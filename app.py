@@ -58,7 +58,7 @@ def _init_db_once():
 
 
 def _init_reset_table():
-    """确保 password_reset_tokens 表存在"""
+    """确保 password_reset_tokens 和 user_profiles 表存在"""
     conn = get_db()
     if not conn:
         return
@@ -72,6 +72,17 @@ def _init_reset_table():
                 used TINYINT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                username VARCHAR(50) PRIMARY KEY,
+                nickname VARCHAR(50),
+                bio TEXT,
+                phone VARCHAR(20),
+                email VARCHAR(100),
+                birthday DATE,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         """)
         conn.commit()
@@ -300,8 +311,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/api/captcha"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/api/captcha"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/")
 
 @app.before_request
 def check_global_captcha():
@@ -904,6 +915,53 @@ def dashboard():
                            permission=session["permission"])
 
 
+# ---------- 路由：个人资料 ----------
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    conn = get_db()
+    if not conn:
+        flash("数据库连接失败", "danger")
+        return redirect(url_for("dashboard"))
+    cursor = conn.cursor()
+
+    if request.method == "POST":
+        nickname = sanitize_input(request.form.get("nickname", ""), 50)
+        bio = sanitize_input(request.form.get("bio", ""), 500)
+        phone = sanitize_input(request.form.get("phone", ""), 20)
+        email = sanitize_input(request.form.get("email", ""), 100)
+        birthday = request.form.get("birthday", "").strip() or None
+        cursor.execute(
+            "INSERT INTO user_profiles (username, nickname, bio, phone, email, birthday) "
+            "VALUES (%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE "
+            "nickname=%s,bio=%s,phone=%s,email=%s,birthday=%s",
+            (session["username"], nickname, bio, phone, email, birthday,
+             nickname, bio, phone, email, birthday)
+        )
+        conn.commit()
+        flash("个人资料已保存", "success")
+
+    cursor.execute("SELECT * FROM user_profiles WHERE username=%s", (session["username"],))
+    cols = [d[0] for d in cursor.description]
+    row = cursor.fetchone()
+    profile_data = dict(zip(cols, row)) if row else {}
+    cursor.close()
+    conn.close()
+    return render_template("profile.html",
+                           username=session["username"],
+                           permission=session["permission"],
+                           profile=profile_data,
+                           csrf_token=session.get("csrf_token", ""))
+
+
+# ---------- 路由：关于作者 ----------
+@app.route("/author")
+def author():
+    return render_template("author.html",
+                           username=session.get("username", ""),
+                           permission=session.get("permission", ""))
+
+
 # ---------- 路由：系统监控 ----------
 @app.route("/system_monitor")
 @login_required
@@ -1409,8 +1467,6 @@ def api_album_image_manage(img_id):
 @app.route("/api/album/upload", methods=["POST"])
 @login_required
 def api_album_upload():
-    if session["permission"] != "administrator" and session.get("role") != "teacher":
-        return jsonify({"error": "权限不足"}), 403
     file = request.files.get("image")
     if not file or not file.filename:
         return jsonify({"error": "未选择文件"}), 400

@@ -202,6 +202,36 @@
         </a>
     </div>
     {% endif %}
+
+    <!-- 个人资料 -->
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('profile') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-info bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">👤</span>
+                    </div>
+                    <h5>个人资料</h5>
+                    <p class="text-muted small">编辑你的个人信息</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 关于作者 -->
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('author') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-success bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">👨‍💻</span>
+                    </div>
+                    <h5>关于作者</h5>
+                    <p class="text-muted small">了解网站开发者</p>
+                </div>
+            </div>
+        </a>
+    </div>
 </div>
 
 <!-- 跳转网页弹窗 -->
