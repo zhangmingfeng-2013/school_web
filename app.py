@@ -54,6 +54,31 @@ def _init_db_once():
     global _db_init_done
     if not _db_init_done:
         _db_init_done = True
+        _init_reset_table()
+
+
+def _init_reset_table():
+    """确保 password_reset_tokens 表存在"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                token VARCHAR(32) NOT NULL UNIQUE,
+                used TINYINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError:
+        pass
 
 # ---------- IP 访问限制 ----------
 # ---------- 速率限制配置（持久化到文件，可在管理后台动态修改） ----------
@@ -275,7 +300,7 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/api/captcha"}
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/api/captcha"}
 CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager")
 
 @app.before_request
@@ -672,9 +697,9 @@ def login():
                 attempts, _ = login_lockout.get(username, (0, 0))
                 attempts += 1
                 if attempts >= 5:
-                    login_lockout[username] = (attempts, time.time() + 15 * 60)
-                    write_log("账户锁定", f"用户名: {username}, 失败 {attempts} 次，锁定 15 分钟")
-                    flash(f"密码错误次数过多，账户已锁定 15 分钟", "danger")
+                    login_lockout[username] = (attempts, time.time() + 5 * 60)
+                    write_log("账户锁定", f"用户名: {username}, 失败 {attempts} 次，锁定 5 分钟")
+                    flash(f"密码错误次数过多，账户已锁定 5 分钟", "danger")
                 else:
                     login_lockout[username] = (attempts, 0)
                     remaining = 5 - attempts
@@ -757,6 +782,99 @@ def logout():
     session.clear()
     flash("已退出登录", "info")
     return redirect(url_for("login"))
+
+
+# ---------- 路由：忘记密码 ----------
+@app.route("/forgot_password", methods=["GET", "POST"])
+def forgot_password():
+    _init_db_once()
+    if request.method == "POST":
+        username = sanitize_input(request.form.get("username", ""), 50)
+        captcha_input = request.form.get("captcha", "").strip().lower()
+        stored = session.get("captcha_code", "")
+
+        if not username:
+            flash("请输入用户名", "danger")
+        elif captcha_input != stored:
+            session.pop("captcha_code", None)
+            flash("验证码错误", "danger")
+        else:
+            session.pop("captcha_code", None)
+            conn = get_db()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT User_Name FROM users WHERE User_Name=%s", (username,))
+                if cursor.fetchone():
+                    # 生成重置 token，10 分钟有效
+                    token = uuid.uuid4().hex
+                    expires = datetime.datetime.now() + datetime.timedelta(minutes=10)
+                    cursor.execute(
+                        "INSERT INTO password_reset_tokens (username, token, expires_at) VALUES (%s,%s,%s)",
+                        (username, token, expires)
+                    )
+                    conn.commit()
+                    write_log("密码重置申请", f"用户名: {username}")
+                    flash(f"重置令牌: {token}（有效期10分钟）", "info")
+                else:
+                    flash("用户名不存在", "danger")
+                cursor.close()
+                conn.close()
+
+    return render_template("forgot_password.html",
+                           csrf_token=session.get("csrf_token", ""))
+
+
+@app.route("/reset_password", methods=["GET", "POST"])
+def reset_password():
+    _init_db_once()
+    if request.method == "POST":
+        username = sanitize_input(request.form.get("username", ""), 50)
+        token = sanitize_input(request.form.get("token", ""), 32)
+        new_pwd = request.form.get("new_pwd", "").strip()
+        confirm_pwd = request.form.get("confirm_pwd", "").strip()
+        captcha_input = request.form.get("captcha", "").strip().lower()
+        stored_captcha = session.get("captcha_code", "")
+
+        if not username or not token:
+            flash("用户名和重置令牌不能为空", "danger")
+        elif captcha_input != stored_captcha:
+            session.pop("captcha_code", None)
+            flash("验证码错误", "danger")
+        elif new_pwd != confirm_pwd:
+            flash("两次密码不一致", "danger")
+        elif len(new_pwd) < 8:
+            flash("密码至少8位", "danger")
+        elif not re.search(r"[A-Za-z]", new_pwd):
+            flash("密码需包含字母", "danger")
+        elif not re.search(r"[0-9]", new_pwd):
+            flash("密码需包含数字", "danger")
+        else:
+            session.pop("captcha_code", None)
+            conn = get_db()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id FROM password_reset_tokens WHERE username=%s AND token=%s AND used=0 AND expires_at > NOW()",
+                    (username, token)
+                )
+                row = cursor.fetchone()
+                if not row:
+                    flash("令牌无效或已过期", "danger")
+                else:
+                    hashed = generate_password_hash(new_pwd)
+                    cursor.execute("UPDATE users SET User_Password=%s WHERE User_Name=%s", (hashed, username))
+                    cursor.execute("UPDATE password_reset_tokens SET used=1 WHERE id=%s", (row[0],))
+                    conn.commit()
+                    write_log("密码重置成功", f"用户名: {username}")
+                    flash("密码重置成功，请登录", "success")
+                    cursor.close()
+                    conn.close()
+                    return redirect(url_for("login"))
+                cursor.close()
+                conn.close()
+
+    return render_template("reset_password.html",
+                           csrf_token=session.get("csrf_token", ""))
 
 
 # ---------- 路由：仪表盘 ----------
