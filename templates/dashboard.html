@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}主菜单 - 多合一工具箱 Web 版{% endblock %}
+{% block content %}
+<div class="text-center mb-4">
+    <h2>👋 欢迎，{{ username }}</h2>
+    <span class="badge fs-6 {% if permission == 'administrator' %}bg-danger{% elif permission == 'guest' %}bg-secondary{% else %}bg-info{% endif %}">
+        {{ '🔑 管理员' if permission == 'administrator' else ('👤 访客' if permission == 'guest' else '👤 用户') }}
+    </span>
+</div>
+
+<div class="row g-4">
+    <!-- 跳转网页（所有人可用） -->
+    <div class="col-md-6 col-lg-4">
+        <a href="javascript:void(0)" onclick="openWebDialog()" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-primary bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">🔗</span>
+                    </div>
+                    <h5>跳转网页</h5>
+                    <p class="text-muted small">打开指定网页链接</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 管理后台（仅管理员） -->
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('admin_dashboard') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(220,53,69,.3)">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-danger bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">🛡️</span>
+                    </div>
+                    <h5>管理后台 <span class="badge bg-danger" style="font-size:10px">NEW</span></h5>
+                    <p class="text-muted small">IP监控 · 服务器状态</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- 系统监控（仅管理员） -->
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('system_monitor') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-success bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">📊</span>
+                    </div>
+                    <h5>系统监控</h5>
+                    <p class="text-muted small">CPU / 内存 / 磁盘实时监控</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- 网络工具（仅管理员） -->
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('network_tools') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-warning bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">🌐</span>
+                    </div>
+                    <h5>网络工具</h5>
+                    <p class="text-muted small">IP查询 / 端口扫描</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- 文件管理器（访客不可用） -->
+    {% if permission != 'guest' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('file_manager') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-warning bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">📁</span>
+                    </div>
+                    <h5>文件管理器</h5>
+                    <p class="text-muted small">浏览 Mac Mini 文件目录</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- 查询数据库（非访客） -->
+    {% if permission != 'guest' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('db_query') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-info bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">🗄️</span>
+                    </div>
+                    <h5>查询数据库</h5>
+                    <p class="text-muted small">查看表结构和数据</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- 更改数据库（仅管理员） -->
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('db_update') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-danger bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">⚙️</span>
+                    </div>
+                    <h5>更改数据库</h5>
+                    <p class="text-muted small">执行 SQL 语句</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- 计算器 -->
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('calculator') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-warning bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">🧮</span>
+                    </div>
+                    <h5>计算器 <span class="badge bg-info" style="font-size:10px">三合一</span></h5>
+                    <p class="text-muted small">普通 · 科学 · 网络计算器</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 毕业相册（Element Plus） -->
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('album') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(64,158,255,.3)">
+                <div class="card-body text-center">
+                    <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(64,158,255,.12),rgba(103,194,58,.12))!important;">
+                        <span style="font-size:2rem;">🎓</span>
+                    </div>
+                    <h5>毕业纪念相册 <span class="badge" style="background:#409eff;font-size:10px">Element Plus</span></h5>
+                    <p class="text-muted small">Vue 3 + Element Plus + Flask + MySQL</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 修改密码（所有人可用） -->
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('change_password') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-danger bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">🔑</span>
+                    </div>
+                    <h5>修改密码</h5>
+                    <p class="text-muted small">修改用户密码</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 备忘录（所有人可用） -->
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('notes') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-purple bg-opacity-10 mx-auto" style="background:rgba(111,66,193,.1)!important;">
+                        <span style="font-size:2rem;">📝</span>
+                    </div>
+                    <h5>备忘录</h5>
+                    <p class="text-muted small">随手记笔记，自动保存</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 日志查看（仅管理员） -->
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('logs') }}" class="text-decoration-none text-dark">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="feature-icon bg-dark bg-opacity-10 mx-auto">
+                        <span style="font-size:2rem;">📋</span>
+                    </div>
+                    <h5>日志查看</h5>
+                    <p class="text-muted small">操作日志审计</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 跳转网页弹窗 -->
+<div class="modal fade" id="webDialog" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔗 跳转网页</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="webUrl" class="form-control form-control-lg" placeholder="输入网址（如 google.com）">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="goWeb()">跳转</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function openWebDialog() {
+    new bootstrap.Modal(document.getElementById('webDialog')).show();
+}
+function goWeb() {
+    var url = document.getElementById('webUrl').value.trim();
+    if (!url) { alert('请输入网址'); return; }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
+    window.open(url, '_blank');
+    bootstrap.Modal.getInstance(document.getElementById('webDialog')).hide();
+}
+</script>
+{% endblock %}

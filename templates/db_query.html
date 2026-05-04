@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}查询数据库 - 多合一工具箱 Web 版{% endblock %}
+{% block content %}
+<h2 class="mb-4">🗄️ 查询数据库</h2>
+<div class="card">
+    <div class="card-body">
+        <form method="POST" class="row g-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label">选择表</label>
+                <select name="table" class="form-select">
+                    {% for t in tables %}
+                    <option value="{{ t }}" {% if t == selected_table %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">🔍 查询</button>
+            </div>
+        </form>
+
+        {% if columns %}
+        <hr>
+        <h6>表: {{ selected_table }}</h6>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        {% for col in columns %}
+                        <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if data %}
+                    {% for row in data %}
+                    <tr>
+                        {% for cell in row %}
+                        <td>{{ cell }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr><td colspan="{{ columns|length }}" class="text-center text-muted">表中没有数据</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

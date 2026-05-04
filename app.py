@@ -1,0 +1,2595 @@
+"""
+多合一工具箱 Web 版
+"""
+import os
+import re
+import uuid
+import json
+import time
+import random
+import hmac
+import threading
+import psutil
+import platform
+import socket
+import requests
+import datetime
+import pymysql
+from collections import deque
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import io
+from flask import (
+    Flask, render_template, request, redirect, url_for,
+    session, flash, jsonify, send_from_directory, send_file, abort
+)
+from flask_cors import CORS
+
+app = Flask(__name__)
+
+# ---------- 持久化 Secret Key ----------
+SECRET_KEY_FILE = os.path.join(os.path.dirname(__file__), ".secret_key")
+if os.path.exists(SECRET_KEY_FILE):
+    with open(SECRET_KEY_FILE, "r") as f:
+        app.secret_key = f.read().strip()
+else:
+    app.secret_key = os.urandom(64).hex()
+    with open(SECRET_KEY_FILE, "w") as f:
+        f.write(app.secret_key)
+
+CORS(app, supports_credentials=True, origins=['http://localhost:3000', 'http://192.168.3.204:3000'])
+
+# ---------- Session 安全设置 ----------
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=False,  # 开发环境 HTTP，生产应设为 True
+    PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=2),
+)
+
+# ---------- 数据库初始化 ----------
+_db_init_done = False
+def _init_db_once():
+    global _db_init_done
+    if not _db_init_done:
+        _db_init_done = True
+
+# ---------- IP 访问限制 ----------
+# ---------- 速率限制配置（持久化到文件，可在管理后台动态修改） ----------
+RATE_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "rate_config.json")
+
+DEFAULT_RATE_CONFIG = {
+    "RATE_LIMIT": 40,         # 最大请求数
+    "RATE_WINDOW": 15,        # 时间窗口（秒）
+    "BLOCK_DURATION": 240,    # 封禁时长（秒）
+    "BLOCK_PROBE_LIMIT": 200, # 封禁期间试探次数阈值
+    "BLOCK_EXTEND": 300,      # 试探超限后追加封禁（秒）
+}
+
+def _load_rate_config():
+    """从文件加载速率配置，失败则使用默认值"""
+    if os.path.exists(RATE_CONFIG_FILE):
+        try:
+            with open(RATE_CONFIG_FILE, "r") as f:
+                saved = json.load(f)
+            # 合并：保留默认值作为回退，覆盖已保存的值
+            cfg = dict(DEFAULT_RATE_CONFIG)
+            cfg.update(saved)
+            return cfg
+        except Exception:
+            pass
+    return dict(DEFAULT_RATE_CONFIG)
+
+def _save_rate_config():
+    """保存速率配置到文件"""
+    try:
+        with open(RATE_CONFIG_FILE, "w") as f:
+            json.dump(rate_config, f)
+    except Exception:
+        pass
+
+rate_config = _load_rate_config()
+ip_requests = {}        # {ip: deque(timestamps)}
+ip_blocked = {}         # {ip: blocked_until_timestamp}
+ip_blocked_probes = {}  # {ip: probe_count}
+ip_whitelist = set()    # 白名单 IP，不受速率限制
+ip_manual_blocked = {}  # {ip: blocked_until_timestamp} 手动封禁
+
+# ---------- IP 白名单持久化 ----------
+WHITELIST_FILE = os.path.join(os.path.dirname(__file__), "ip_whitelist.json")
+
+def _load_whitelist():
+    """从文件加载白名单"""
+    if os.path.exists(WHITELIST_FILE):
+        try:
+            with open(WHITELIST_FILE, "r") as f:
+                return set(json.load(f))
+        except Exception:
+            pass
+    return set()
+
+def _save_whitelist():
+    """保存白名单到文件"""
+    try:
+        with open(WHITELIST_FILE, "w") as f:
+            json.dump(sorted(ip_whitelist), f)
+    except Exception:
+        pass
+
+ip_whitelist = _load_whitelist()
+
+# ---------- 图形验证码 ----------
+@app.route("/api/captcha")
+def api_captcha():
+    """生成图形验证码"""
+    import random as _random
+    # 生成4位随机码（数字+字母，排除易混淆字符）
+    chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+    code = "".join(_random.choice(chars) for _ in range(4))
+    session["captcha_code"] = code.lower()
+    session["captcha_time"] = time.time()
+
+    # 创建验证码图片
+    width, height = 140, 50
+    img = Image.new("RGB", (width, height), (255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    # 背景噪点
+    for x in range(width):
+        for y in range(height):
+            if _random.random() < 0.3:
+                draw.point((x, y), fill=(_random.randint(200, 250), _random.randint(200, 250), _random.randint(200, 250)))
+
+    # 随机曲线干扰
+    for _ in range(3):
+        points = [(_random.randint(0, width), _random.randint(0, height)) for _ in range(4)]
+        for j in range(len(points) - 1):
+            draw.line([points[j], points[j+1]], fill=(_random.randint(50, 180), _random.randint(50, 180), _random.randint(50, 180)), width=2)
+
+    # 随机直线干扰
+    for _ in range(8):
+        x1, y1 = _random.randint(0, width), _random.randint(0, height)
+        x2, y2 = _random.randint(0, width), _random.randint(0, height)
+        draw.line([(x1, y1), (x2, y2)], fill=(_random.randint(100, 200), _random.randint(100, 200), _random.randint(100, 200)), width=1)
+
+    # 随机点
+    for _ in range(200):
+        x, y = _random.randint(0, width), _random.randint(0, height)
+        draw.point((x, y), fill=(_random.randint(0, 150), _random.randint(0, 150), _random.randint(0, 150)))
+
+    # 绘制文字（扭曲）
+    try:
+        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
+    except:
+        font = ImageFont.load_default()
+
+    for i, ch in enumerate(code):
+        # 每个字符单独创建并旋转
+        char_img = Image.new("RGBA", (40, 48), (0, 0, 0, 0))
+        char_draw = ImageDraw.Draw(char_img)
+        color = (_random.randint(0, 80), _random.randint(0, 100), _random.randint(120, 240))
+        char_draw.text((4, 2), ch, font=font, fill=color)
+        # 随机旋转
+        angle = _random.randint(-25, 25)
+        char_img = char_img.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
+        x = 10 + i * 30 + _random.randint(-4, 4)
+        y = _random.randint(2, 8)
+        img.paste(char_img, (x, y), char_img)
+
+    # 轻微模糊
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.8))
+
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+# ---------- 登录防爆破 ----------
+login_lockout = {}  # {username: (attempts, lockout_until)}
+
+rate_lock = threading.Lock()
+
+# ---------- IP 会话超时（2分钟无动作自动登出） ----------
+SESSION_IDLE_TIMEOUT = 150  # 秒
+ip_last_active = {}         # {ip: last_activity_timestamp}
+session_lock = threading.Lock()
+
+@app.before_request
+def check_rate_limit():
+    # 静态文件和分享链接跳过速率限制
+    path = request.path
+    if any(path.startswith(p) for p in ("/static/", "/assets/", "/favicon.ico", "/share/")):
+        return None
+    ip = request.remote_addr or "0.0.0.0"
+    now = time.time()
+    with rate_lock:
+        # 白名单：跳过检查
+        if ip in ip_whitelist:
+            return None
+        # 手动封禁检查
+        if ip in ip_manual_blocked and now < ip_manual_blocked[ip]:
+            remaining = int(ip_manual_blocked[ip] - now)
+            return jsonify({"error": f"IP已被管理员手动封禁，剩余 {remaining} 秒"}), 403
+        # 检查是否在封禁期
+        if ip in ip_blocked:
+            if now < ip_blocked[ip]:
+                # 累加封禁期间的试探次数
+                ip_blocked_probes[ip] = ip_blocked_probes.get(ip, 0) + 1
+                if ip_blocked_probes[ip] >= rate_config["BLOCK_PROBE_LIMIT"]:
+                    ip_blocked[ip] += rate_config["BLOCK_EXTEND"]
+                    ip_blocked_probes[ip] = 0  # 重置计数
+                    remaining = int(ip_blocked[ip] - now)
+                    return jsonify({"error": f"封禁期间持续试探，封禁延长 {rate_config['BLOCK_EXTEND']} 秒，剩余 {remaining} 秒"}), 403
+                remaining = int(ip_blocked[ip] - now)
+                return jsonify({"error": f"请求过于频繁，IP已被封禁，剩余 {remaining} 秒"}), 403
+            else:
+                del ip_blocked[ip]
+                ip_blocked_probes.pop(ip, None)
+        # 记录本次请求
+        if ip not in ip_requests:
+            ip_requests[ip] = deque()
+        q = ip_requests[ip]
+        # 清理过期记录
+        while q and now - q[0] > rate_config["RATE_WINDOW"]:
+            q.popleft()
+        q.append(now)
+        # 超限则封禁
+        if len(q) > rate_config["RATE_LIMIT"]:
+            ip_blocked[ip] = now + rate_config["BLOCK_DURATION"]
+            ip_blocked_probes[ip] = 0
+            del ip_requests[ip]
+            return jsonify({"error": f"请求过于频繁，IP已被封禁 {rate_config['BLOCK_DURATION']} 秒"}), 403
+
+
+@app.before_request
+def check_session_idle_timeout():
+    """如果 IP 在 SESSION_IDLE_TIMEOUT 秒内无任何动作，下次请求强制重新登录"""
+    # 排除不需要超时检测的路由
+    skip_prefixes = ("/static/", "/assets/", "/favicon.ico", "/share/")
+    path = request.path
+    if any(path.startswith(p) for p in skip_prefixes):
+        return None
+    # 登录/注册/登出 页面是超时后要去的，不检测
+    if path in ("/", "/register", "/logout"):
+        return None
+
+    ip = request.remote_addr or "0.0.0.0"
+    now = time.time()
+
+    with session_lock:
+        # 检查该 IP 是否已超时（仅对已登录用户）
+        if "username" in session:
+            last = ip_last_active.get(ip, 0)
+            if last and (now - last) > SESSION_IDLE_TIMEOUT:
+                # 超时了，清除会话
+                idle_minutes = int((now - last) / 60)
+                session.clear()
+                del ip_last_active[ip]
+                flash(f"由于 {idle_minutes} 分钟未操作，已自动退出登录", "warning")
+                return redirect(url_for("login"))
+            # 更新最后活跃时间
+            ip_last_active[ip] = now
+
+    return None
+
+
+# ---------- 全站验证码门禁 ----------
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/api/captcha"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager")
+
+@app.before_request
+def check_global_captcha():
+    if "username" not in session:
+        return None
+    path = request.path
+    if path in CAPTCHA_SKIP or any(path.startswith(p) for p in CAPTCHA_SKIP_PREFIX):
+        return None
+    if session.get("global_captcha_verified"):
+        return None
+    if request.method == "POST" and request.form.get("captcha"):
+        inp = request.form.get("captcha", "").strip().lower()
+        if inp == session.get("captcha_code", ""):
+            session["global_captcha_verified"] = True
+            session.pop("captcha_code", None)
+            return redirect(request.path)
+        flash("验证码错误", "danger")
+    if path.startswith("/api/"):
+        return jsonify({"error": "需要安全验证"}), 403
+    return render_template("global_captcha.html",
+                           username=session["username"],
+                           permission=session["permission"],
+                           csrf_token=session.get("csrf_token", ""))
+
+
+# ---------- 配置 ----------
+DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "root@123456",
+    "database": "sample"
+}
+ALBUM_DB_CONFIG = {
+    "host": "localhost",
+    "user": "root",
+    "password": "root@123456",
+    "database": "sample"
+}
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "asdfghjkl;'")
+LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "app.log")
+
+
+# ---------- 安全响应头 ----------
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # CSP: 防 XSS + 点击劫持 + 资源来源限制
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.qq.com https://cdn.bootcdn.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
+        "font-src 'self' https://cdn.bootcdn.net; "
+        "img-src 'self' data: blob: *; "
+        "connect-src 'self' *; "
+        "frame-ancestors 'self'; "
+        "form-action 'self'"
+    )
+    # HSTS: 仅在生产环境下使用
+    if not os.environ.get("FLASK_DEBUG"):
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
+
+
+# ---------- 工具函数 ----------
+def get_db():
+    try:
+        return pymysql.connect(**DB_CONFIG)
+    except pymysql.MySQLError as e:
+        return None
+
+def get_album_db():
+    try:
+        conn = pymysql.connect(**ALBUM_DB_CONFIG)
+        _init_album_tables(conn)
+        return conn
+    except pymysql.MySQLError as e:
+        return None
+
+# ---------- 初始化相册扩展表 ----------
+def _init_album_tables(conn):
+    """创建相册扩展功能所需的表（如果不存在）"""
+    cursor = conn.cursor()
+    # 大事记时间轴
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_events (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            event_date DATE NOT NULL,
+            created_by VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 同学录
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_classmates (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(50) NOT NULL,
+            nickname VARCHAR(50),
+            avatar_url VARCHAR(500),
+            birthday DATE,
+            phone VARCHAR(30),
+            email VARCHAR(100),
+            motto TEXT,
+            interests TEXT,
+            future_plan TEXT,
+            created_by VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 毕业寄语
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_wishes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            author VARCHAR(50),
+            is_anonymous TINYINT DEFAULT 0,
+            content TEXT NOT NULL,
+            avatar_color VARCHAR(20),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 照片标签
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_tags (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(50) NOT NULL UNIQUE,
+            color VARCHAR(20) DEFAULT '#04c'
+        )
+    """)
+    # 照片-标签关联
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_image_tags (
+            image_id INT NOT NULL,
+            tag_id INT NOT NULL,
+            PRIMARY KEY (image_id, tag_id)
+        )
+    """)
+    # 毕业歌单
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_playlist (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            artist VARCHAR(100),
+            url VARCHAR(500),
+            added_by VARCHAR(50),
+            votes INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 弹幕
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_danmaku (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            image_id INT NOT NULL,
+            text VARCHAR(200) NOT NULL,
+            color VARCHAR(20) DEFAULT '#fff',
+            position FLOAT DEFAULT 50,
+            author VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 分享链接
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_share_links (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            image_id INT NOT NULL,
+            token VARCHAR(64) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    cursor.close()
+
+
+# ---------- 输入清洗 ----------
+_SCRIPT_TAG = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+_HTML_TAG = re.compile(r"<[^>]+>")
+
+def sanitize_input(text, max_length=1000):
+    """清洗用户输入：去除 HTML/JS 标签，限制长度"""
+    if not text:
+        return ""
+    text = str(text).strip()
+    text = _SCRIPT_TAG.sub("", text)
+    text = _HTML_TAG.sub("", text)
+    return text[:max_length]
+
+def _mask_cell(col_name, value):
+    """直接返回原始值"""
+    return str(value) if value is not None else ""
+
+def write_log(action, detail=""):
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    entry = f"[{ts}] {action}"
+    if detail:
+        entry += f" - {detail}"
+    entry += "\n"
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(entry)
+    except:
+        pass
+
+def read_logs():
+    if os.path.exists(LOG_FILE):
+        try:
+            with open(LOG_FILE, "r", encoding="utf-8") as f:
+                return f.read()
+        except:
+            return ""
+    return ""
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "username" not in session:
+            flash("请先登录", "warning")
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def csrf_required(f):
+    """验证 CSRF token（用于非 GET 请求的表单提交）"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            return f(*args, **kwargs)
+        # 检查 session 中的 token
+        token = request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token")
+        expected = session.get("csrf_token")
+        if not expected or not token or not hmac.compare_digest(str(token), str(expected)):
+            flash("安全验证失败，请重试", "danger")
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get("permission") != "administrator":
+            flash("权限不足，需要管理员权限", "danger")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+def non_guest_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get("permission") == "guest":
+            flash("访客权限无法访问该功能", "warning")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ---------- 数据库二次验证（验证码） ----------
+def db_captcha_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get("db_captcha_verified"):
+            return f(*args, **kwargs)
+        if request.method == "POST" and request.form.get("db_captcha"):
+            captcha_input = request.form.get("db_captcha", "").strip().lower()
+            stored = session.get("captcha_code", "")
+            if captcha_input == stored:
+                session["db_captcha_verified"] = True
+                session.pop("captcha_code", None)
+                return redirect(request.path)
+            else:
+                flash("验证码错误", "danger")
+        # API 请求返回 JSON 错误
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "需要数据库操作验证"}), 403
+        return render_template("db_captcha.html",
+                               username=session["username"],
+                               permission=session["permission"],
+                               csrf_token=session.get("csrf_token", ""))
+    return decorated
+
+
+# ---------- 文件管理器密码二次验证 ----------
+def fm_password_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get("fm_verified"):
+            return f(*args, **kwargs)
+        if request.method == "POST" and request.form.get("fm_password"):
+            pwd = request.form.get("fm_password", "").strip()
+            conn = get_db()
+            if conn:
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT User_Password FROM users WHERE User_Name = %s", (session["username"],))
+                    result = cursor.fetchone()
+                    cursor.close()
+                    conn.close()
+                    if result and check_password_hash(result[0], pwd):
+                        session["fm_verified"] = True
+                        return redirect(request.path)
+                except:
+                    pass
+            flash("密码错误", "danger")
+        return render_template("fm_password.html",
+                               username=session["username"],
+                               permission=session["permission"],
+                               csrf_token=session.get("csrf_token", ""))
+    return decorated
+
+
+# ---------- 路由：登录 ----------
+@app.route("/", methods=["GET", "POST"])
+def login():
+    _init_db_once()
+    # 生成 CSRF token
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
+
+    if request.method == "POST":
+        username = sanitize_input(request.form.get("username", ""), 50)
+        password = request.form.get("password", "").strip()
+
+        if not username or not password:
+            flash("用户名和密码不能为空", "danger")
+            return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+
+        # 验证码校验
+        captcha_input = request.form.get("captcha", "").strip().lower()
+        stored_captcha = session.get("captcha_code", "")
+        if captcha_input != stored_captcha:
+            session.pop("captcha_code", None)
+            flash("验证码错误", "danger")
+            return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+        session.pop("captcha_code", None)
+
+        # 登录防爆破检查
+        now = time.time()
+        if username in login_lockout:
+            attempts, lockout_until = login_lockout[username]
+            if lockout_until and now < lockout_until:
+                remaining = int(lockout_until - now)
+                flash(f"账户已被锁定，请 {remaining // 60} 分 {remaining % 60} 秒后重试", "danger")
+                return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+
+        conn = get_db()
+        if not conn:
+            flash("数据库连接失败", "danger")
+            return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT User_Password, Access_Permission FROM users WHERE User_Name = %s",
+                (username,)
+            )
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if result and check_password_hash(result[0], password):
+                # 登录成功：清除失败记录
+                login_lockout.pop(username, None)
+                session["username"] = username
+                session["permission"] = result[1]
+                session["csrf_token"] = os.urandom(32).hex()
+                write_log("用户登录", f"用户名: {username}, 权限: {result[1]}")
+                flash(f"欢迎回来，{sanitize_input(username)}！", "success")
+                return redirect(url_for("dashboard"))
+            # 兼容旧版：尝试明文密码匹配，并自动升级为 hash
+            elif result and result[0] == password:
+                # 登录成功：清除失败记录
+                login_lockout.pop(username, None)
+                hashed = generate_password_hash(password)
+                try:
+                    cursor_upgrade = conn.cursor()
+                    cursor_upgrade.execute("UPDATE users SET User_Password=%s WHERE User_Name=%s", (hashed, username))
+                    conn.commit()
+                    cursor_upgrade.close()
+                except Exception:
+                    pass
+                session["username"] = username
+                session["permission"] = result[1]
+                session["csrf_token"] = os.urandom(32).hex()
+                write_log("用户登录(旧版密码升级hash)", f"用户名: {username}")
+                flash(f"欢迎回来，{sanitize_input(username)}！密码已升级为更安全的存储方式", "success")
+                return redirect(url_for("dashboard"))
+            else:
+                # 登录失败：记录尝试次数
+                attempts, _ = login_lockout.get(username, (0, 0))
+                attempts += 1
+                if attempts >= 5:
+                    login_lockout[username] = (attempts, time.time() + 15 * 60)
+                    write_log("账户锁定", f"用户名: {username}, 失败 {attempts} 次，锁定 15 分钟")
+                    flash(f"密码错误次数过多，账户已锁定 15 分钟", "danger")
+                else:
+                    login_lockout[username] = (attempts, 0)
+                    remaining = 5 - attempts
+                    write_log("登录失败", f"用户名: {username}, 剩余 {remaining} 次尝试")
+                    flash(f"用户名或密码错误，还剩 {remaining} 次尝试机会", "danger")
+        except pymysql.MySQLError as e:
+            flash(f"数据库错误: {str(e)}", "danger")
+
+    return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    _init_db_once()
+    if request.method == "POST":
+        username = sanitize_input(request.form.get("username", ""), 50)
+        password = request.form.get("password", "").strip()
+        confirm = request.form.get("confirm", "").strip()
+        admin_pwd = request.form.get("admin_pwd", "").strip()
+
+        if not username or not password or not confirm:
+            flash("所有字段不能为空", "danger")
+            return render_template("register.html")
+
+        if password != confirm:
+            flash("两次密码不一致", "danger")
+            return render_template("register.html")
+
+        if len(password) < 8:
+            flash("密码长度不能少于8位", "danger")
+            return render_template("register.html")
+
+        # 密码复杂度检查
+        if not re.search(r"[A-Za-z]", password):
+            flash("密码必须包含至少一个字母", "danger")
+            return render_template("register.html")
+        if not re.search(r"[0-9]", password):
+            flash("密码必须包含至少一个数字", "danger")
+            return render_template("register.html")
+
+        permission = "administrator" if hmac.compare_digest(admin_pwd, ADMIN_SECRET) else "guest"
+
+        conn = get_db()
+        if not conn:
+            flash("数据库连接失败", "danger")
+            return render_template("register.html")
+
+        try:
+            cursor = conn.cursor()
+            hashed_pw = generate_password_hash(password)
+            cursor.execute(
+                "INSERT INTO users (User_Name, User_Password, Access_Permission) VALUES (%s, %s, %s)",
+                (username, hashed_pw, permission)
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+            perm_text = "管理员" if permission == "administrator" else "访客"
+            write_log("用户注册", f"用户名: {username}, 权限: {permission}")
+            flash(f"注册成功！权限: {perm_text}", "success")
+            return redirect(url_for("login"))
+        except pymysql.IntegrityError:
+            flash("用户名已存在", "danger")
+        except pymysql.MySQLError as e:
+            flash(f"注册失败: {str(e)}", "danger")
+
+    return render_template("register.html")
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    if request.method == "GET":
+        # GET 请求：显示确认页面（可优化为直接重定向带 JS 提交）
+        return render_template("logout_confirm.html",
+                               csrf_token=session.get("csrf_token", ""))
+    # POST 请求：执行登出
+    ip = request.remote_addr or "0.0.0.0"
+    with session_lock:
+        ip_last_active.pop(ip, None)
+    session.clear()
+    flash("已退出登录", "info")
+    return redirect(url_for("login"))
+
+
+# ---------- 路由：仪表盘 ----------
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return render_template("dashboard.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ---------- 路由：系统监控 ----------
+@app.route("/system_monitor")
+@login_required
+@admin_required
+def system_monitor():
+    return render_template("system_monitor.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+@app.route("/api/system_info")
+@login_required
+@admin_required
+def api_system_info():
+    """返回系统信息的JSON，供前端定时刷新"""
+    try:
+        boot_time = psutil.boot_time()
+        uptime_seconds = int(datetime.datetime.now().timestamp() - boot_time)
+        hours, remainder = divmod(uptime_seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+
+        memory = psutil.virtual_memory()
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        cpu_count_physical = psutil.cpu_count(logical=False) or "N/A"
+        cpu_count_logical = psutil.cpu_count(logical=True)
+
+        partitions = []
+        for p in psutil.disk_partitions():
+            try:
+                usage = psutil.disk_usage(p.mountpoint)
+                partitions.append({
+                    "device": p.device,
+                    "mountpoint": p.mountpoint,
+                    "fstype": p.fstype,
+                    "total_gb": round(usage.total / (1024**3), 2),
+                    "used_gb": round(usage.used / (1024**3), 2),
+                    "free_gb": round(usage.free / (1024**3), 2),
+                    "percent": usage.percent
+                })
+            except:
+                pass
+
+        net = psutil.net_io_counters()
+
+        return jsonify({
+            "system": platform.system(),
+            "version": platform.version(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "hostname": platform.node(),
+            "uptime": f"{hours}小时{minutes}分钟",
+            "cpu": {
+                "physical": cpu_count_physical,
+                "logical": cpu_count_logical,
+                "percent": cpu_percent
+            },
+            "memory": {
+                "total_gb": round(memory.total / (1024**3), 2),
+                "used_gb": round(memory.used / (1024**3), 2),
+                "available_gb": round(memory.available / (1024**3), 2),
+                "percent": memory.percent
+            },
+            "disk": partitions,
+            "network": {
+                "sent_mb": round(net.bytes_sent / (1024**2), 2),
+                "recv_mb": round(net.bytes_recv / (1024**2), 2),
+                "sent_packets": net.packets_sent,
+                "recv_packets": net.packets_recv
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------- 路由：网络工具 ----------
+@app.route("/network_tools", methods=["GET", "POST"])
+@login_required
+@admin_required
+def network_tools():
+    result = None
+    result_type = None
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "ip_query":
+            target = request.form.get("target", "").strip()
+            result_type = "ip_query"
+            try:
+                ip = socket.gethostbyname(target)
+                public_ip = ""
+                try:
+                    resp = requests.get("https://api.ipify.org?format=json", timeout=5)
+                    public_ip = resp.json().get("ip", "")
+                except:
+                    pass
+                result = {
+                    "hostname": target,
+                    "ip": ip,
+                    "local_ip": socket.gethostbyname(socket.gethostname()),
+                    "public_ip": public_ip
+                }
+            except socket.gaierror:
+                result = {"error": f"无法解析: {target}"}
+
+        elif action == "port_scan":
+            target = request.form.get("target", "").strip()
+            start_port = request.form.get("start_port", "1")
+            end_port = request.form.get("end_port", "100")
+            result_type = "port_scan"
+
+            try:
+                start = int(start_port)
+                end = int(end_port)
+                if start < 1 or end > 65535 or start > end:
+                    result = {"error": "端口范围无效"}
+                else:
+                    open_ports = []
+                    os_detected = "未知"
+                    ports_to_scan = range(start, min(end + 1, start + 200))
+
+                    def scan_port(p):
+                        try:
+                            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            s.settimeout(0.3)
+                            r = s.connect_ex((target, p))
+                            s.close()
+                            return p if r == 0 else None
+                        except:
+                            return None
+
+                    threads = []
+                    results = [None] * len(ports_to_scan)
+                    def scan_wrapper(i, p):
+                        results[i] = scan_port(p)
+
+                    for i, p in enumerate(ports_to_scan):
+                        t = threading.Thread(target=scan_wrapper, args=(i, p))
+                        threads.append(t)
+                        t.start()
+                    for t in threads:
+                        t.join()
+
+                    open_ports = [p for p in results if p is not None]
+
+                    # OS检测
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(1)
+                        s.connect((target, 80))
+                        s.send(b"HEAD / HTTP/1.0\r\n\r\n")
+                        resp = s.recv(1024).decode("utf-8", errors="ignore")
+                        s.close()
+                        if "Server:" in resp:
+                            for line in resp.split("\n"):
+                                if line.startswith("Server:"):
+                                    server = line.split(":", 1)[1].strip()
+                                    if "nginx" in server.lower():
+                                        os_detected = "Linux (Nginx)"
+                                    elif "apache" in server.lower():
+                                        os_detected = "Linux/Unix (Apache)"
+                                    elif "iis" in server.lower() or "microsoft" in server.lower():
+                                        os_detected = "Windows (IIS)"
+                                    else:
+                                        os_detected = f"推测 Linux/Unix ({server})"
+                    except:
+                        try:
+                            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            s.settimeout(1)
+                            if s.connect_ex((target, 3389)) == 0:
+                                os_detected = "Windows (RDP开放)"
+                            s.close()
+                        except:
+                            pass
+
+                    result = {
+                        "target": target,
+                        "start": start,
+                        "end": end,
+                        "open_ports": open_ports,
+                        "os_detected": os_detected
+                    }
+                    write_log("端口扫描", f"目标: {target}, 开放端口: {len(open_ports)}")
+            except ValueError:
+                result = {"error": "端口必须是数字"}
+
+    return render_template("network_tools.html",
+                           result=result,
+                           result_type=result_type,
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ---------- 路由：数据库 ----------
+@app.route("/db_query", methods=["GET", "POST"])
+@login_required
+@non_guest_required
+@db_captcha_required
+def db_query():
+    tables = []
+    data = None
+    columns = []
+    selected_table = ""
+
+    conn = get_db()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SHOW TABLES")
+            tables = [r[0] for r in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+        except:
+            pass
+
+    if request.method == "POST":
+        selected_table = request.form.get("table", "")
+        if selected_table and selected_table in tables:
+            conn = get_db()
+            if conn:
+                try:
+                    cursor = conn.cursor()
+                    # 使用反引号包裹表名防止注入（并通过白名单校验）
+                    cursor.execute(f"SELECT * FROM `{selected_table}`")
+                    columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                    raw_data = cursor.fetchall()
+                    # 密码列脱敏
+                    data = [
+                        tuple(_mask_cell(col, val) if val is not None else "" for col, val in zip(columns, row))
+                        for row in raw_data
+                    ]
+                    cursor.close()
+                    conn.close()
+                except pymysql.MySQLError as e:
+                    flash(f"查询失败: {str(e)}", "danger")
+
+    return render_template("db_query.html",
+                           tables=tables,
+                           data=data,
+                           columns=columns,
+                           selected_table=selected_table,
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ---------- API：数据库表数据 ----------
+@app.route("/api/table/<table>/data")
+@login_required
+@admin_required
+@db_captcha_required
+def api_table_data(table):
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        # 白名单校验：确认表存在
+        cursor.execute("SHOW TABLES")
+        valid_tables = [r[0] for r in cursor.fetchall()]
+        if table not in valid_tables:
+            return jsonify({"error": "表不存在"}), 404
+        cursor.execute(f"DESCRIBE `{table}`")
+        cols = cursor.fetchall()
+        cursor.execute(f"SELECT * FROM `{table}`")
+        rows = cursor.fetchall()
+        column_names = [c[0] for c in cols]
+        column_types = [c[1] for c in cols]
+        primary_key = cols[0][0] if any(c[3] == "PRI" for c in cols) else cols[0][0]
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "columns": column_names,
+            "types": column_types,
+            "primary_key": primary_key,
+            "rows": [[
+                _mask_cell(col_name, cell) if cell is not None else ""
+                for col_name, cell in zip(column_names, row)
+            ] for row in rows]
+        })
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/table/<table>/insert", methods=["POST"])
+@login_required
+@admin_required
+@db_captcha_required
+def api_table_insert(table):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "无数据"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cols = ", ".join(f"`{k}`" for k in data.keys())
+        vals = ", ".join("%s" for _ in data)
+        sql = f"INSERT INTO `{table}` ({cols}) VALUES ({vals})"
+        cursor.execute(sql, list(data.values()))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        write_log("插入数据", f"表: {table}, 用户: {session['username']}")
+        return jsonify({"success": True, "affected": cursor.rowcount})
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/table/<table>/update", methods=["POST"])
+@login_required
+@admin_required
+@db_captcha_required
+def api_table_update(table):
+    data = request.get_json()
+    if not data or "pk" not in data or "pk_col" not in data:
+        return jsonify({"error": "缺少主键信息"}), 400
+    pk_col = data["pk_col"]
+    pk_val = data["pk"]
+    fields = {k: v for k, v in data["fields"].items()}
+    if not fields:
+        return jsonify({"error": "无更新字段"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        set_clause = ", ".join(f"`{k}` = %s" for k in fields.keys())
+        sql = f"UPDATE `{table}` SET {set_clause} WHERE `{pk_col}` = %s"
+        cursor.execute(sql, list(fields.values()) + [pk_val])
+        conn.commit()
+        cursor.close()
+        conn.close()
+        write_log("更新数据", f"表: {table}, 主键: {pk_col}={pk_val}, 用户: {session['username']}")
+        return jsonify({"success": True, "affected": cursor.rowcount})
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/table/<table>/delete/<path:pk_val>")
+@login_required
+@admin_required
+@db_captcha_required
+def api_table_delete(table, pk_val):
+    pk_col = request.args.get("pk_col", "")
+    if not pk_col:
+        return jsonify({"error": "缺少主键字段"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        sql = f"DELETE FROM `{table}` WHERE `{pk_col}` = %s"
+        cursor.execute(sql, [pk_val])
+        conn.commit()
+        cursor.close()
+        conn.close()
+        write_log("删除数据", f"表: {table}, 主键: {pk_col}={pk_val}, 用户: {session['username']}")
+        return jsonify({"success": True, "affected": cursor.rowcount})
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------- 路由：更改数据库（可视化） ----------
+@app.route("/db_update")
+@login_required
+@admin_required
+@db_captcha_required
+def db_update():
+    conn = get_db()
+    tables = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SHOW TABLES")
+            tables = [r[0] for r in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+        except:
+            pass
+    return render_template("db_update.html",
+                           tables=tables,
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ---------- 路由：文件管理器 ----------
+# ---------- 路由：毕业相册 ----------
+ALBUM_DIR = os.path.join(os.path.dirname(__file__), "static", "albums")
+os.makedirs(ALBUM_DIR, exist_ok=True)
+
+@app.route("/album")
+@login_required
+def album():
+    """Vue3 前端 - 开发时返回 Vite dev 代理，生产时返回构建文件"""
+    # 尝试返回构建后的文件
+    dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+    if os.path.exists(os.path.join(dist, "index.html")):
+        return send_from_directory(dist, "index.html")
+    # fallback: 开发模式 → Vite dev server
+    return render_template("album_vue3.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+@app.route("/assets/<path:filename>")
+def serve_assets(filename):
+    """服务 Vite 构建的静态资源"""
+    dist_assets = os.path.join(os.path.dirname(__file__), "frontend", "dist", "assets")
+    return send_from_directory(dist_assets, filename)
+
+
+@app.route("/api/album/images")
+@login_required
+def api_album_images():
+    category = request.args.get("category", "graduation")
+    sort = request.args.get("sort", "newest")
+    search = request.args.get("search", "").strip()
+    tag_id = request.args.get("tag_id", "").strip()
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    _init_album_tables(conn)
+    try:
+        cursor = conn.cursor()
+        join_clause = ""
+        where = "WHERE category=%s"
+        params = [category]
+        if search:
+            where += " AND name LIKE %s"
+            params.append(f"%{search}%")
+        if tag_id:
+            join_clause = " JOIN album_image_tags ait ON album_images.id=ait.image_id"
+            where += " AND ait.tag_id=%s"
+            params.append(int(tag_id))
+        order = "ORDER BY upload_time DESC" if sort == "newest" else "ORDER BY upload_time ASC"
+        cursor.execute(f"SELECT DISTINCT album_images.id, category, name, filename, uploader, uploader_name, upload_time FROM album_images{join_clause} {where} {order}", params)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify([{
+            "id": r[0], "category": r[1], "name": r[2], "filename": r[3],
+            "uploader": r[4], "uploaderName": r[5],
+            "uploadTime": r[6].strftime("%Y-%m-%d %H:%M") if r[6] else ""
+        } for r in rows])
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/album/images/<int:img_id>", methods=["PUT", "DELETE"])
+@login_required
+def api_album_image_manage(img_id):
+    if session["permission"] != "administrator":
+        return jsonify({"error": "权限不足"}), 403
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+
+    if request.method == "PUT":
+        # 修改名称
+        data = request.get_json()
+        new_name = sanitize_input(data.get("name", "") if data else "", 100).strip()
+        if not new_name:
+            return jsonify({"error": "名称不能为空"}), 400
+        try:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE album_images SET name=%s WHERE id=%s", [new_name, img_id])
+            conn.commit()
+            cursor.close()
+            conn.close()
+            write_log("修改图片名", f"用户: {session['username']}, 图片ID: {img_id}, 新名: {new_name}")
+            return jsonify({"success": True})
+        except pymysql.MySQLError as e:
+            return jsonify({"error": str(e)}), 500
+
+    if request.method == "DELETE":
+        try:
+            cursor = conn.cursor()
+            # 先查文件名
+            cursor.execute("SELECT filename FROM album_images WHERE id=%s", [img_id])
+            row = cursor.fetchone()
+            if not row:
+                cursor.close(); conn.close()
+                return jsonify({"error": "图片不存在"}), 404
+            filename = row[0]
+            # 删数据库记录（级联删评论、点赞、分享链接）
+            cursor.execute("DELETE FROM album_likes WHERE image_id=%s", [img_id])
+            cursor.execute("DELETE FROM album_image_comments WHERE image_id=%s", [img_id])
+            cursor.execute("DELETE FROM album_share_links WHERE image_id=%s", [img_id])
+            cursor.execute("DELETE FROM album_images WHERE id=%s", [img_id])
+            conn.commit()
+            cursor.close()
+            conn.close()
+            # 删文件
+            filepath = os.path.join(ALBUM_DIR, filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            write_log("删除图片", f"用户: {session['username']}, 图片ID: {img_id}, 文件: {filename}")
+            return jsonify({"success": True})
+        except pymysql.MySQLError as e:
+            return jsonify({"error": str(e)}), 500
+
+    return jsonify({"error": "未知操作"}), 400
+
+
+@app.route("/api/album/upload", methods=["POST"])
+@login_required
+def api_album_upload():
+    if session["permission"] != "administrator" and session.get("role") != "teacher":
+        return jsonify({"error": "权限不足"}), 403
+    file = request.files.get("image")
+    if not file or not file.filename:
+        return jsonify({"error": "未选择文件"}), 400
+    if not file.content_type or not file.content_type.startswith("image/"):
+        return jsonify({"error": "仅支持图片格式"}), 400
+
+    # 限制文件大小（10MB）
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+    file.seek(0, 2)
+    file_size = file.tell()
+    file.seek(0)
+    if file_size > MAX_FILE_SIZE:
+        return jsonify({"error": "文件大小不能超过 10MB"}), 400
+
+    # 验证文件魔数
+    header = file.read(12)
+    file.seek(0)
+    MAGIC_NUMBERS = {
+        b"\xff\xd8\xff": ".jpg",
+        b"\x89PNG\r\n\x1a\n": ".png",
+        b"GIF87a": ".gif",
+        b"GIF89a": ".gif",
+        b"RIFF": ".webp",
+        b"BM": ".bmp",
+    }
+    ext = ".jpg"
+    detected = False
+    for magic, magic_ext in MAGIC_NUMBERS.items():
+        if header[:len(magic)] == magic:
+            ext = magic_ext
+            detected = True
+            break
+    if not detected:
+        return jsonify({"error": "文件格式不合法，仅允许 jpg/png/gif/webp/bmp"}), 400
+
+    import uuid
+    save_name = f"{uuid.uuid4().hex}{ext}"
+    file.save(os.path.join(ALBUM_DIR, save_name))
+
+    category = request.form.get("category", "graduation")
+    name = sanitize_input(request.form.get("name", ""), 100).strip() or file.filename[:100]
+
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO album_images (category, name, filename, uploader, uploader_name) VALUES (%s,%s,%s,%s,%s)",
+            [category, name, save_name, session["username"], session["username"]]
+        )
+        conn.commit()
+        img_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        write_log("上传图片", f"用户: {session['username']}, 图片: {name}, ID: {img_id}")
+        return jsonify({"success": True, "id": img_id})
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------- 点赞 ----------
+@app.route("/api/album/images/<int:img_id>/like", methods=["GET", "POST", "DELETE"])
+@login_required
+def api_album_like(img_id):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    user = session["username"]
+
+    if request.method == "GET":
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM album_likes WHERE image_id=%s", [img_id])
+            count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM album_likes WHERE image_id=%s AND user=%s", [img_id, user])
+            liked = cursor.fetchone()[0] > 0
+            cursor.close()
+            conn.close()
+            return jsonify({"count": count, "liked": liked})
+        except pymysql.MySQLError as e:
+            return jsonify({"error": str(e)}), 500
+
+    if request.method == "POST":
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT IGNORE INTO album_likes (image_id, user) VALUES (%s, %s)", [img_id, user])
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({"success": True})
+        except pymysql.MySQLError as e:
+            return jsonify({"error": str(e)}), 500
+
+    if request.method == "DELETE":
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM album_likes WHERE image_id=%s AND user=%s", [img_id, user])
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return jsonify({"success": True})
+        except pymysql.MySQLError as e:
+            return jsonify({"error": str(e)}), 500
+
+
+# ---------- 下载图片 ----------
+@app.route("/api/album/images/<int:img_id>/download")
+@login_required
+def api_album_download(img_id):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename, name FROM album_images WHERE id=%s", [img_id])
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            return jsonify({"error": "找不到图片"}), 404
+        filename, name = row
+        # 保留原始文件后缀
+        _, ext = os.path.splitext(filename)
+        safe_name = (name if name else filename)
+        if ext and not safe_name.lower().endswith(ext.lower()):
+            safe_name += ext
+        return send_from_directory(ALBUM_DIR, filename, as_attachment=True, download_name=safe_name)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------- 分享链接 ----------
+
+@app.route("/api/album/images/<int:img_id>/share", methods=["GET", "POST"])
+@login_required
+def api_album_share(img_id):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+
+    if request.method == "POST":
+        token = uuid.uuid4().hex
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO album_share_links (image_id, token) VALUES (%s, %s)", [img_id, token])
+            conn.commit()
+            cursor.close()
+            conn.close()
+            link = f"{request.host_url}share/{token}"
+            return jsonify({"link": link, "token": token})
+        except pymysql.MySQLError as e:
+            return jsonify({"error": str(e)}), 500
+
+    if request.method == "GET":
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT token FROM album_share_links WHERE image_id=%s ORDER BY created_at DESC LIMIT 1", [img_id])
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            if row:
+                link = f"{request.host_url}share/{row[0]}"
+                return jsonify({"link": link})
+            return jsonify({"link": None})
+        except pymysql.MySQLError as e:
+            return jsonify({"error": str(e)}), 500
+
+
+@app.route("/share/<token>")
+def share_view(token):
+    conn = get_album_db()
+    if not conn:
+        return "<h2>页面不存在</h2>", 404
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT ai.id, ai.name, ai.filename, ai.uploader, ai.upload_time,
+                   (SELECT COUNT(*) FROM album_likes WHERE image_id=ai.id) as likes
+            FROM album_share_links sl
+            JOIN album_images ai ON ai.id = sl.image_id
+            WHERE sl.token=%s
+        """, [token])
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            return "<h2>链接无效或已过期</h2>", 404
+        img_id, name, filename, uploader, upload_time, likes = row
+        time_str = upload_time.strftime("%Y-%m-%d %H:%M") if upload_time else ""
+        return f"""
+        <!DOCTYPE html>
+        <html><head><meta charset="UTF-8"><title>{name} - 分享</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>body{{margin:0;background:#222;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif}}
+        .box{{background:#fff;border-radius:12px;padding:20px;max-width:800px;margin:20px;text-align:center}}
+        img{{max-width:100%;max-height:70vh;border-radius:8px}}
+        .info{{margin-top:12px;color:#666;font-size:14px}}
+        h2{{margin:8px 0;color:#333}}</style></head>
+        <body><div class="box">
+        <img src="/static/albums/{filename}">
+        <h2>{name}</h2>
+        <div class="info">{uploader} · {time_str} · ♥ {likes}</div>
+        </div></body></html>
+        """
+    except Exception as e:
+        return f"<h2>加载失败: {str(e)}</h2>", 500
+
+@app.route("/api/album/images/<int:img_id>/comments")
+@login_required
+def api_album_image_comments(img_id):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, author, author_name, text, time FROM album_image_comments WHERE image_id=%s ORDER BY time ASC",
+            [img_id]
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify([{
+            "id": r[0], "author": r[1], "authorName": r[2], "text": r[3],
+            "time": r[4].strftime("%Y-%m-%d %H:%M") if r[4] else ""
+        } for r in rows])
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/album/images/<int:img_id>/comments", methods=["POST"])
+@login_required
+def api_album_add_image_comment(img_id):
+    data = request.get_json()
+    text = sanitize_input(data.get("text", "") if data else "", 500)
+    if not text:
+        return jsonify({"error": "内容不能为空"}), 400
+    reply_to = data.get("reply_to") if data else None
+    reply_user = sanitize_input(data.get("reply_user", "") if data else "", 50) or None
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        if reply_to:
+            cursor.execute(
+                "INSERT INTO album_image_comments (image_id, reply_to, reply_user, author, author_name, text) VALUES (%s,%s,%s,%s,%s,%s)",
+                [img_id, reply_to, reply_user, session["username"], session["username"], text]
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO album_image_comments (image_id, author, author_name, text) VALUES (%s,%s,%s,%s)",
+                [img_id, session["username"], session["username"], text]
+            )
+        conn.commit()
+        cid = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        write_log("图片评论", f"用户: {session['username']}, 图片ID: {img_id}")
+        return jsonify({"success": True, "id": cid})
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/album/comments")
+@login_required
+def api_album_general_comments():
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, author, author_name, text, time FROM album_general_comments ORDER BY time DESC")
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify([{
+            "id": r[0], "author": r[1], "authorName": r[2], "text": r[3],
+            "time": r[4].strftime("%Y-%m-%d %H:%M") if r[4] else ""
+        } for r in rows])
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/album/comments", methods=["POST"])
+@login_required
+def api_album_add_general_comment():
+    data = request.get_json()
+    text = sanitize_input(data.get("text", "") if data else "", 500)
+    if not text:
+        return jsonify({"error": "内容不能为空"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO album_general_comments (author, author_name, text) VALUES (%s,%s,%s)",
+            [session["username"], session["username"], text]
+        )
+        conn.commit()
+        cid = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        write_log("总体留言", f"用户: {session['username']}")
+        return jsonify({"success": True, "id": cid})
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/album/comments/<int:cid>", methods=["DELETE"])
+@login_required
+def api_album_general_comment_delete(cid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("SELECT author FROM album_general_comments WHERE id=%s", (cid,))
+    row = cursor.fetchone()
+    if not row:
+        return jsonify({"error": "留言不存在"}), 404
+    is_admin = session.get("permission") == "administrator"
+    is_owner = row[0] == session.get("username")
+    if not is_admin and not is_owner:
+        return jsonify({"error": "只能删除自己的留言"}), 403
+    cursor.execute("DELETE FROM album_general_comments WHERE id=%s", (cid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/album/stats")
+@login_required
+def api_album_stats():
+    conn = get_album_db()
+    if not conn:
+        return jsonify({}), 500
+    try:
+        cursor = conn.cursor()
+        # 上传排行榜
+        cursor.execute("SELECT uploader, COUNT(*) as cnt FROM album_images GROUP BY uploader ORDER BY cnt DESC LIMIT 5")
+        top_uploaders = [{"user": r[0], "count": r[1]} for r in cursor.fetchall()]
+        # 评论排行榜
+        cursor.execute("SELECT author, COUNT(*) as cnt FROM album_image_comments GROUP BY author ORDER BY cnt DESC LIMIT 5")
+        top_commenters = [{"user": r[0], "count": r[1]} for r in cursor.fetchall()]
+        # 最受欢迎图片
+        cursor.execute("""
+            SELECT ai.id, ai.name, ai.filename, COUNT(al.id) as likes
+            FROM album_images ai LEFT JOIN album_likes al ON al.image_id=ai.id
+            GROUP BY ai.id ORDER BY likes DESC LIMIT 5
+        """)
+        top_liked = [{"id": r[0], "name": r[1], "filename": r[2], "likes": r[3]} for r in cursor.fetchall()]
+        # 总数
+        cursor.execute("SELECT COUNT(*) FROM album_images")
+        total_images = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM album_image_comments")
+        total_comments = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM album_likes")
+        total_likes = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "totalImages": total_images, "totalComments": total_comments, "totalLikes": total_likes,
+            "topUploaders": top_uploaders, "topCommenters": top_commenters, "topLiked": top_liked
+        })
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/album/me")
+@login_required
+def api_album_me():
+    return jsonify({
+        "username": session["username"],
+        "permission": session["permission"],
+        "isTeacher": session["permission"] == "administrator"
+    })
+
+# ===== 新功能 API =====
+
+# --- 📅 大事记时间轴 ---
+@app.route("/api/album/events")
+def api_album_events():
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM album_events ORDER BY event_date DESC")
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    for r in rows:
+        r["event_date"] = str(r["event_date"])
+        r["created_at"] = str(r["created_at"])
+    return jsonify(rows)
+
+@app.route("/api/album/events", methods=["POST"])
+@login_required
+@admin_required
+def api_album_events_add():
+    data = request.get_json()
+    title = sanitize_input(data.get("title", ""))
+    desc = sanitize_input(data.get("description", ""), 2000)
+    event_date = (data or {}).get("event_date", "")
+    if not title or not event_date:
+        return jsonify({"error": "标题和日期必填"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO album_events (title, description, event_date, created_by) VALUES (%s,%s,%s,%s)",
+        (title, desc, event_date, session["username"])
+    )
+    conn.commit()
+    eid = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "id": eid})
+
+@app.route("/api/album/events/<int:eid>", methods=["DELETE"])
+@login_required
+@admin_required
+def api_album_events_delete(eid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM album_events WHERE id=%s", (eid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+# --- 👥 同学录 ---
+@app.route("/api/album/classmates")
+def api_album_classmates():
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM album_classmates ORDER BY name")
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    for r in rows:
+        if r.get("birthday"): r["birthday"] = str(r["birthday"])
+        r["created_at"] = str(r["created_at"])
+    cursor.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/album/classmates", methods=["POST"])
+@login_required
+def api_album_classmates_add():
+    data = request.get_json()
+    name = sanitize_input(data.get("name", ""))
+    if not name:
+        return jsonify({"error": "姓名必填"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO album_classmates (name, nickname, avatar_url, birthday, phone, email, motto, interests, future_plan, created_by)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (name, sanitize_input(data.get("nickname","")), sanitize_input(data.get("avatar_url",""),500),
+         data.get("birthday","") or None, sanitize_input(data.get("phone","")), sanitize_input(data.get("email","")),
+         sanitize_input(data.get("motto",""),500), sanitize_input(data.get("interests",""),500),
+         sanitize_input(data.get("future_plan",""),500), session["username"])
+    )
+    conn.commit()
+    cid = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "id": cid})
+
+@app.route("/api/album/classmates/<int:cid>", methods=["DELETE"])
+@login_required
+@admin_required
+def api_album_classmates_delete(cid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM album_classmates WHERE id=%s", (cid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+# --- 🎓 毕业寄语墙 ---
+@app.route("/api/album/wishes")
+def api_album_wishes():
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM album_wishes ORDER BY created_at DESC")
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    for r in rows:
+        r["created_at"] = str(r["created_at"])
+    cursor.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/album/wishes", methods=["POST"])
+@login_required
+def api_album_wishes_add():
+    data = request.get_json()
+    content = sanitize_input(data.get("content", ""), 500)
+    if not content:
+        return jsonify({"error": "内容不能为空"}), 400
+    is_anon = 1 if data.get("is_anonymous") else 0
+    colors = ["#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7","#DDA0DD","#98D8C8","#F7DC6F","#BB8FCE","#85C1E9"]
+    color = random.choice(colors)
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO album_wishes (author, is_anonymous, content, avatar_color) VALUES (%s,%s,%s,%s)",
+        (session["username"], is_anon, content, color)
+    )
+    conn.commit()
+    wid = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "id": wid})
+
+@app.route("/api/album/wishes/<int:wid>", methods=["DELETE"])
+@login_required
+def api_album_wishes_delete(wid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    # 检查所有权：本人或管理员可删除
+    cursor.execute("SELECT author FROM album_wishes WHERE id=%s", (wid,))
+    row = cursor.fetchone()
+    if not row:
+        return jsonify({"error": "寄语不存在"}), 404
+    is_admin = session.get("permission") == "administrator"
+    is_owner = row[0] == session.get("username")
+    if not is_admin and not is_owner:
+        return jsonify({"error": "只能删除自己的寄语"}), 403
+    cursor.execute("DELETE FROM album_wishes WHERE id=%s", (wid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+# --- 🏷️ 照片标签 ---
+@app.route("/api/album/tags")
+def api_album_tags():
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    _init_album_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM album_tags ORDER BY name")
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/album/tags", methods=["POST"])
+@login_required
+def api_album_tags_add():
+    data = request.get_json()
+    name = sanitize_input(data.get("name", ""))
+    color = sanitize_input(data.get("color", "#04c"))
+    if not name:
+        return jsonify({"error": "标签名必填"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    _init_album_tables(conn)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO album_tags (name,color) VALUES (%s,%s)", (name, color))
+        conn.commit()
+        tid = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "id": tid})
+    except pymysql.MySQLError:
+        return jsonify({"error": "标签已存在"}), 400
+
+@app.route("/api/album/tags/<int:tid>", methods=["DELETE"])
+@login_required
+def api_album_tags_delete(tid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    _init_album_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM album_image_tags WHERE tag_id=%s", (tid,))
+    cursor.execute("DELETE FROM album_tags WHERE id=%s", (tid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/album/images/<int:img_id>/tags")
+def api_album_image_tags(img_id):
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    _init_album_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT t.id, t.name, t.color FROM album_tags t
+        JOIN album_image_tags it ON it.tag_id=t.id
+        WHERE it.image_id=%s ORDER BY t.name
+    """, (img_id,))
+    rows = [{"id": r[0], "name": r[1], "color": r[2]} for r in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/album/images/<int:img_id>/tags", methods=["POST"])
+@login_required
+def api_album_image_tags_set(img_id):
+    data = request.get_json()
+    tag_ids = (data or {}).get("tag_ids", [])
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    _init_album_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM album_image_tags WHERE image_id=%s", (img_id,))
+    for tid in tag_ids:
+        cursor.execute("INSERT IGNORE INTO album_image_tags (image_id, tag_id) VALUES (%s,%s)", (img_id, tid))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+# --- 🎵 毕业歌单 ---
+@app.route("/api/album/playlist")
+def api_album_playlist():
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM album_playlist ORDER BY votes DESC, created_at DESC")
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    for r in rows:
+        r["created_at"] = str(r["created_at"])
+    cursor.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/album/playlist", methods=["POST"])
+@login_required
+def api_album_playlist_add():
+    data = request.get_json()
+    title = sanitize_input(data.get("title", ""))
+    artist = sanitize_input(data.get("artist", ""))
+    url = sanitize_input(data.get("url", ""), 500)
+    if not title:
+        return jsonify({"error": "歌名必填"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO album_playlist (title, artist, url, added_by) VALUES (%s,%s,%s,%s)",
+        (title, artist, url, session["username"])
+    )
+    conn.commit()
+    pid = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "id": pid})
+
+@app.route("/api/album/playlist/<int:pid>/vote", methods=["POST"])
+@login_required
+def api_album_playlist_vote(pid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("UPDATE album_playlist SET votes=votes+1 WHERE id=%s", (pid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/album/playlist/<int:pid>", methods=["DELETE"])
+@login_required
+@admin_required
+def api_album_playlist_delete(pid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM album_playlist WHERE id=%s", (pid,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+# --- 💬 弹幕 ---
+@app.route("/api/album/images/<int:img_id>/danmaku")
+def api_album_danmaku(img_id):
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM album_danmaku WHERE image_id=%s ORDER BY created_at", (img_id,))
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    for r in rows:
+        r["created_at"] = str(r["created_at"])
+    cursor.close()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/album/images/<int:img_id>/danmaku", methods=["POST"])
+@login_required
+def api_album_danmaku_add(img_id):
+    data = request.get_json()
+    text = sanitize_input(data.get("text", ""), 200)
+    color = sanitize_input(data.get("color", "#fff"))
+    position = float((data or {}).get("position", 50))
+    if not text:
+        return jsonify({"error": "弹幕内容不能为空"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO album_danmaku (image_id, text, color, position, author) VALUES (%s,%s,%s,%s,%s)",
+        (img_id, text, color, position, session["username"])
+    )
+    conn.commit()
+    did = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "id": did})
+
+
+
+def _safe_realpath(path):
+    """确保路径是真实路径且不包含 '..' 路径穿越"""
+    path = os.path.realpath(path)
+    # 限制在用户主目录下
+    allowed_base = os.path.realpath(os.path.expanduser("~"))
+    if not path.startswith(allowed_base):
+        return allowed_base
+    return path
+
+
+@app.route("/file_manager", methods=["GET", "POST"])
+@login_required
+@non_guest_required
+@fm_password_required
+def file_manager():
+    current_path = _safe_realpath(request.form.get("path", os.path.expanduser("~")))
+    dirs = []
+    files = []
+    error = ""
+
+    if request.method == "POST" and "go_up" in request.form:
+        parent = os.path.dirname(current_path)
+        current_path = _safe_realpath(parent)
+
+    try:
+        items = os.listdir(current_path)
+        for item in sorted(items):
+            full = os.path.join(current_path, item)
+            if os.path.isdir(full):
+                dirs.append(item)
+            else:
+                try:
+                    size = os.path.getsize(full)
+                    if size < 1024:
+                        size_str = f"{size} B"
+                    elif size < 1024**2:
+                        size_str = f"{size/1024:.1f} KB"
+                    else:
+                        size_str = f"{size/(1024**2):.1f} MB"
+                except:
+                    size_str = "?"
+                files.append({"name": item, "size": size_str})
+    except PermissionError:
+        error = "没有权限访问该目录"
+    except Exception as e:
+        error = str(e)
+
+    return render_template("file_manager.html",
+                           current_path=current_path,
+                           dirs=dirs,
+                           files=files,
+                           error=error,
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ---------- 文件管理器 API：上传 ----------
+@app.route("/api/file/upload", methods=["POST"])
+@login_required
+def api_file_upload():
+    target_dir = _safe_realpath(request.form.get("path", os.path.expanduser("~")))
+    if "file" not in request.files:
+        return jsonify({"error": "未选择文件"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "未选择文件"}), 400
+    # 安全文件名
+    safe_name = re.sub(r"[^\w\-.]", "_", f.filename)
+    if not safe_name:
+        return jsonify({"error": "无效文件名"}), 400
+    # 大小限制 50MB
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(0)
+    if size > 50 * 1024 * 1024:
+        return jsonify({"error": "文件不能超过50MB"}), 400
+    dest = os.path.join(target_dir, safe_name)
+    try:
+        f.save(dest)
+        write_log("文件管理上传", f"文件: {safe_name}, 路径: {target_dir}, 操作者: {session['username']}")
+        return jsonify({"success": True, "name": safe_name})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------- 文件管理器 API：下载（仅管理员） ----------
+@app.route("/api/file/download", methods=["GET"])
+@login_required
+def api_file_download():
+    filepath = _safe_realpath(request.args.get("path", ""))
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "文件不存在"}), 404
+    dir_name = os.path.dirname(filepath)
+    file_name = os.path.basename(filepath)
+    # 确认路径穿越防护
+    if _safe_realpath(filepath) != filepath:
+        return jsonify({"error": "路径非法"}), 403
+    return send_from_directory(dir_name, file_name, as_attachment=True)
+
+
+# ---------- 文件管理器 API：删除（仅管理员） ----------
+@app.route("/api/file/delete", methods=["POST"])
+@login_required
+@admin_required
+def api_file_delete():
+    filepath = _safe_realpath(request.form.get("path", ""))
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "文件不存在"}), 404
+    try:
+        os.remove(filepath)
+        write_log("文件管理删除", f"文件: {filepath}, 操作者: {session['username']}")
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------- 路由：备忘录 ----------
+NOTES_FILE = os.path.join(os.path.dirname(__file__), "..", "notes.txt")
+
+# ---------- 路由：修改密码 ----------
+@app.route("/change_password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    users = []
+    is_admin = (session["permission"] == "administrator")
+
+    if is_admin:
+        conn = get_db()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT User_Name FROM users")
+                users = [r[0] for r in cursor.fetchall()]
+                cursor.close()
+                conn.close()
+            except:
+                pass
+
+    if request.method == "POST":
+        # 修改密码
+        current_user = session["username"]
+        target_user = sanitize_input(request.form.get("target_user", current_user), 50)
+        old_pwd = request.form.get("old_pwd", "").strip()
+        new_pwd = request.form.get("new_pwd", "").strip()
+        confirm_pwd = request.form.get("confirm_pwd", "").strip()
+        captcha_input = request.form.get("captcha", "").strip().lower()
+
+        # 验证码校验
+        stored_code = session.get("captcha_code", "")
+        captcha_time = session.get("captcha_time", 0)
+
+        if not stored_code:
+            flash("验证码已失效，请刷新", "danger")
+        elif time.time() - captcha_time > 300:
+            session.pop("captcha_code", None)
+            flash("验证码已过期，请刷新", "danger")
+        elif captcha_input != stored_code:
+            session.pop("captcha_code", None)
+            flash("验证码错误", "danger")
+        elif not new_pwd or not confirm_pwd:
+            flash("新密码和确认密码不能为空", "danger")
+        elif new_pwd != confirm_pwd:
+            flash("两次输入的新密码不一致", "danger")
+        elif len(new_pwd) < 8:
+            flash("新密码长度不能少于8位", "danger")
+        elif not re.search(r"[A-Za-z]", new_pwd):
+            flash("新密码必须包含至少一个字母", "danger")
+        elif not re.search(r"[0-9]", new_pwd):
+            flash("新密码必须包含至少一个数字", "danger")
+        else:
+            # 验证通过，清除验证码
+            session.pop("captcha_code", None)
+            session.pop("captcha_time", None)
+            conn = get_db()
+            if conn:
+                try:
+                    cursor = conn.cursor()
+                    hashed_new = generate_password_hash(new_pwd)
+                    if is_admin:
+                        cursor.execute(
+                            "UPDATE users SET User_Password = %s WHERE User_Name = %s",
+                            (hashed_new, target_user)
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT User_Password FROM users WHERE User_Name = %s",
+                            (current_user,)
+                        )
+                        result = cursor.fetchone()
+                        if not result or not check_password_hash(result[0], old_pwd):
+                            flash("原密码错误", "danger")
+                            cursor.close()
+                            conn.close()
+                            return render_template("change_password.html",
+                                                   is_admin=is_admin, users=users,
+                                                   username=session["username"],
+                                                   permission=session["permission"])
+                        cursor.execute(
+                            "UPDATE users SET User_Password = %s WHERE User_Name = %s",
+                            (hashed_new, current_user)
+                        )
+                    conn.commit()
+                    affected = cursor.rowcount
+                    cursor.close()
+                    conn.close()
+                    if affected > 0:
+                        write_log("修改密码", f"操作者: {current_user}, 目标: {target_user}")
+                        flash(f"用户 {sanitize_input(target_user)} 的密码已修改", "success")
+                    else:
+                        flash("修改密码失败", "danger")
+                except pymysql.MySQLError as e:
+                    flash(f"修改失败: {str(e)}", "danger")
+
+    return render_template("change_password.html",
+                           is_admin=is_admin, users=users,
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ---------- 路由：备忘录 ----------
+@app.route("/notes", methods=["GET", "POST"])
+@login_required
+def notes():
+    content = ""
+    if os.path.exists(NOTES_FILE):
+        with open(NOTES_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+
+    if request.method == "POST":
+        content = request.form.get("content", "")[:50000]  # 限制 50KB
+        with open(NOTES_FILE, "w", encoding="utf-8") as f:
+            f.write(content)
+        flash("备忘录已保存", "success")
+
+    return render_template("notes.html",
+                           content=content,
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ---------- 路由：计算器 ----------
+@app.route("/calculator")
+@login_required
+def calculator():
+    return render_template("calculator.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+@app.route("/calculator/sci")
+@login_required
+def calculator_sci():
+    return render_template("calculator_sci.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+@app.route("/calculator/net")
+@login_required
+def calculator_net():
+    return render_template("calculator_net.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+# ---------- 路由：日志 ----------
+# ---------- 路由：管理后台 ----------
+@app.route("/admin")
+@login_required
+@admin_required
+def admin_dashboard():
+    return render_template("admin_dashboard.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+@app.route("/api/admin/ip_stats")
+@login_required
+@admin_required
+def api_admin_ip_stats():
+    """返回所有IP的请求统计"""
+    now = time.time()
+    result = []
+    with rate_lock:
+        for ip, q in list(ip_requests.items()):
+            count = len(q)
+            first_req = q[0] if q else now
+            last_req = q[-1] if q else now
+            result.append({
+                "ip": ip,
+                "requests": count,
+                "first_request": datetime.datetime.fromtimestamp(first_req).strftime("%H:%M:%S"),
+                "last_request": datetime.datetime.fromtimestamp(last_req).strftime("%H:%M:%S"),
+                "rate_per_sec": round(count / max(now - first_req, 1), 2) if count > 1 else count,
+                "blocked": False,
+                "block_remaining": 0
+            })
+        for ip, blocked_until in list(ip_blocked.items()):
+            if now < blocked_until:
+                result.append({
+                    "ip": ip,
+                    "requests": 0,
+                    "first_request": "-",
+                    "last_request": "-",
+                    "rate_per_sec": 0,
+                    "blocked": True,
+                    "block_remaining": int(blocked_until - now),
+                    "block_probes": ip_blocked_probes.get(ip, 0)
+                })
+    with session_lock:
+        for ip, last_active in list(ip_last_active.items()):
+            for r in result:
+                if r["ip"] == ip:
+                    r["last_active"] = datetime.datetime.fromtimestamp(last_active).strftime("%H:%M:%S") if last_active else "-"
+                    r["idle_sec"] = int(now - last_active) if last_active else 0
+                    break
+    result.sort(key=lambda x: x["requests"], reverse=True)
+    # 标记白名单和手动封禁
+    for r in result:
+        r["whitelisted"] = r["ip"] in ip_whitelist
+        r["manual_blocked"] = r["ip"] in ip_manual_blocked and now < ip_manual_blocked.get(r["ip"], 0)
+        if r["manual_blocked"]:
+            r["manual_block_remaining"] = int(ip_manual_blocked[r["ip"]] - now)
+    return jsonify({
+        "ips": result,
+        "total_tracked": len(result),
+        "total_blocked": sum(1 for r in result if r["blocked"]),
+        "total_whitelisted": len(ip_whitelist),
+        "rate_limit": rate_config["RATE_LIMIT"],
+        "rate_window": rate_config["RATE_WINDOW"],
+        "block_duration": rate_config["BLOCK_DURATION"],
+        "block_probe_limit": rate_config["BLOCK_PROBE_LIMIT"],
+        "block_extend": rate_config["BLOCK_EXTEND"]
+    })
+
+
+@app.route("/api/admin/ip_stats", methods=["DELETE"])
+@login_required
+@admin_required
+def api_admin_clear_ip_stats():
+    """清除IP统计"""
+    ip = request.args.get("ip")
+    with rate_lock:
+        if ip:
+            ip_requests.pop(ip, None)
+            ip_blocked.pop(ip, None)
+            ip_blocked_probes.pop(ip, None)
+            ip_manual_blocked.pop(ip, None)
+            ip_whitelist.discard(ip)
+        else:
+            ip_requests.clear()
+            ip_blocked.clear()
+            ip_blocked_probes.clear()
+            ip_manual_blocked.clear()
+            ip_whitelist.clear()
+    _save_whitelist()
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/unblock", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_unblock():
+    """解封指定IP"""
+    data = request.get_json()
+    ip = (data or {}).get("ip", "").strip()
+    if not ip:
+        return jsonify({"error": "未提供IP"}), 400
+    with rate_lock:
+        ip_blocked.pop(ip, None)
+        ip_blocked_probes.pop(ip, None)
+        ip_manual_blocked.pop(ip, None)
+    write_log("管理后台解封IP", f"IP: {ip}, 操作者: {session['username']}")
+    return jsonify({"success": True})
+
+
+@app.route("/api/admin/whitelist", methods=["GET"])
+@login_required
+@admin_required
+def api_admin_whitelist_list():
+    """获取白名单列表"""
+    with rate_lock:
+        return jsonify({"whitelist": sorted(ip_whitelist), "count": len(ip_whitelist)})
+
+
+@app.route("/api/admin/whitelist", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_whitelist_add():
+    """添加IP到白名单"""
+    data = request.get_json()
+    ip = (data or {}).get("ip", "").strip()
+    if not ip:
+        return jsonify({"error": "未提供IP"}), 400
+    with rate_lock:
+        ip_whitelist.add(ip)
+        # 同时清除该IP的封禁状态
+        ip_blocked.pop(ip, None)
+        ip_blocked_probes.pop(ip, None)
+        ip_manual_blocked.pop(ip, None)
+        ip_requests.pop(ip, None)
+    _save_whitelist()
+    write_log("管理后台添加白名单", f"IP: {ip}, 操作者: {session['username']}")
+    return jsonify({"success": True, "count": len(ip_whitelist)})
+
+
+@app.route("/api/admin/whitelist", methods=["DELETE"])
+@login_required
+@admin_required
+def api_admin_whitelist_remove():
+    """从白名单移除IP"""
+    ip = request.args.get("ip", "").strip()
+    if not ip:
+        return jsonify({"error": "未提供IP"}), 400
+    with rate_lock:
+        ip_whitelist.discard(ip)
+    _save_whitelist()
+    write_log("管理后台移除白名单", f"IP: {ip}, 操作者: {session['username']}")
+    return jsonify({"success": True, "count": len(ip_whitelist)})
+
+
+@app.route("/api/admin/manual_block", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_manual_block():
+    """手动封禁IP（可指定时长，默认1小时）"""
+    data = request.get_json()
+    ip = (data or {}).get("ip", "").strip()
+    duration = int((data or {}).get("duration", 3600))  # 默认1小时
+    if not ip:
+        return jsonify({"error": "未提供IP"}), 400
+    with rate_lock:
+        # 不能封禁白名单IP
+        if ip in ip_whitelist:
+            return jsonify({"error": "该IP在白名单中，无法封禁"}), 400
+        ip_manual_blocked[ip] = time.time() + duration
+        ip_requests.pop(ip, None)
+    write_log("管理后台手动封禁", f"IP: {ip}, 时长: {duration}s, 操作者: {session['username']}")
+    return jsonify({"success": True, "until": int(time.time() + duration)})
+
+
+@app.route("/api/admin/batch", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_batch():
+    """批量操作：添加白名单 / 手动封禁"""
+    data = request.get_json()
+    action = (data or {}).get("action")  # "whitelist" 或 "block"
+    ips_raw = (data or {}).get("ips", "")
+    duration = int((data or {}).get("duration", 3600))
+
+    # 解析IP列表（支持逗号、空格、换行分隔）
+    ips = []
+    for part in re.split(r"[,;\s\n]+", ips_raw):
+        part = part.strip()
+        if part:
+            ips.append(part)
+    if not ips:
+        return jsonify({"error": "未提供有效IP"}), 400
+
+    success, skipped, failed = [], [], []
+    with rate_lock:
+        for ip in ips:
+            if ip in ip_whitelist and action == "whitelist":
+                skipped.append(ip)
+                continue
+            if action == "whitelist":
+                ip_whitelist.add(ip)
+                ip_blocked.pop(ip, None)
+                ip_blocked_probes.pop(ip, None)
+                ip_manual_blocked.pop(ip, None)
+                ip_requests.pop(ip, None)
+                success.append(ip)
+            elif action == "block":
+                if ip in ip_whitelist:
+                    skipped.append(ip)
+                    continue
+                ip_manual_blocked[ip] = time.time() + duration
+                ip_requests.pop(ip, None)
+                success.append(ip)
+            else:
+                failed.append(ip)
+
+    if action == "whitelist":
+        _save_whitelist()
+    write_log(f"管理后台批量{action}", f"IP: {ips}, 成功: {len(success)}, 跳过: {len(skipped)}, 操作者: {session['username']}")
+    return jsonify({"success": True, "added": success, "skipped": skipped, "failed": failed})
+
+
+# ---------- 速率限制配置 API ----------
+@app.route("/api/admin/rate_config", methods=["GET"])
+@login_required
+@admin_required
+def api_admin_rate_config_get():
+    """获取速率限制配置"""
+    return jsonify(dict(rate_config))
+
+@app.route("/api/admin/rate_config", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_rate_config_set():
+    """修改速率限制配置"""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "无数据"}), 400
+    changed = []
+    for key in ["RATE_LIMIT", "RATE_WINDOW", "BLOCK_DURATION", "BLOCK_PROBE_LIMIT", "BLOCK_EXTEND"]:
+        if key in data:
+            val = int(data[key])
+            if val <= 0:
+                return jsonify({"error": f"{key} 必须为正数"}), 400
+            rate_config[key] = val
+            changed.append(f"{key}={val}")
+    _save_rate_config()
+    write_log("管理后台修改速率配置", f"{', '.join(changed)}, 操作者: {session['username']}")
+    return jsonify({"success": True, "config": dict(rate_config)})
+
+
+@app.route("/logs")
+@login_required
+@admin_required
+def logs():
+    log_content = read_logs()
+    return render_template("logs.html",
+                           log_content=log_content,
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+@app.route("/logs/clear")
+@login_required
+@admin_required
+def logs_clear():
+    try:
+        ip = request.remote_addr or "0.0.0.0"
+        user = session.get("username", "unknown")
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clear_entry = f"[{now}] 清空日志 - IP: {ip}, 用户: {user}\n"
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            f.write(clear_entry)
+        flash("日志已清空", "info")
+    except:
+        flash("清空日志失败", "danger")
+    return redirect(url_for("logs"))
+
+
+# ---------- 全局错误处理：不泄露内部信息 ----------
+@app.errorhandler(404)
+def not_found(e):
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "页面不存在"}), 404
+    return render_template("login.html", csrf_token=session.get("csrf_token", "")), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "服务器内部错误"}), 500
+    return "<h2>服务器内部错误，请稍后重试</h2>", 500
+
+@app.errorhandler(403)
+def forbidden(e):
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "禁止访问"}), 403
+    return "<h2>禁止访问</h2>", 403
+
+
+# ---------- 启动 ----------
+if __name__ == "__main__":
+    print("=" * 50)
+    print("  多合一工具箱 Web 版启动")
+    print(f"  本地访问: http://127.0.0.1:5800")
+    print(f"  局域网访问: http://192.168.3.204:5800")
+    print(f"  调试模式: {'开启' if os.environ.get('FLASK_DEBUG') else '关闭'}")
+    print("=" * 50)
+    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=5800, debug=debug_mode)
