@@ -785,6 +785,8 @@ def logout():
 
 
 # ---------- 路由：忘记密码 ----------
+_reset_rate = {}  # {ip: (count, last_time)} 防滥用
+
 @app.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
     _init_db_once()
@@ -792,6 +794,15 @@ def forgot_password():
         username = sanitize_input(request.form.get("username", ""), 50)
         captcha_input = request.form.get("captcha", "").strip().lower()
         stored = session.get("captcha_code", "")
+        ip = request.remote_addr or "0.0.0.0"
+        now = time.time()
+
+        # 速率限制：每 IP 3分钟内最多3次
+        cnt, last = _reset_rate.get(ip, (0, 0))
+        if cnt >= 3 and now - last < 180:
+            remaining = int(180 - (now - last))
+            flash(f"操作过于频繁，请 {remaining} 秒后重试", "danger")
+            return render_template("forgot_password.html", csrf_token=session.get("csrf_token", ""))
 
         if not username:
             flash("请输入用户名", "danger")
@@ -800,12 +811,14 @@ def forgot_password():
             flash("验证码错误", "danger")
         else:
             session.pop("captcha_code", None)
+            _reset_rate[ip] = (cnt + 1, now)
             conn = get_db()
             if conn:
                 cursor = conn.cursor()
+                cursor.execute("UPDATE password_reset_tokens SET used=1 WHERE username=%s AND used=0", (username,))
+                cursor.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW()")
                 cursor.execute("SELECT User_Name FROM users WHERE User_Name=%s", (username,))
                 if cursor.fetchone():
-                    # 生成重置 token，10 分钟有效
                     token = uuid.uuid4().hex
                     expires = datetime.datetime.now() + datetime.timedelta(minutes=10)
                     cursor.execute(
@@ -813,15 +826,14 @@ def forgot_password():
                         (username, token, expires)
                     )
                     conn.commit()
-                    write_log("密码重置申请", f"用户名: {username}")
-                    flash(f"重置令牌: {token}（有效期10分钟）", "info")
+                    write_log("密码重置申请", f"用户名: {username}, IP: {ip}")
+                    flash(f"重置令牌（请完整复制）: {token}", "info")
                 else:
                     flash("用户名不存在", "danger")
                 cursor.close()
                 conn.close()
 
-    return render_template("forgot_password.html",
-                           csrf_token=session.get("csrf_token", ""))
+    return render_template("forgot_password.html", csrf_token=session.get("csrf_token", ""))
 
 
 @app.route("/reset_password", methods=["GET", "POST"])
@@ -861,15 +873,21 @@ def reset_password():
                 if not row:
                     flash("令牌无效或已过期", "danger")
                 else:
-                    hashed = generate_password_hash(new_pwd)
-                    cursor.execute("UPDATE users SET User_Password=%s WHERE User_Name=%s", (hashed, username))
-                    cursor.execute("UPDATE password_reset_tokens SET used=1 WHERE id=%s", (row[0],))
-                    conn.commit()
-                    write_log("密码重置成功", f"用户名: {username}")
-                    flash("密码重置成功，请登录", "success")
-                    cursor.close()
-                    conn.close()
-                    return redirect(url_for("login"))
+                    # 不允许和旧密码相同
+                    cursor.execute("SELECT User_Password FROM users WHERE User_Name=%s", (username,))
+                    old_pw = cursor.fetchone()
+                    if old_pw and check_password_hash(old_pw[0], new_pwd):
+                        flash("新密码不能与旧密码相同", "danger")
+                    else:
+                        hashed = generate_password_hash(new_pwd)
+                        cursor.execute("UPDATE users SET User_Password=%s WHERE User_Name=%s", (hashed, username))
+                        cursor.execute("UPDATE password_reset_tokens SET used=1 WHERE id=%s", (row[0],))
+                        conn.commit()
+                        write_log("密码重置成功", f"用户名: {username}, IP: {request.remote_addr}")
+                        flash("密码重置成功，请登录", "success")
+                        cursor.close()
+                        conn.close()
+                        return redirect(url_for("login"))
                 cursor.close()
                 conn.close()
 
