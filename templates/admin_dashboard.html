@@ -21,7 +21,34 @@
 </style>
 
 <h2 class="mb-3">🛡️ 管理后台</h2>
-<p class="text-muted mb-4">实时 IP 请求监控 & 服务器状态</p>
+<p class="text-muted mb-3">实时 IP 请求监控 & 服务器状态</p>
+
+{% if pending_admin_reqs > 0 %}
+<div class="alert alert-warning py-2 mb-3" style="cursor:pointer;" onclick="showAdminRequests()">
+    ⚠️ 有 <strong>{{ pending_admin_reqs }}</strong> 个待审核的管理员申请 — 点击查看
+</div>
+{% endif %}
+
+{% if leaderboard %}
+<div class="card mb-4">
+    <div class="card-header"><strong>🏆 活跃度排行榜</strong></div>
+    <div class="card-body p-2">
+        <table class="table table-sm table-hover mb-0" style="font-size:.85rem;">
+            <thead><tr><th>#</th><th>用户</th><th class="text-end">积分</th><th class="text-end">操作</th></tr></thead>
+            <tbody>
+            {% for u in leaderboard %}
+            <tr>
+                <td>{% if loop.index==1 %}🥇{% elif loop.index==2 %}🥈{% elif loop.index==3 %}🥉{% else %}{{ loop.index }}{% endif %}</td>
+                <td>{{ u.username }}</td>
+                <td class="text-end"><strong>{{ u.score }}</strong></td>
+                <td class="text-end" style="color:#888;">{{ u.actions }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 
 <!-- 顶部统计卡片 -->
 <div class="row g-3 mb-4" id="topStats">
@@ -619,6 +646,34 @@ function toggleRateConfig() {
     card.style.display = card.style.display === 'none' ? 'block' : 'none';
 }
 
+function showAdminRequests() {
+    fetch('/api/admin-requests')
+        .then(r => r.json())
+        .then(d => {
+            if (!d.requests || !d.requests.length) { alert('暂无申请记录'); return; }
+            var html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>用户</th><th>积分</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>';
+            d.requests.forEach(function(r) {
+                var sb = r.status === 'pending' ? '<span class="badge bg-warning text-dark">待审核</span>' :
+                    r.status === 'approved' ? '<span class="badge bg-success">已通过</span>' : '<span class="badge bg-secondary">已拒绝</span>';
+                var acts = r.status === 'pending' ?
+                    '<button class="btn btn-sm btn-success me-1" onclick="reviewReq(' + r.id + ',\\'approve\\')">通过</button><button class="btn btn-sm btn-danger" onclick="reviewReq(' + r.id + ',\\'reject\\')">拒绝</button>' :
+                    '<small class="text-muted">' + (r.reviewed_by || '') + '</small>';
+                html += '<tr><td>' + r.username + '</td><td>' + r.score + '</td><td>' + sb + '</td><td>' + (r.requested_at||'').slice(0,16) + '</td><td>' + acts + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+            document.getElementById('adminReqBody').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('adminReqModal')).show();
+        });
+}
+
+function reviewReq(id, action) {
+    if (!confirm('确定' + (action === 'approve' ? '通过' : '拒绝') + '此申请？')) return;
+    fetch('/api/admin-review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, action: action }) })
+        .then(r => r.json())
+        .then(d => { alert(d.message || d.error); location.reload(); })
+        .catch(() => alert('操作失败'));
+}
+
 async function saveRateConfig() {
     const data = {
         RATE_WINDOW: parseInt(document.getElementById('cfgWindow').value),
@@ -639,4 +694,14 @@ async function saveRateConfig() {
     refreshIPStats();
 }
 </script>
+
+<!-- 审核弹窗 -->
+<div class="modal fade" id="adminReqModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">📋 管理员申请审核</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="adminReqBody"></div>
+        </div>
+    </div>
+</div>
 {% endblock %}

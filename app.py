@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import io
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, jsonify, send_from_directory, send_file, abort
+    session, flash, jsonify, send_from_directory, send_file, abort, Response
 )
 from flask_cors import CORS
 
@@ -85,6 +85,28 @@ def _init_reset_table():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                action VARCHAR(50) NOT NULL,
+                points INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_activity_user (username),
+                INDEX idx_activity_time (created_at)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_requests (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                status VARCHAR(20) DEFAULT 'pending',
+                score INT DEFAULT 0,
+                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_by VARCHAR(50),
+                reviewed_at TIMESTAMP NULL
+            )
+        """)
         conn.commit()
         cursor.close()
         conn.close()
@@ -131,6 +153,7 @@ ip_blocked = {}         # {ip: blocked_until_timestamp}
 ip_blocked_probes = {}  # {ip: probe_count}
 ip_whitelist = set()    # 白名单 IP，不受速率限制
 ip_manual_blocked = {}  # {ip: blocked_until_timestamp} 手动封禁
+recent_blocks = []  # [(ip, timestamp, reason)] — 最近封禁记录，供通知功能使用
 
 # ---------- IP 白名单持久化 ----------
 WHITELIST_FILE = os.path.join(os.path.dirname(__file__), "ip_whitelist.json")
@@ -274,6 +297,9 @@ def check_rate_limit():
         if len(q) > rate_config["RATE_LIMIT"]:
             ip_blocked[ip] = now + rate_config["BLOCK_DURATION"]
             ip_blocked_probes[ip] = 0
+            recent_blocks.append((ip, now, "请求超限"))
+            if len(recent_blocks) > 100:
+                recent_blocks.pop(0)
             del ip_requests[ip]
             return jsonify({"error": f"请求过于频繁，IP已被封禁 {rate_config['BLOCK_DURATION']} 秒"}), 403
 
@@ -312,7 +338,7 @@ def check_session_idle_timeout():
 
 # ---------- 全站验证码门禁 ----------
 CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/")
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin-", "/api/notifications", "/api/avatar")
 
 @app.before_request
 def check_global_captcha():
@@ -710,6 +736,7 @@ def login():
                 session["permission"] = result[1]
                 session["csrf_token"] = os.urandom(32).hex()
                 write_log("用户登录", f"用户名: {username}, 权限: {result[1]}")
+                record_activity(username, "登录", 1)
                 flash(f"欢迎回来，{sanitize_input(username)}！", "success")
                 return redirect(url_for("dashboard"))
             # 兼容旧版：尝试明文密码匹配，并自动升级为 hash
@@ -728,6 +755,7 @@ def login():
                 session["permission"] = result[1]
                 session["csrf_token"] = os.urandom(32).hex()
                 write_log("用户登录(旧版密码升级hash)", f"用户名: {username}")
+                record_activity(username, "登录", 1)
                 flash(f"欢迎回来，{sanitize_input(username)}！密码已升级为更安全的存储方式", "success")
                 return redirect(url_for("dashboard"))
             else:
@@ -933,13 +961,313 @@ def reset_password():
                            csrf_token=session.get("csrf_token", ""))
 
 
+# ---------- 活跃度系统 ----------
+def record_activity(username, action, points=1):
+    """记录用户活跃行为"""
+    try:
+        conn = get_db()
+        if not conn:
+            return
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO activity_log (username, action, points) VALUES (%s, %s, %s)",
+            (username, action, points)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception:
+        pass
+
+def get_leaderboard(limit=10):
+    """获取活跃度排行榜（同分时访客优先）"""
+    conn = get_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT a.username, SUM(a.points) as total_score, COUNT(*) as action_count,
+                   COALESCE(u.Access_Permission,'') as perm
+            FROM activity_log a
+            LEFT JOIN users u ON a.username = u.User_Name
+            GROUP BY a.username, u.Access_Permission
+            ORDER BY total_score DESC,
+                     CASE WHEN COALESCE(u.Access_Permission,'')='guest' THEN 0 ELSE 1 END,
+                     a.username
+            LIMIT %s
+        """, (limit,))
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return [{"username": r[0], "score": int(r[1]), "actions": int(r[2])} for r in rows]
+    except Exception:
+        return []
+
+def get_user_rank(username):
+    """获取用户排名"""
+    conn = get_db()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT username, SUM(points) as total_score
+            FROM activity_log
+            GROUP BY username
+            ORDER BY total_score DESC
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        for idx, r in enumerate(rows):
+            if r[0] == username:
+                return {"rank": idx + 1, "username": r[0], "score": int(r[1])}
+        return None
+    except Exception:
+        return None
+
+# ---------- 路由：活跃度排行榜 API ----------
+@app.route("/api/leaderboard")
+def api_leaderboard():
+    limit = request.args.get("limit", 10, type=int)
+    return jsonify({"leaderboard": get_leaderboard(limit)})
+
+@app.route("/api/leaderboard/my-rank")
+@login_required
+def api_my_rank():
+    rank_info = get_user_rank(session["username"])
+    has_pending = False
+    conn = get_db()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT status FROM admin_requests WHERE username=%s AND status='pending'",
+                (session["username"],)
+            )
+            has_pending = cursor.fetchone() is not None
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+    return jsonify({
+        "rank": rank_info,
+        "has_pending_request": has_pending
+    })
+
+# ---------- 路由：申请管理员 ----------
+@app.route("/api/admin-request", methods=["POST"])
+@login_required
+def api_admin_request():
+    username = session["username"]
+    if session.get("permission") == "administrator":
+        return jsonify({"error": "你已经是管理员了"}), 400
+    rank_info = get_user_rank(username)
+    if not rank_info or rank_info["rank"] != 1:
+        return jsonify({"error": "只有排行榜第一名才能申请管理员"}), 403
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, status FROM admin_requests WHERE username=%s", (username,))
+        existing = cursor.fetchone()
+        if existing:
+            if existing[1] == "pending":
+                return jsonify({"error": "你已经有待审核的申请了"}), 400
+            elif existing[1] == "approved":
+                return jsonify({"error": "你的申请已经通过了"}), 400
+            else:
+                cursor.execute(
+                    "UPDATE admin_requests SET status='pending', score=%s, requested_at=NOW(), reviewed_by=NULL, reviewed_at=NULL WHERE username=%s",
+                    (rank_info["score"], username)
+                )
+        else:
+            cursor.execute(
+                "INSERT INTO admin_requests (username, score) VALUES (%s, %s)",
+                (username, rank_info["score"])
+            )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "管理员申请已提交，请等待现有管理员审核"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ---------- 路由：查看/处理管理员申请 ----------
+@app.route("/api/admin-requests")
+@login_required
+def api_admin_requests():
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "仅管理员可访问"}), 403
+    conn = get_db()
+    if not conn:
+        return jsonify({"requests": []})
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, username, score, status, requested_at, reviewed_by, reviewed_at
+            FROM admin_requests ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, requested_at DESC
+        """)
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "requests": [{"id": r[0], "username": r[1], "score": r[2], "status": r[3],
+                "requested_at": str(r[4]) if r[4] else None, "reviewed_by": r[5],
+                "reviewed_at": str(r[6]) if r[6] else None} for r in rows]
+        })
+    except Exception:
+        return jsonify({"requests": []})
+
+@app.route("/api/admin-review", methods=["POST"])
+@login_required
+def api_admin_review():
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "仅管理员可操作"}), 403
+    req_id = request.json.get("id")
+    action = request.json.get("action")
+    if action not in ("approve", "reject"):
+        return jsonify({"error": "无效操作"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, status FROM admin_requests WHERE id=%s", (req_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "申请不存在"}), 404
+        if row[1] != "pending":
+            return jsonify({"error": "申请已处理"}), 400
+        if action == "approve":
+            cursor.execute("UPDATE users SET Access_Permission='administrator' WHERE User_Name=%s", (row[0],))
+            new_status = "approved"
+        else:
+            new_status = "rejected"
+        cursor.execute(
+            "UPDATE admin_requests SET status=%s, reviewed_by=%s, reviewed_at=NOW() WHERE id=%s",
+            (new_status, session["username"], req_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "已" + ("通过" if action == "approve" else "拒绝") + "申请"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ---------- 路由：本地头像生成 ----------
+@app.route("/api/avatar/<seed>")
+def api_avatar(seed):
+    """生成初始头像SVG"""
+    size = request.args.get("size", 140, type=int)
+    bgcolor = request.args.get("bg", "667eea")
+    color = request.args.get("color", "fff")
+    text = seed[0].upper() if seed else "?"
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">
+    <rect width="{size}" height="{size}" rx="{size/2}" fill="#{bgcolor}"/>
+    <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle"
+          fill="#{color}" font-size="{size*0.45}" font-weight="700"
+          font-family="-apple-system,BlinkMacSystemFont,'Noto Sans SC',sans-serif">{text}</text>
+    </svg>'''
+    return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
+
+# ---------- 路由：通知铃铛 API ----------
+@app.route("/api/notifications")
+@login_required
+def api_notifications():
+    """获取未读通知数量"""
+    username = session["username"]
+    is_admin = session.get("permission") == "administrator"
+    since = request.args.get("since", "").strip()
+    result = {"chat_unread": 0, "admin_requests": 0, "blocked_ips": 0}
+
+    # 聊天未读
+    if since:
+        try:
+            conn = pymysql.connect(**ALBUM_DB_CONFIG)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM chat_messages
+                WHERE (channel='world' OR recipient=%s) AND sender!=%s AND created_at > %s
+            """, (username, username, since))
+            result["chat_unread"] = cursor.fetchone()[0]
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+
+    # 管理员通知
+    if is_admin:
+        try:
+            conn = get_db()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM admin_requests WHERE status='pending'")
+                result["admin_requests"] = cursor.fetchone()[0]
+                cursor.close()
+                conn.close()
+        except Exception:
+            pass
+        try:
+            cutoff = time.time() - 3600
+            result["blocked_ips"] = sum(1 for _, ts, _ in recent_blocks if ts > cutoff)
+        except Exception:
+            result["blocked_ips"] = 0
+
+    return jsonify(result)
+
+@app.route("/api/notifications/read", methods=["POST"])
+@login_required
+def api_notifications_read():
+    """标记通知已读"""
+    from datetime import datetime
+    session["last_notification_read"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    return jsonify({"success": True})
+
 # ---------- 路由：仪表盘 ----------
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    leaderboard = get_leaderboard(10)
+    my_rank = get_user_rank(session["username"])
+    # check pending request
+    pending_request = False
+    if session.get("permission") != "administrator":
+        try:
+            conn = get_db()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id FROM admin_requests WHERE username=%s AND status='pending'",
+                    (session["username"],)
+                )
+                pending_request = cursor.fetchone() is not None
+                cursor.close()
+                conn.close()
+        except Exception:
+            pass
+    # admin: count pending requests
+    pending_admin_reqs = 0
+    if session.get("permission") == "administrator":
+        try:
+            conn = get_db()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM admin_requests WHERE status='pending'")
+                pending_admin_reqs = cursor.fetchone()[0]
+                cursor.close()
+                conn.close()
+        except Exception:
+            pass
     return render_template("dashboard.html",
                            username=session["username"],
-                           permission=session["permission"])
+                           permission=session["permission"],
+                           leaderboard=leaderboard,
+                           my_rank=my_rank,
+                           pending_request=pending_request,
+                           pending_admin_reqs=pending_admin_reqs)
 
 
 # ---------- 路由：个人资料 ----------
@@ -1559,6 +1887,7 @@ def api_album_upload():
         cursor.close()
         conn.close()
         write_log("上传图片", f"用户: {session['username']}, 图片: {name}, ID: {img_id}")
+        record_activity(session["username"], "上传图片", 5)
         return jsonify({"success": True, "id": img_id})
     except pymysql.MySQLError as e:
         return jsonify({"error": str(e)}), 500
@@ -1762,6 +2091,7 @@ def api_album_add_image_comment(img_id):
         cursor.close()
         conn.close()
         write_log("图片评论", f"用户: {session['username']}, 图片ID: {img_id}")
+        record_activity(session["username"], "评论", 2)
         return jsonify({"success": True, "id": cid})
     except pymysql.MySQLError as e:
         return jsonify({"error": str(e)}), 500
@@ -2029,6 +2359,7 @@ def api_album_wishes_add():
     wid = cursor.lastrowid
     cursor.close()
     conn.close()
+    record_activity(session["username"], "寄语", 2)
     return jsonify({"success": True, "id": wid})
 
 @app.route("/api/album/wishes/<int:wid>", methods=["DELETE"])
@@ -2087,6 +2418,7 @@ def api_album_tags_add():
         tid = cursor.lastrowid
         cursor.close()
         conn.close()
+        record_activity(session["username"], "标签", 1)
         return jsonify({"success": True, "id": tid})
     except pymysql.MySQLError:
         return jsonify({"error": "标签已存在"}), 400
@@ -2178,6 +2510,7 @@ def api_album_playlist_add():
     pid = cursor.lastrowid
     cursor.close()
     conn.close()
+    record_activity(session["username"], "歌单", 2)
     return jsonify({"success": True, "id": pid})
 
 @app.route("/api/album/playlist/<int:pid>/vote", methods=["POST"])
@@ -2244,6 +2577,7 @@ def api_album_danmaku_add(img_id):
     did = cursor.lastrowid
     cursor.close()
     conn.close()
+    record_activity(session["username"], "弹幕", 1)
     return jsonify({"success": True, "id": did})
 
 
@@ -2306,6 +2640,7 @@ def api_chat_send():
     mid = cursor.lastrowid
     cursor.close()
     conn.close()
+    record_activity(session["username"], "聊天", 1)
     return jsonify({"success": True, "id": mid})
 
 # 搜索用户
@@ -2728,9 +3063,23 @@ def calculator_net():
 @login_required
 @admin_required
 def admin_dashboard():
+    pending_admin_reqs = 0
+    try:
+        conn = get_db()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM admin_requests WHERE status='pending'")
+            pending_admin_reqs = cursor.fetchone()[0]
+            cursor.close()
+            conn.close()
+    except Exception:
+        pass
+    leaderboard = get_leaderboard(10)
     return render_template("admin_dashboard.html",
                            username=session["username"],
-                           permission=session["permission"])
+                           permission=session["permission"],
+                           leaderboard=leaderboard,
+                           pending_admin_reqs=pending_admin_reqs)
 
 
 @app.route("/api/admin/ip_stats")

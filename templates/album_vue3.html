@@ -133,7 +133,7 @@ textarea { resize:none; }
         <p style="font-size:15px">还没有留言</p>
       </div>
       <div v-for="msg in boardMessages" :key="msg.id" class="msg-card">
-        <div class="msg-avatar">{{ (msg.authorName||msg.author).charAt(0) }}</div>
+        <img src="/api/avatar/{{ (msg.authorName or msg.author)[0] }}?size=36&bg=04c&color=fff" alt="{{ (msg.authorName or msg.author)[0] }}" class="msg-avatar" style="object-fit:cover;border-radius:50%;">
         <div style="flex:1">
           <div class="fw-600" style="font-size:13px">{{ msg.authorName||msg.author }}</div>
           <div class="text-sm" style="margin:2px 0 4px">{{ msg.time }}</div>

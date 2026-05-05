@@ -3,19 +3,18 @@
 {% block content %}
 <style>
 /* ============================================
-   JetBrains 风格 · 关于作者
+   JetBrains Ultra · 关于作者
    ============================================ */
 :root {
-    --bg: #0b0b14;
-    --bg-card: rgba(255,255,255,.035);
-    --border: rgba(255,255,255,.07);
-    --border-hover: rgba(255,255,255,.12);
-    --text: #e8e8f0;
+    --bg: #090912;
+    --bg-card: rgba(255,255,255,.03);
+    --border: rgba(255,255,255,.06);
+    --text: #ececf5;
     --text-muted: #7a7a9a;
-    --accent-1: #6366f1;
-    --accent-2: #8b5cf6;
-    --accent-3: #06b6d4;
-    --glow: rgba(99,102,241,.2);
+    --a1: #6366f1;
+    --a2: #8b5cf6;
+    --a3: #06b6d4;
+    --a4: #f59e0b;
 }
 
 /* ---- 全局 ---- */
@@ -23,112 +22,178 @@
     position: relative;
     min-height: 100vh;
     padding-bottom: 5rem;
-    overflow-x: hidden;
+    overflow: hidden;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
     -webkit-font-smoothing: antialiased;
 }
 
-/* 点阵网格背景 */
-.author-page::before {
+/* 噪点纹理 */
+.author-page::after {
     content: '';
     position: fixed;
     inset: 0;
-    background-image: radial-gradient(circle, rgba(255,255,255,.06) 1px, transparent 1px);
-    background-size: 24px 24px;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: .035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+}
+
+/* ---- Canvas: 粒子网络 (底层) ---- */
+#particleCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     z-index: 0;
     pointer-events: none;
 }
 
-/* ---- 浮动渐变色球 (JetBrains 风格) ---- */
-.floating-orb {
+/* ---- 浮动几何体 ---- */
+.floating-geo {
     position: fixed;
-    border-radius: 50%;
-    filter: blur(80px);
     pointer-events: none;
     z-index: 0;
-    will-change: transform;
+    opacity: .06;
 }
-.floating-orb:nth-child(1) {
-    width: 500px; height: 500px;
-    background: rgba(99,102,241,.12);
-    top: -10%; right: -10%;
-    animation: orbFloat1 18s ease-in-out infinite;
+.floating-geo.s1 {
+    width: 200px; height: 200px;
+    border: 2px solid var(--a1);
+    border-radius: 50%;
+    top: 8%; left: 5%;
+    animation: geoFloat1 20s ease-in-out infinite;
 }
-.floating-orb:nth-child(2) {
-    width: 400px; height: 400px;
-    background: rgba(139,92,246,.10);
-    bottom: -5%; left: -8%;
-    animation: orbFloat2 22s ease-in-out infinite;
+.floating-geo.s2 {
+    width: 120px; height: 120px;
+    border: 2px solid var(--a3);
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+    bottom: 12%; right: 8%;
+    animation: geoFloat2 16s ease-in-out infinite;
 }
-.floating-orb:nth-child(3) {
-    width: 350px; height: 350px;
-    background: rgba(6,182,212,.08);
-    top: 40%; left: 50%;
-    animation: orbFloat3 16s ease-in-out infinite;
+.floating-geo.s3 {
+    width: 80px; height: 80px;
+    border: 2px solid var(--a2);
+    transform: rotate(45deg);
+    top: 45%; right: 12%;
+    animation: geoFloat3 14s ease-in-out infinite;
 }
-@keyframes orbFloat1 {
+.floating-geo.s4 {
+    width: 60px; height: 60px;
+    background: var(--a4);
+    border-radius: 5px;
+    bottom: 30%; left: 6%;
+    opacity: .04;
+    animation: geoFloat4 18s ease-in-out infinite;
+}
+@keyframes geoFloat1 {
     0%, 100% { transform: translate(0, 0) scale(1); }
-    33%      { transform: translate(-80px, 60px) scale(1.1); }
-    66%      { transform: translate(40px, -40px) scale(.95); }
+    25%  { transform: translate(40px, -60px) scale(1.08); }
+    50%  { transform: translate(-30px, 80px) scale(.95); }
+    75%  { transform: translate(50px, 20px) scale(1.05); }
 }
-@keyframes orbFloat2 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33%      { transform: translate(60px, -50px) scale(1.15); }
-    66%      { transform: translate(-50px, 40px) scale(.9); }
+@keyframes geoFloat2 {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    33%  { transform: translate(-50px, -30px) rotate(120deg); }
+    66%  { transform: translate(40px, 50px) rotate(240deg); }
 }
-@keyframes orbFloat3 {
+@keyframes geoFloat3 {
+    0%, 100% { transform: translate(0, 0) rotate(45deg); }
+    50%  { transform: translate(-60px, 40px) rotate(225deg); }
+}
+@keyframes geoFloat4 {
     0%, 100% { transform: translate(0, 0) scale(1); }
-    50%      { transform: translate(90px, 30px) scale(1.08); }
+    50%  { transform: translate(50px, -70px) scale(1.2); }
+}
+
+/* ---- 自定义鼠标光标 ---- */
+#customCursor {
+    position: fixed;
+    width: 28px; height: 28px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10000;
+    transform: translate(-50%, -50%);
+    transition: width .3s, height .3s, border-color .3s, background .3s;
+    will-change: left, top;
+}
+#customCursor.hover {
+    width: 48px; height: 48px;
+    border-color: var(--a1);
+    background: rgba(99,102,241,.08);
+}
+#customCursorDot {
+    position: fixed;
+    width: 4px; height: 4px;
+    background: var(--a1);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10001;
+    transform: translate(-50%, -50%);
+    will-change: left, top;
 }
 
 /* ---- 鼠标跟踪聚光灯 ---- */
 #spotlight {
     position: fixed;
-    width: 700px; height: 700px;
+    width: 800px; height: 800px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(99,102,241,.07) 0%, transparent 60%);
+    background: radial-gradient(circle, rgba(99,102,241,.06) 0%, transparent 55%);
     pointer-events: none;
     transform: translate(-50%, -50%);
     z-index: 0;
     will-change: left, top;
 }
 
-/* ---- 容器层级 ---- */
-.author-page > .container {
-    position: relative;
-    z-index: 1;
+/* ---- 浮点粒子拖尾 ---- */
+#sparkleContainer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
 }
+.particle-sparkle {
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* ---- 容器层级 ---- */
+.container { position: relative; z-index: 1; }
 
 /* ============================================
    HERO
    ============================================ */
 .hero-section {
     position: relative;
-    padding: 5.5rem 0 3.5rem;
+    padding: 5rem 0 3rem;
     text-align: center;
 }
 
 /* 头像 */
 .hero-avatar-wrap {
-    width: 140px; height: 140px;
+    width: 150px; height: 150px;
     margin: 0 auto 1.5rem;
     position: relative;
     cursor: pointer;
 }
 .hero-avatar-ring {
     position: absolute;
-    inset: -5px;
+    inset: -6px;
     border-radius: 50%;
-    background: conic-gradient(from 0deg, var(--accent-1), var(--accent-3), var(--accent-2), var(--accent-1));
-    animation: spinRing 5s linear infinite;
+    background: conic-gradient(from 0deg, var(--a1), var(--a3), var(--a2), var(--a4), var(--a1));
+    animation: spinRing 4s linear infinite;
     mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px));
     -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px));
     transition: transform .4s ease;
 }
 .hero-avatar-wrap:hover .hero-avatar-ring {
-    transform: scale(1.08);
+    animation-duration: 1.5s;
+    transform: scale(1.1);
 }
 @keyframes spinRing {
     to { transform: rotate(360deg); }
@@ -138,63 +203,90 @@
     border-radius: 50%;
     background: linear-gradient(135deg, #667eea, #764ba2);
     display: flex; align-items: center; justify-content: center;
-    font-size: 52px; font-weight: 700; color: #fff;
+    font-size: 54px; font-weight: 700; color: #fff;
     position: relative; z-index: 1;
     transition: transform .4s cubic-bezier(.34,1.56,.64,1);
-    box-shadow: 0 0 40px rgba(99,102,241,.25);
+    box-shadow: 0 0 50px rgba(99,102,241,.3), 0 0 100px rgba(99,102,241,.1);
+    user-select: none;
 }
 .hero-avatar-wrap:hover .hero-avatar {
     transform: scale(1.06);
+    box-shadow: 0 0 60px rgba(99,102,241,.4), 0 0 120px rgba(99,102,241,.15);
 }
 
-/* 名字 - 渐变动画 */
+/* 名字 */
 .hero-name {
-    font-size: 3.2rem;
+    font-size: 3.4rem;
     font-weight: 800;
     margin-bottom: .3rem;
-    letter-spacing: 3px;
-    background: linear-gradient(135deg, #e4e4ed 0%, #818cf8 40%, #22d3ee 70%, #818cf8 100%);
-    background-size: 300% 300%;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, #e4e4ed 0%, #818cf8 30%, #22d3ee 60%, #818cf8 80%, #e4e4ed 100%);
+    background-size: 400% 400%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: gradText 6s ease-in-out infinite;
+    animation: gradText 5s ease-in-out infinite;
 }
 @keyframes gradText {
     0%, 100% { background-position: 0% 50%; }
-    50%      { background-position: 100% 50%; }
+    25%  { background-position: 50% 50%; }
+    50%  { background-position: 100% 50%; }
+    75%  { background-position: 50% 50%; }
 }
 
 .hero-subtitle {
-    font-size: 1.05rem;
+    font-size: 1rem;
     color: var(--text-muted);
-    letter-spacing: 6px;
+    letter-spacing: 8px;
     text-transform: uppercase;
-    margin-bottom: .6rem;
+    margin-bottom: .4rem;
 }
-.hero-tagline {
+
+/* Tagline 打字机 */
+#typewriter {
     font-size: 1.05rem;
     color: rgba(255,255,255,.35);
-    max-width: 460px;
-    margin: .8rem auto 0;
+    max-width: 480px;
+    margin: .6rem auto 0;
     line-height: 1.7;
+    min-height: 1.7em;
 }
+#typewriter .cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.1em;
+    background: var(--a1);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* 统计数字 (动画计数) */
 .hero-stats {
     display: flex;
     justify-content: center;
-    gap: 2.5rem;
+    gap: 3rem;
     margin-top: 2rem;
 }
 .hero-stat {
     text-align: center;
+    cursor: pointer;
 }
 .hero-stat-num {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--accent-1), var(--accent-3));
+    background: linear-gradient(135deg, var(--a1), var(--a3));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    transition: transform .3s ease;
+}
+.hero-stat:hover .hero-stat-num {
+    transform: scale(1.2);
 }
 .hero-stat-label {
     font-size: .78rem;
@@ -203,7 +295,7 @@
 }
 
 /* ============================================
-   3D Tilt 卡片
+   卡片系统
    ============================================ */
 .tilt-card {
     perspective: 1200px;
@@ -215,36 +307,46 @@
     border-radius: 16px;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
     padding: 1.8rem;
     overflow: hidden;
     transform-style: preserve-3d;
     will-change: transform;
     transition: box-shadow .4s ease, border-color .4s ease;
 }
-/* 卡片光晕 (跟随鼠标) */
+
+/* 深度层 */
+.tilt-layer-1 { transform: translateZ(20px); }
+.tilt-layer-2 { transform: translateZ(40px); }
+.tilt-layer-3 { transform: translateZ(60px); }
+
+/* 卡片光晕跟随鼠标 */
 .tilt-card-inner::before {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: 16px;
-    background: radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 50%), rgba(99,102,241,.08) 0%, transparent 60%);
+    background: radial-gradient(circle at var(--gx,50%) var(--gy,50%),
+        rgba(99,102,241,.1) 0%,
+        rgba(6,182,212,.04) 40%,
+        transparent 70%);
     pointer-events: none;
     z-index: 0;
     opacity: 0;
-    transition: opacity .3s ease;
+    transition: opacity .35s ease;
 }
 .tilt-card:hover .tilt-card-inner::before {
     opacity: 1;
 }
-/* 渐变边框 (hover) */
+
+/* 渐变边框 */
 .tilt-card-inner::after {
     content: '';
     position: absolute;
     inset: -1px;
     border-radius: 17px;
-    background: linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-3), transparent 60%);
+    background: linear-gradient(135deg, var(--a1), var(--a2), var(--a3), transparent 60%);
     opacity: 0;
     transition: opacity .4s ease;
     z-index: -1;
@@ -253,21 +355,17 @@
     -webkit-mask-composite: xor;
     padding: 1px;
 }
-.tilt-card:hover .tilt-card-inner::after {
-    opacity: 1;
-}
+.tilt-card:hover .tilt-card-inner::after { opacity: 1; }
 .tilt-card:hover .tilt-card-inner {
     border-color: transparent;
-    box-shadow: 0 8px 50px rgba(99,102,241,.12);
+    box-shadow: 0 8px 60px rgba(99,102,241,.14), inset 0 1px 0 rgba(255,255,255,.04);
 }
 
-.tilt-card-inner > * {
-    position: relative; z-index: 1;
-}
+.tilt-card-inner > * { position: relative; z-index: 1; }
 
-/* ---- 卡片标题 ---- */
+/* 卡片标题 */
 .section-title {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     font-weight: 700;
     margin-bottom: 1.2rem;
     display: flex;
@@ -282,22 +380,17 @@
 }
 
 /* ============================================
-   基本信息表格
+   基本信息
    ============================================ */
-.info-table {
-    width: 100%;
-    border-collapse: collapse;
-}
+.info-table { width: 100%; border-collapse: collapse; }
 .info-table td {
-    padding: .6rem .8rem;
+    padding: .55rem .8rem;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
 }
 .info-table td:first-child {
-    width: 80px;
-    color: var(--text-muted);
-    font-size: .88rem;
-    white-space: nowrap;
+    width: 80px; color: var(--text-muted);
+    font-size: .86rem; white-space: nowrap;
 }
 .info-table td:last-child { font-weight: 500; }
 .info-table tr:last-child td { border-bottom: none; }
@@ -306,10 +399,8 @@
    饼图
    ============================================ */
 #pieWrapper {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 1.5rem;
+    display: flex; flex-wrap: wrap;
+    align-items: center; gap: 1.2rem;
     justify-content: center;
 }
 #pieChart svg { display: block; }
@@ -318,158 +409,105 @@
     cursor: pointer;
 }
 .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 5px 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all .25s ease;
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 10px; border-radius: 8px;
+    cursor: pointer; transition: all .25s ease;
 }
-.legend-item:hover,
-.legend-item.active {
+.legend-item:hover, .legend-item.active {
     background: rgba(255,255,255,.06);
     transform: translateX(4px);
 }
-.legend-dot {
-    width: 14px; height: 14px;
-    border-radius: 4px; flex-shrink: 0;
-}
+.legend-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
 .legend-label { font-size: 14px; }
-.legend-pct {
-    font-size: 14px; font-weight: 600;
-    color: var(--text-muted); margin-left: auto;
-}
+.legend-pct { font-size: 14px; font-weight: 600; color: var(--text-muted); margin-left: auto; }
 
 /* ============================================
-   荣誉项
+   荣誉
    ============================================ */
-.honor-category-label {
-    color: var(--text-muted);
-    font-weight: 600;
-    font-size: .85rem;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: .8rem;
+.honor-label {
+    font-weight: 600; font-size: .82rem;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: .8rem;
 }
-.honor-card-inner {
-    display: flex;
-    align-items: flex-start;
-    gap: .9rem;
-    padding: 1.1rem 1.3rem;
+.honor-inner {
+    display: flex; align-items: flex-start; gap: .9rem;
+    padding: 1rem 1.3rem;
 }
 .honor-icon-box {
-    width: 38px; height: 38px;
-    flex-shrink: 0;
+    width: 38px; height: 38px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     border-radius: 10px;
     background: rgba(255,255,255,.035);
     border: 1px solid var(--border);
     font-size: 1.2rem;
 }
-.honor-name {
-    font-weight: 600;
-    font-size: .92rem;
-    line-height: 1.45;
-}
-.honor-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 4px;
-}
-.honor-date {
-    font-size: .8rem;
-    color: var(--text-muted);
-}
-.honor-badge {
-    display: inline-block;
-    padding: 1px 10px;
-    border-radius: 20px;
-    font-size: .76rem;
-    font-weight: 600;
-    letter-spacing: .5px;
-}
+.honor-name { font-weight: 600; font-size: .9rem; line-height: 1.45; }
+.honor-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.honor-date { font-size: .78rem; color: var(--text-muted); }
+.honor-badge { display: inline-block; padding: 1px 10px; border-radius: 20px; font-size: .75rem; font-weight: 600; letter-spacing: .5px; }
 
-/* 校内小卡片 */
-.school-honor {
-    text-align: center;
-    width: 100%;
-    padding: .2rem 0;
-}
-.school-honor .star-icon {
-    font-size: 2rem;
-    margin-bottom: 6px;
-    display: block;
-}
-.school-honor .honor-name {
-    font-size: .88rem;
-}
-.school-honor .honor-date {
-    font-size: .75rem;
-    margin-top: 2px;
-}
+.school-honor { text-align: center; width: 100%; padding: .1rem 0; }
+.school-honor .star-icon { font-size: 2rem; margin-bottom: 4px; display: block; }
+.school-honor .honor-name { font-size: .85rem; }
+.school-honor .honor-date { font-size: .72rem; margin-top: 2px; }
 
 /* ============================================
-   滚动入场动画 (更精细)
+   滚动入场
    ============================================ */
-.reveal {
-    opacity: 0;
-    transform: translateY(30px);
-    transition: opacity .7s cubic-bezier(.25,.46,.45,.94),
-                transform .7s cubic-bezier(.25,.46,.45,.94);
-}
-.reveal.show {
-    opacity: 1;
-    transform: translateY(0);
-}
-.reveal-delay-1 { transition-delay: .1s; }
-.reveal-delay-2 { transition-delay: .2s; }
-.reveal-delay-3 { transition-delay: .3s; }
-.reveal-delay-4 { transition-delay: .4s; }
+.reveal { opacity: 0; transform: translateY(30px); }
+.reveal.show { opacity: 1; transform: translateY(0); }
+.reveal { transition: opacity .7s cubic-bezier(.22,.68,0,1), transform .7s cubic-bezier(.22,.68,0,1); }
+.r1 { transition-delay: .05s; }
+.r2 { transition-delay: .12s; }
+.r3 { transition-delay: .2s; }
+.r4 { transition-delay: .28s; }
+.r5 { transition-delay: .36s; }
+.r6 { transition-delay: .44s; }
 
 /* ============================================
    响应式
    ============================================ */
-@media (max-width: 991px) {
-    .hero-name { font-size: 2.6rem; }
-}
 @media (max-width: 768px) {
-    .hero-section { padding: 3.5rem 0 2.5rem; }
-    .hero-name { font-size: 2rem; }
-    .hero-avatar-wrap { width: 110px; height: 110px; }
-    .hero-avatar { font-size: 40px; }
-    .hero-stats { gap: 1.5rem; }
-    .hero-stat-num { font-size: 1.2rem; }
-    .tilt-card-inner { padding: 1.3rem; }
+    .hero-section { padding: 3rem 0 2rem; }
+    .hero-name { font-size: 2.2rem; }
+    .hero-avatar-wrap { width: 120px; height: 120px; }
+    .hero-avatar { font-size: 42px; }
+    .hero-stats { gap: 1.8rem; }
+    .hero-stat-num { font-size: 1.3rem; }
+    .tilt-card-inner { padding: 1.2rem; }
+    #customCursor, #customCursorDot { display: none; }
 }
 @media (max-width: 576px) {
-    .hero-name { font-size: 1.6rem; letter-spacing: 1px; }
-    .hero-subtitle { font-size: .9rem; letter-spacing: 3px; }
-    .hero-tagline { font-size: .9rem; }
-    .hero-stats { gap: 1rem; }
-    .info-table td { padding: .5rem; font-size: .88rem; }
-    .info-table td:first-child { width: 60px; font-size: .8rem; }
-    .honor-card-inner { padding: .9rem 1rem; }
+    .hero-name { font-size: 1.7rem; letter-spacing: 2px; }
+    .hero-subtitle { font-size: .85rem; letter-spacing: 4px; }
+    .hero-stats { gap: 1.2rem; }
+    .floating-geo { display: none; }
 }
 
-/* ---- 打印 ---- */
 @media print {
     .author-page { background: #fff !important; color: #000 !important; }
-    .author-page::before, .floating-orb, #spotlight { display: none !important; }
+    .author-page::after, #particleCanvas, .floating-geo, #spotlight, #customCursor, #customCursorDot, #sparkleContainer { display: none !important; }
 }
 </style>
 
 <div class="author-page">
 
-<!-- 浮动渐变色球 (JetBrains 标志性效果) -->
-<div class="floating-orb"></div>
-<div class="floating-orb"></div>
-<div class="floating-orb"></div>
+<!-- Canvas 粒子网络 -->
+<canvas id="particleCanvas"></canvas>
 
-<!-- 鼠标跟踪聚光灯 -->
+<!-- 浮动几何体 -->
+<div class="floating-geo s1"></div>
+<div class="floating-geo s2"></div>
+<div class="floating-geo s3"></div>
+<div class="floating-geo s4"></div>
+
+<!-- 聚光灯 -->
 <div id="spotlight"></div>
+
+<!-- 自定义光标 -->
+<div id="customCursor"></div>
+<div id="customCursorDot"></div>
+<div id="sparkleContainer"></div>
 
 <div class="container">
 
@@ -477,22 +515,23 @@
 <section class="hero-section reveal">
     <div class="hero-avatar-wrap" id="avatarWrap">
         <div class="hero-avatar-ring"></div>
-        <div class="hero-avatar">铭</div>
+        <img src="/api/avatar/铭?size=150&bg=667eea&color=fff" alt="铭" class="hero-avatar" style="object-fit:cover;border-radius:50%;">
     </div>
     <h1 class="hero-name">张铭枫</h1>
     <p class="hero-subtitle">少年编程爱好者</p>
-    <p class="hero-tagline">用代码构建未来的 12 岁开发者 · 热爱创造与探索</p>
+    <div id="typewriter"></div>
+
     <div class="hero-stats">
         <div class="hero-stat">
-            <div class="hero-stat-num">2</div>
+            <div class="hero-stat-num" data-count="2">0</div>
             <div class="hero-stat-label">年编程经验</div>
         </div>
         <div class="hero-stat">
-            <div class="hero-stat-num">5</div>
+            <div class="hero-stat-num" data-count="5">0</div>
             <div class="hero-stat-label">门编程语言</div>
         </div>
         <div class="hero-stat">
-            <div class="hero-stat-num">12</div>
+            <div class="hero-stat-num" data-count="12">0</div>
             <div class="hero-stat-label">项荣誉奖项</div>
         </div>
     </div>
@@ -501,10 +540,10 @@
 <!-- ==================== 信息 + 技能 ==================== -->
 <div class="row g-4 mb-5">
     <div class="col-lg-6">
-        <div class="tilt-card reveal reveal-delay-1">
-            <div class="tilt-card-inner tilt-layer">
-                <h3 class="section-title">📋 基本信息</h3>
-                <table class="info-table">
+        <div class="tilt-card reveal r2">
+            <div class="tilt-card-inner">
+                <h3 class="section-title tilt-layer-1">📋 基本信息</h3>
+                <table class="info-table tilt-layer-2">
                     <tr><td>性别</td><td>男</td></tr>
                     <tr><td>生日</td><td>2013年5月26日</td></tr>
                     <tr><td>民族</td><td>蒙古族</td></tr>
@@ -516,121 +555,121 @@
         </div>
     </div>
     <div class="col-lg-6">
-        <div class="tilt-card reveal reveal-delay-2">
-            <div class="tilt-card-inner tilt-layer">
-                <h3 class="section-title">💻 编程语言技能</h3>
-                <div id="pieWrapper">
-                    <div id="pieChart" style="width:270px;height:270px;">
-                        <svg viewBox="0 0 320 320" width="270" height="270"></svg>
+        <div class="tilt-card reveal r2">
+            <div class="tilt-card-inner">
+                <h3 class="section-title tilt-layer-1">💻 编程语言技能</h3>
+                <div id="pieWrapper" class="tilt-layer-2">
+                    <div id="pieChart" style="width:260px;height:260px;">
+                        <svg viewBox="0 0 320 320" width="260" height="260"></svg>
                     </div>
-                    <div id="pieLegend" style="min-width:130px;"></div>
+                    <div id="pieLegend" style="min-width:120px;"></div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ==================== 荣誉奖项 ==================== -->
-<div class="reveal reveal-delay-3">
-    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;">🏆 荣誉奖项</h2>
+<!-- ==================== 开源项目 ==================== -->
+<div class="reveal r3">
+    <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:1.5rem;">📂 开源项目</h2>
 
-    <!-- 市级 -->
-    <div class="honor-category-label">🎖 市级荣誉</div>
-    <div class="row g-3 mb-4">
-        {% set honors_city = [
-            ("全国青少年信息素养大赛西南赛区（重庆）编程挑战赛", "2024年7月", "bg-warning text-dark", "二等奖"),
-            ("全国学生信息素养提升实践活动重庆市级选拔活动", "2024年6月", "bg-warning text-dark", "二等奖"),
-        ] %}
-        {% for name, date, cls, badge in honors_city %}
-        <div class="col-md-6">
-            <div class="tilt-card">
-                <div class="tilt-card-inner tilt-layer honor-card-inner">
-                    <div class="honor-icon-box">🏅</div>
-                    <div class="honor-name-wrapper">
-                        <div class="honor-name">{{ name }}</div>
-                        <div class="honor-meta">
-                            <span class="honor-date">{{ date }}</span>
-                            <span class="honor-badge {{ cls }}">{{ badge }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+    {% set projects = [
+        ("ToolBoxHub", "zhang-mingfeng9773_admin_admin", "tool-box-hub", "一个集合多种实用工具的开源项目，旨在为普通人和开发者提供便捷、高效的一站式工具网站", "Python/HTML/JavaScript"),
+        ("PyMaster", "zhang-mingfeng9773_admin", "py-master", "专注 Python 全栈技术的开源项目，整合从语法基础到 LLM 应用的体系化资源，涵盖 Web 开发 / 数据科学实战案例与核心库源码解析", "Python"),
+        ("Examination_grades", "zhang-mingfeng9773_admin", "exam-grades", "GESP（全国青少年软件编程等级考试）与 CIE（中国电子学会编程等级考试）的考级资源整合，涵盖 Python/C++ 等语言的历年真题、分模块专项训练及考纲解析", "C++"),
+        ("myplusplus", "zhang-mingfeng9773_admin", "myplusplus", "系统性存储个人日常练习的 C++ 代码，涵盖数据结构实现（链表/树/图）、算法题解（LeetCode/NOIP 真题）、编程项目实战等模块", "C++"),
+    ] %}
 
-    <!-- 区级 -->
-    <div class="honor-category-label">🥇 区级荣誉</div>
-    <div class="row g-3 mb-4">
-        {% set honors_dist = [
-            ("重庆高新区第二十六届全国学生信息素养提升实践活动", "2025年5月", "bg-success", "一等奖"),
-            ("重庆高新区第二十五届全国学生信息素养提升实践活动", "2024年5月", "bg-success", "一等奖"),
-        ] %}
-        {% for name, date, cls, badge in honors_dist %}
-        <div class="col-md-6">
-            <div class="tilt-card">
-                <div class="tilt-card-inner tilt-layer honor-card-inner">
-                    <div class="honor-icon-box">🏅</div>
-                    <div class="honor-name-wrapper">
-                        <div class="honor-name">{{ name }}</div>
-                        <div class="honor-meta">
-                            <span class="honor-date">{{ date }}</span>
-                            <span class="honor-badge {{ cls }}">{{ badge }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- 考级 -->
-    <div class="honor-category-label">📜 考级荣誉</div>
-    <div class="row g-3 mb-4">
-        {% set honors_level = [
-            ("青少年软件编程等级考试", "2025年9月", "bg-info", "Level-3 G"),
-            ("青少年软件编程等级考试", "2025年6月", "bg-info", "Level-2 E"),
-            ("青少年软件编程等级考试", "2024年10月", "bg-info", "Level-1 E"),
-        ] %}
-        {% for name, date, cls, badge in honors_level %}
-        <div class="col-md-4">
-            <div class="tilt-card">
-                <div class="tilt-card-inner tilt-layer honor-card-inner">
-                    <div class="honor-icon-box">📜</div>
-                    <div class="honor-name-wrapper">
-                        <div class="honor-name">{{ name }}</div>
-                        <div class="honor-meta">
-                            <span class="honor-date">{{ date }}</span>
-                            <span class="honor-badge {{ cls }}">{{ badge }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- 校内 -->
-    <div class="honor-category-label">🌟 校内荣誉</div>
     <div class="row g-3">
-        {% set honors_school = [
-            ("进步之星", "2025年6月"),
-            ("数学之星", "2025年1月"),
-            ("学习小标兵", "2022年6月"),
-            ("学习小明星", "2022年1月"),
-        ] %}
-        {% for name, date in honors_school %}
-        <div class="col-md-3 col-6">
-            <div class="tilt-card">
-                <div class="tilt-card-inner tilt-layer" style="padding:1.2rem 1rem;">
-                    <div class="school-honor">
-                        <span class="star-icon">⭐</span>
-                        <div class="honor-name">{{ name }}</div>
-                        <div class="honor-date">{{ date }}</div>
+        {% for name, user, repo, desc, lang in projects %}
+        <div class="col-md-6">
+            <div class="tilt-card reveal r3">
+                <div class="tilt-card-inner honor-inner" style="padding:1.2rem 1.3rem;">
+                    <div class="honor-icon-box tilt-layer-1" style="font-size:1rem;width:42px;height:42px;">📦</div>
+                    <div class="tilt-layer-2" style="flex:1;min-width:0;">
+                        <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" style="color:var(--text);text-decoration:none;">
+                            <div class="honor-name" style="font-size:1rem;">{{ name }}</div>
+                        </a>
+                        <div style="font-size:.82rem;color:var(--text-muted);margin-top:3px;line-height:1.5;">{{ desc }}</div>
+                        <div class="honor-meta" style="margin-top:6px;">
+                            <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:rgba(99,102,241,.12);color:var(--a1);font-size:.72rem;font-weight:600;">
+                                <span style="width:6px;height:6px;border-radius:50%;background:var(--a1);"></span>
+                                {{ lang }}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+        {% endfor %}
+    </div>
+    <div style="text-align:center;margin-top:1rem;">
+        <a href="https://gitee.com/organizations/zhang-mingfeng9773_admin/projects" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:12px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.15);color:var(--a1);text-decoration:none;font-size:.85rem;font-weight:500;transition:all .3s ease;"
+           onmouseenter="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.3)';"
+           onmouseleave="this.style.background='rgba(99,102,241,.08)';this.style.borderColor='rgba(99,102,241,.15)';">
+            <span>🔗</span>
+            <span>在 Gitee 上查看全部项目 →</span>
+        </a>
+    </div>
+</div>
+
+<!-- ==================== 荣誉 ==================== -->
+<div class="reveal r3">
+    <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:1.5rem;">🏆 荣誉奖项</h2>
+
+    <div class="honor-label">🎖 市级荣誉</div>
+    <div class="row g-3 mb-4">
+        {% set h = [
+            ("全国青少年信息素养大赛西南赛区（重庆）编程挑战赛","2024年7月","bg-warning text-dark","二等奖"),
+            ("全国学生信息素养提升实践活动重庆市级选拔活动","2024年6月","bg-warning text-dark","二等奖"),
+        ] %}
+        {% for n,d,c,b in h %}
+        <div class="col-md-6"><div class="tilt-card reveal r3"><div class="tilt-card-inner honor-inner">
+            <div class="honor-icon-box tilt-layer-1">🏅</div>
+            <div class="tilt-layer-2"><div class="honor-name">{{ n }}</div>
+            <div class="honor-meta"><span class="honor-date">{{ d }}</span><span class="honor-badge {{ c }}">{{ b }}</span></div></div>
+        </div></div></div>
+        {% endfor %}
+    </div>
+
+    <div class="honor-label">🥇 区级荣誉</div>
+    <div class="row g-3 mb-4">
+        {% set h = [
+            ("重庆高新区第二十六届全国学生信息素养提升实践活动","2025年5月","bg-success","一等奖"),
+            ("重庆高新区第二十五届全国学生信息素养提升实践活动","2024年5月","bg-success","一等奖"),
+        ] %}
+        {% for n,d,c,b in h %}
+        <div class="col-md-6"><div class="tilt-card reveal r4"><div class="tilt-card-inner honor-inner">
+            <div class="honor-icon-box tilt-layer-1">🏅</div>
+            <div class="tilt-layer-2"><div class="honor-name">{{ n }}</div>
+            <div class="honor-meta"><span class="honor-date">{{ d }}</span><span class="honor-badge {{ c }}">{{ b }}</span></div></div>
+        </div></div></div>
+        {% endfor %}
+    </div>
+
+    <div class="honor-label">📜 考级荣誉</div>
+    <div class="row g-3 mb-4">
+        {% set h = [
+            ("青少年软件编程等级考试","2025年9月","bg-info","Level-3 G"),
+            ("青少年软件编程等级考试","2025年6月","bg-info","Level-2 E"),
+            ("青少年软件编程等级考试","2024年10月","bg-info","Level-1 E"),
+        ] %}
+        {% for n,d,c,b in h %}
+        <div class="col-md-4"><div class="tilt-card reveal r5"><div class="tilt-card-inner honor-inner">
+            <div class="honor-icon-box tilt-layer-1">📜</div>
+            <div class="tilt-layer-2"><div class="honor-name">{{ n }}</div>
+            <div class="honor-meta"><span class="honor-date">{{ d }}</span><span class="honor-badge {{ c }}">{{ b }}</span></div></div>
+        </div></div></div>
+        {% endfor %}
+    </div>
+
+    <div class="honor-label">🌟 校内荣誉</div>
+    <div class="row g-3">
+        {% set h = [("进步之星","2025年6月"),("数学之星","2025年1月"),("学习小标兵","2022年6月"),("学习小明星","2022年1月")] %}
+        {% for n,d in h %}
+        <div class="col-md-3 col-6"><div class="tilt-card reveal r6"><div class="tilt-card-inner" style="padding:1.1rem 1rem;">
+            <div class="school-honor tilt-layer-1"><span class="star-icon">⭐</span><div class="honor-name">{{ n }}</div><div class="honor-date">{{ d }}</div></div>
+        </div></div></div>
         {% endfor %}
     </div>
 </div>
@@ -642,27 +681,173 @@
 (function(){
     'use strict';
 
-    /* ========================
-       1. 鼠标跟踪聚光灯
-       ======================== */
-    const spotlight = document.getElementById('spotlight');
-    let mx = window.innerWidth / 2, my = window.innerHeight / 2;
-    let cx = mx, cy = my;
+    /* ==========================================
+       1. Canvas 粒子网络
+       ========================================== */
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, particles = [], mouse = { x: -9999, y: -9999 };
 
-    document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+    function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 生成粒子
+    const COUNT = 90;
+    for (let i = 0; i < COUNT; i++) {
+        particles.push({
+            x: Math.random() * W, y: Math.random() * H,
+            vx: (Math.random() - .5) * .3,
+            vy: (Math.random() - .5) * .3,
+            r: Math.random() * 2 + 1,
+            o: Math.random() * .5 + .2
+        });
+    }
+
+    document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+    document.addEventListener('mouseleave', () => { mouse.x = -9999; mouse.y = -9999; });
+
+    function drawParticles() {
+        ctx.clearRect(0, 0, W, H);
+
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            // 鼠标吸引力
+            const dx = mouse.x - p.x, dy = mouse.y - p.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < 250) {
+                const force = (250 - dist) / 250 * .02;
+                p.vx += dx * force * .01;
+                p.vy += dy * force * .01;
+            }
+
+            p.x += p.vx; p.y += p.vy;
+            p.vx *= .99; p.vy *= .99;
+
+            // 边界
+            if (p.x < 0) p.x = W;
+            if (p.x > W) p.x = 0;
+            if (p.y < 0) p.y = H;
+            if (p.y > H) p.y = 0;
+
+            // 绘制粒子
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(99, 102, 241, ${p.o})`;
+            ctx.fill();
+        }
+
+        // 连线
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                const dx = particles[i].x - particles[j].x;
+                const dy = particles[i].y - particles[j].y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 150) {
+                    const alpha = (1 - dist / 150) * .3;
+                    ctx.beginPath();
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
+                    ctx.lineWidth = .6;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        requestAnimationFrame(drawParticles);
+    }
+    drawParticles();
+
+    /* ==========================================
+       2. 自定义光标
+       ========================================== */
+    const cursor = document.getElementById('customCursor');
+    const cursorDot = document.getElementById('customCursorDot');
+    let cuX = W/2, cuY = H/2;
+    let cdX = W/2, cdY = H/2;
+
+    document.addEventListener('mousemove', e => {
+        cuX = e.clientX; cuY = e.clientY;
+    });
+
+    function tickCursor() {
+        cdX += (cuX - cdX) * .15;
+        cdY += (cuY - cdY) * .15;
+        cursor.style.left = cuX + 'px';
+        cursor.style.top = cuY + 'px';
+        cursorDot.style.left = cdX + 'px';
+        cursorDot.style.top = cdY + 'px';
+        requestAnimationFrame(tickCursor);
+    }
+    tickCursor();
+
+    // 交互元素 hover 状态
+    document.querySelectorAll('a, button, .tilt-card, .hero-avatar-wrap, .hero-stat, .legend-item, #pieChart g').forEach(el => {
+        el.addEventListener('mouseenter', () => cursor.classList.add('hover'));
+        el.addEventListener('mouseleave', () => cursor.classList.remove('hover'));
+    });
+
+    // 隐藏默认光标
+    document.body.style.cursor = 'none';
+
+    /* ==========================================
+       3. 鼠标拖尾粒子
+       ========================================== */
+    const sparkles = document.getElementById('sparkleContainer');
+    let lastSpark = 0;
+
+    document.addEventListener('mousemove', e => {
+        const now = Date.now();
+        if (now - lastSpark < 40) return;
+        lastSpark = now;
+
+        const colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#f59e0b', '#fff'];
+        for (let k = 0; k < 2; k++) {
+            const el = document.createElement('div');
+            el.className = 'particle-sparkle';
+            el.style.cssText = `
+                left:${e.clientX + (Math.random()-.5)*12}px;
+                top:${e.clientY + (Math.random()-.5)*12}px;
+                background:${colors[Math.floor(Math.random()*colors.length)]};
+                width:${Math.random()*4+2}px;
+                height:${Math.random()*4+2}px;
+                opacity:${Math.random()*.5+.5};
+                transition: all ${.6 + Math.random()*.4}s ease-out;
+            `;
+            sparkles.appendChild(el);
+            requestAnimationFrame(() => {
+                el.style.transform = `translate(${(Math.random()-.5)*30}px, ${(Math.random()-.5)*30 - 10}px) scale(0)`;
+                el.style.opacity = '0';
+            });
+            setTimeout(() => el.remove(), 1200);
+        }
+    });
+
+    /* ==========================================
+       4. 跟踪聚光灯
+       ========================================== */
+    const spotlight = document.getElementById('spotlight');
+    let smx = W/2, smy = H/2;
+    let scx = smx, scy = smy;
+
+    document.addEventListener('mousemove', e => { smx = e.clientX; smy = e.clientY; });
 
     function tickSpotlight() {
-        cx += (mx - cx) * .07;
-        cy += (my - cy) * .07;
-        spotlight.style.left = cx + 'px';
-        spotlight.style.top  = cy + 'px';
+        scx += (smx - scx) * .05;
+        scy += (smy - scy) * .05;
+        spotlight.style.left = scx + 'px';
+        spotlight.style.top  = scy + 'px';
         requestAnimationFrame(tickSpotlight);
     }
     tickSpotlight();
 
-    /* ========================
-       2. 3D Tilt + 光晕跟随
-       ======================== */
+    /* ==========================================
+       5. 3D Tilt + 深度
+       ========================================== */
     const tiltCards = document.querySelectorAll('.tilt-card');
     tiltCards.forEach(card => {
         const inner = card.querySelector('.tilt-card-inner');
@@ -671,155 +856,158 @@
         card.addEventListener('mousemove', e => {
             const r = card.getBoundingClientRect();
             const x = e.clientX - r.left, y = e.clientY - r.top;
-            const hw = r.width / 2, hh = r.height / 2;
-            const rx = ((y - hh) / hh) * -7;  // max ±7°
-            const ry = ((x - hw) / hw) * 7;
+            const hw = r.width/2, hh = r.height/2;
+            const rx = ((y - hh) / hh) * -8;
+            const ry = ((x - hw) / hw) * 8;
             inner.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg) scale(1.025)`;
-            inner.style.setProperty('--glow-x', (x / r.width  * 100) + '%');
-            inner.style.setProperty('--glow-y', (y / r.height * 100) + '%');
+            inner.style.setProperty('--gx', (x / r.width * 100) + '%');
+            inner.style.setProperty('--gy', (y / r.height * 100) + '%');
+
+            // 深度层跟随
+            const layers = inner.querySelectorAll('.tilt-layer-1, .tilt-layer-2, .tilt-layer-3');
+            layers.forEach(l => {
+                const d = l.classList.contains('tilt-layer-1') ? 20 :
+                          l.classList.contains('tilt-layer-2') ? 40 : 60;
+                const lrx = ((y - hh) / hh) * -8 * (d/60);
+                const lry = ((x - hw) / hw) * 8 * (d/60);
+                l.style.transform = `translateZ(${d}px) rotateX(${lrx}deg) rotateY(${lry}deg)`;
+            });
         });
 
         card.addEventListener('mouseleave', () => {
-            inner.style.transform = 'rotateX(0deg) rotateY(0deg) scale(1)';
+            inner.style.transform = 'rotateX(0) rotateY(0) scale(1)';
+            inner.querySelectorAll('.tilt-layer-1, .tilt-layer-2, .tilt-layer-3').forEach(l => {
+                l.style.transform = '';
+            });
         });
     });
 
-    /* ========================
-       3. 磁性鼠标 (头像)
-       ======================== */
-    const avatarWrap = document.getElementById('avatarWrap');
-    if (avatarWrap) {
-        const avatar = avatarWrap.querySelector('.hero-avatar');
-        const ring   = avatarWrap.querySelector('.hero-avatar-ring');
-        avatarWrap.addEventListener('mousemove', e => {
-            const r = avatarWrap.getBoundingClientRect();
+    /* ==========================================
+       6. 磁性鼠标: 头像
+       ========================================== */
+    const aw = document.getElementById('avatarWrap');
+    if (aw) {
+        const av = aw.querySelector('.hero-avatar'),
+              ring = aw.querySelector('.hero-avatar-ring');
+        aw.addEventListener('mousemove', e => {
+            const r = aw.getBoundingClientRect();
             const x = e.clientX - r.left, y = e.clientY - r.top;
-            const hw = r.width / 2, hh = r.height / 2;
-            const dx = (x - hw) / hw * 6;
-            const dy = (y - hh) / hh * 6;
-            avatar.style.transform = `translate(${dx}px, ${dy}px) scale(1.06)`;
-            ring.style.transform  = `translate(${dx * .5}px, ${dy * .5}px) scale(1.08)`;
+            const dx = (x - r.width/2) / (r.width/2) * 8;
+            const dy = (y - r.height/2) / (r.height/2) * 8;
+            av.style.transform = `translate(${dx}px,${dy}px) scale(1.06)`;
+            ring.style.transform = `translate(${dx*.5}px,${dy*.5}px) scale(1.1)`;
         });
-        avatarWrap.addEventListener('mouseleave', () => {
-            avatar.style.transform = '';
-            ring.style.transform  = '';
+        aw.addEventListener('mouseleave', () => {
+            av.style.transform = ''; ring.style.transform = '';
         });
     }
 
-    /* ========================
-       4. 滚动入场
-       ======================== */
+    /* ==========================================
+       7. 打字机效果
+       ========================================== */
+    (function typewriter() {
+        const el = document.getElementById('typewriter');
+        if (!el) return;
+        const text = '用代码构建未来的 12 岁开发者 · 热爱创造与探索';
+        let idx = 0;
+        el.innerHTML = '';
+        function type() {
+            if (idx < text.length) {
+                el.innerHTML = text.slice(0, idx+1) + '<span class="cursor"></span>';
+                idx++;
+                const delay = text[idx-1] === '·' || text[idx-1] === '。' ? 300 :
+                             Math.random() * 60 + 40;
+                setTimeout(type, delay);
+            } else {
+                el.innerHTML = text;
+            }
+        }
+        setTimeout(type, 600);
+    })();
+
+    /* ==========================================
+       8. 数字动画计数
+       ========================================== */
+    (function counter() {
+        const nums = document.querySelectorAll('[data-count]');
+        if (!nums.length) return;
+
+        const obs = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const el = entry.target;
+                const target = parseInt(el.dataset.count);
+                const dur = 1200;
+                const start = performance.now();
+
+                function frame(now) {
+                    const p = Math.min(1, (now - start) / dur);
+                    // easeOutExpo
+                    const ep = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+                    el.textContent = Math.round(ep * target);
+                    if (p < 1) requestAnimationFrame(frame);
+                    else { el.textContent = target; obs.unobserve(el); }
+                }
+                requestAnimationFrame(frame);
+                obs.unobserve(el);
+            });
+        }, { threshold: .5 });
+        nums.forEach(el => obs.observe(el));
+    })();
+
+    /* ==========================================
+       9. 滚动入场
+       ========================================== */
     const revealEls = document.querySelectorAll('.reveal');
-    const observer = new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('show');
-                observer.unobserve(entry.target);
+    const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.classList.add('show');
+                obs.unobserve(e.target);
             }
         });
-    }, { threshold: .12, rootMargin: '0px 0px -20px 0px' });
-    revealEls.forEach(el => observer.observe(el));
+    }, { threshold: .1, rootMargin: '0px 0px -30px 0px' });
+    revealEls.forEach(el => obs.observe(el));
 
-    /* ========================
-       5. 饼图 (不变)
-       ======================== */
+    /* ==========================================
+       10. 饼图
+       ========================================== */
     const data = [
-        { label: 'Python',       percent: 50,  color: '#3776AB' },
-        { label: 'C/C++',        percent: 40,  color: '#00599C' },
-        { label: 'SQL',          percent: 5,   color: '#E38C00' },
-        { label: 'JavaScript',   percent: 2.5, color: '#F7DF1E' },
-        { label: 'Java',         percent: 2.5, color: '#ED8B00' },
+        { label:'Python',     percent:50,  color:'#3776AB' },
+        { label:'C/C++',      percent:40,  color:'#00599C' },
+        { label:'SQL',        percent:5,   color:'#E38C00' },
+        { label:'JavaScript', percent:2.5, color:'#F7DF1E' },
+        { label:'Java',       percent:2.5, color:'#ED8B00' },
     ];
-
-    const cxP = 160, cyP = 160, rP = 135;
-    const svg = document.querySelector('#pieChart svg');
-    const legend = document.getElementById('pieLegend');
-    if (!svg || !legend) return;
-
-    function polar(deg) {
-        const rad = deg * Math.PI / 180;
-        return { x: cxP + rP * Math.sin(rad), y: cyP - rP * Math.cos(rad) };
-    }
-    function arcPath(s, e) {
-        const a = polar(s), b = polar(e);
-        const large = e - s > 180 ? 1 : 0;
-        return `M ${cxP} ${cyP} L ${a.x} ${a.y} A ${rP} ${rP} 0 ${large} 1 ${b.x} ${b.y} Z`;
-    }
-    function mid(s, e) { return (s + e) / 2; }
-    function hov(el, idx, active) {
-        const d = data[idx];
-        const m = mid(d.startAngle, d.endAngle);
-        const r = m * Math.PI / 180;
-        const o = active ? 18 : 0;
-        const dx = o * Math.sin(r), dy = -o * Math.cos(r);
-        el.style.transform = active ? `translate(${dx}px,${dy}px) scale(1.15)` : '';
-        el.style.transformOrigin = `${cxP}px ${cyP}px`;
-    }
-
-    let sa = 0;
-    data.forEach((d, i) => {
-        const slice = d.percent * 360 / 100;
-        const end = sa + slice;
-        d.startAngle = sa; d.endAngle = end;
-
-        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        g.dataset.idx = i;
-
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', arcPath(sa, end));
-        path.setAttribute('fill', d.color);
-        path.setAttribute('stroke', '#11111f');
-        path.setAttribute('stroke-width', '2');
-        g.appendChild(path);
-
-        if (d.percent >= 8) {
-            const m = mid(sa, end);
-            const mr = m * Math.PI / 180;
-            const tx = cxP + (rP * .55) * Math.sin(mr);
-            const ty = cyP - (rP * .55) * Math.cos(mr);
-            const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            txt.setAttribute('x', tx);
-            txt.setAttribute('y', ty);
-            txt.setAttribute('text-anchor', 'middle');
-            txt.setAttribute('dominant-baseline', 'central');
-            txt.setAttribute('fill', '#fff');
-            txt.setAttribute('font-size', Math.min(22, Math.max(14, d.percent * .36)));
-            txt.setAttribute('font-weight', 'bold');
-            txt.textContent = d.percent === 50 ? 'Python\u00a0' : d.percent + '%';
-            g.appendChild(txt);
-        }
-
-        g.addEventListener('mouseenter', function() {
-            hov(this, +this.dataset.idx, true);
-            const items = document.querySelectorAll('.legend-item');
-            if (items[i]) items[i].classList.add('active');
+    const CX=160,CY=160,R=135;
+    const svg=document.querySelector('#pieChart svg');
+    const legend=document.getElementById('pieLegend');
+    if(svg&&legend){
+        function pol(d){const r=d*Math.PI/180;return{x:CX+R*Math.sin(r),y:CY-R*Math.cos(r)}}
+        function arc(s,e){const a=pol(s),b=pol(e),lg=e-s>180?1:0;return`M ${CX} ${CY} L ${a.x} ${a.y} A ${R} ${R} 0 ${lg} 1 ${b.x} ${b.y} Z`}
+        function mid(s,e){return(s+e)/2}
+        function hov(el,i,a){const d=data[i],m=mid(d.startAngle,d.endAngle),r=m*Math.PI/180,o=a?18:0;el.style.transform=a?`translate(${o*Math.sin(r)}px,${-o*Math.cos(r)}px) scale(1.15)`:'';el.style.transformOrigin=`${CX}px ${CY}px`}
+        let sa=0;
+        data.forEach((d,i)=>{
+            const si=d.percent*360/100,end=sa+si;d.startAngle=sa;d.endAngle=end;
+            const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.dataset.idx=i;
+            const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+            p.setAttribute('d',arc(sa,end));p.setAttribute('fill',d.color);p.setAttribute('stroke','#11111f');p.setAttribute('stroke-width','2');
+            g.appendChild(p);
+            if(d.percent>=8){const m=mid(sa,end),mr=m*Math.PI/180;const tx=CX+(R*.55)*Math.sin(mr),ty=CY-(R*.55)*Math.cos(mr);const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',tx);t.setAttribute('y',ty);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('fill','#fff');t.setAttribute('font-size',Math.min(22,Math.max(14,d.percent*.36)));t.setAttribute('font-weight','bold');t.textContent=d.percent===50?'Python\u00a0':d.percent+'%';g.appendChild(t)}
+            g.addEventListener('mouseenter',function(){hov(this,+this.dataset.idx,1);const q=document.querySelectorAll('.legend-item');if(q[i])q[i].classList.add('active')});
+            g.addEventListener('mouseleave',function(){hov(this,+this.dataset.idx,0);const q=document.querySelectorAll('.legend-item');if(q[i])q[i].classList.remove('active')});
+            svg.appendChild(g);sa=end
         });
-        g.addEventListener('mouseleave', function() {
-            hov(this, +this.dataset.idx, false);
-            const items = document.querySelectorAll('.legend-item');
-            if (items[i]) items[i].classList.remove('active');
+        data.forEach((d,i)=>{
+            const it=document.createElement('div');it.className='legend-item';
+            it.innerHTML=`<span class="legend-dot" style="background:${d.color}"></span><span class="legend-label">${d.label}</span><span class="legend-pct">${d.percent}%</span>`;
+            it.addEventListener('mouseenter',()=>{hov(svg.children[i],i,1);it.classList.add('active')});
+            it.addEventListener('mouseleave',()=>{hov(svg.children[i],i,0);it.classList.remove('active')});
+            it.addEventListener('click',()=>{const a=it.classList.contains('active');document.querySelectorAll('.legend-item').forEach(e=>e.classList.remove('active'));for(let j=0;j<svg.children.length;j++)hov(svg.children[j],j,0);if(!a){hov(svg.children[i],i,1);it.classList.add('active')}});
+            legend.appendChild(it)
         });
-
-        svg.appendChild(g);
-        sa = end;
-    });
-
-    data.forEach((d, i) => {
-        const item = document.createElement('div');
-        item.className = 'legend-item';
-        item.innerHTML = `<span class="legend-dot" style="background:${d.color}"></span>
-            <span class="legend-label">${d.label}</span>
-            <span class="legend-pct">${d.percent}%</span>`;
-        item.addEventListener('mouseenter', () => { hov(svg.children[i], i, true); item.classList.add('active'); });
-        item.addEventListener('mouseleave', () => { hov(svg.children[i], i, false); item.classList.remove('active'); });
-        item.addEventListener('click', () => {
-            const active = item.classList.contains('active');
-            document.querySelectorAll('.legend-item').forEach(e => e.classList.remove('active'));
-            for (let j = 0; j < svg.children.length; j++) hov(svg.children[j], j, false);
-            if (!active) { hov(svg.children[i], i, true); item.classList.add('active'); }
-        });
-        legend.appendChild(item);
-    });
+    }
 })();
 </script>
 {% endblock %}
