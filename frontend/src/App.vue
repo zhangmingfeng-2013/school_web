@@ -15,7 +15,7 @@
       <CountDown v-if="showCountdown" @close="showCountdown=false" />
 
       <!-- 照片标签筛选 -->
-      <TagFilter v-if="tab==='graduation'||tab==='daily'" :activeTag="activeTag" :isAdmin="isAdmin" @filter="onTagFilter" />
+      <TagFilter v-if="tab==='graduation'||tab==='daily'" :activeTag="activeTag" @filter="onTagFilter" />
 
       <div v-if="tab!=='board'&&tab!=='timeline'&&tab!=='classmates'&&tab!=='wishes'&&tab!=='playlist'&&tab!=='stats'" class="toolbar">
         <div class="search-box">

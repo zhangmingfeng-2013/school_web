@@ -311,8 +311,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/api/captcha"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/")
 
 @app.before_request
 def check_global_captcha():
@@ -485,6 +485,33 @@ def _init_album_tables(conn):
             image_id INT NOT NULL,
             token VARCHAR(64) NOT NULL UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 聊天消息
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            channel VARCHAR(10) NOT NULL DEFAULT 'world',
+            sender VARCHAR(50) NOT NULL,
+            recipient VARCHAR(50) DEFAULT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_channel (channel),
+            INDEX idx_sender (sender),
+            INDEX idx_recipient (recipient),
+            INDEX idx_created (created_at)
+        )
+    """)
+    # 好友关系
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS friendships (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user1 VARCHAR(50) NOT NULL,
+            user2 VARCHAR(50) NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            requester VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_pair (user1, user2)
         )
     """)
     conn.commit()
@@ -960,6 +987,15 @@ def author():
     return render_template("author.html",
                            username=session.get("username", ""),
                            permission=session.get("permission", ""))
+
+
+# ---------- 路由：聊天 ----------
+@app.route("/chat")
+@login_required
+def chat_standalone():
+    return render_template("chat_standalone.html",
+                           username=session["username"],
+                           permission=session["permission"])
 
 
 # ---------- 路由：系统监控 ----------
@@ -2209,6 +2245,218 @@ def api_album_danmaku_add(img_id):
     cursor.close()
     conn.close()
     return jsonify({"success": True, "id": did})
+
+
+# ===== 💬 聊天系统 API =====
+
+@app.route("/api/chat/messages")
+def api_chat_messages():
+    """获取聊天记录"""
+    channel = request.args.get("channel", "world")
+    before = request.args.get("before", "")  # 翻页
+    limit = min(int(request.args.get("limit", 50)), 100)
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    if channel == "world":
+        sql = "SELECT id, channel, sender, content, created_at FROM chat_messages WHERE channel='world'"
+        params = []
+    else:
+        user = session.get("username", "")
+        other = request.args.get("with", "")
+        if not user or not other:
+            return jsonify([])
+        sql = "SELECT id, channel, sender, content, created_at FROM chat_messages WHERE channel='dm' AND ((sender=%s AND recipient=%s) OR (sender=%s AND recipient=%s))"
+        params = [user, other, other, user]
+    if before:
+        sql += " AND id < %s"
+        params.append(int(before))
+    sql += " ORDER BY id DESC LIMIT %s"
+    params.append(limit)
+    cursor.execute(sql, params)
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    for r in rows:
+        r["created_at"] = str(r["created_at"])
+    cursor.close()
+    conn.close()
+    rows.reverse()
+    return jsonify(rows)
+
+@app.route("/api/chat/send", methods=["POST"])
+@login_required
+def api_chat_send():
+    """发送消息"""
+    data = request.get_json()
+    channel = (data or {}).get("channel", "world")
+    content = sanitize_input((data or {}).get("content", ""), 1000)
+    recipient = sanitize_input((data or {}).get("recipient", ""), 50) if channel == "dm" else None
+    if not content:
+        return jsonify({"error": "消息不能为空"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO chat_messages (channel, sender, recipient, content) VALUES (%s,%s,%s,%s)",
+        (channel, session["username"], recipient, content)
+    )
+    conn.commit()
+    mid = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True, "id": mid})
+
+# 搜索用户
+@app.route("/api/chat/search")
+@login_required
+def api_chat_search():
+    q = sanitize_input(request.args.get("q", ""), 50)
+    if not q:
+        return jsonify([])
+    conn = get_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("SELECT User_Name FROM users WHERE User_Name LIKE %s AND User_Name != %s LIMIT 10",
+                   (f"%{q}%", session["username"]))
+    users = [r[0] for r in cursor.fetchall()]
+    # 也查 user_profiles 的昵称
+    cursor.execute("""
+        SELECT u.User_Name, p.nickname FROM users u
+        LEFT JOIN user_profiles p ON p.username = u.User_Name
+        WHERE (u.User_Name LIKE %s OR p.nickname LIKE %s) AND u.User_Name != %s LIMIT 10
+    """, (f"%{q}%", f"%{q}%", session["username"]))
+    results = [{"username": r[0], "nickname": r[1] or r[0]} for r in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return jsonify(results)
+
+# 好友操作
+@app.route("/api/chat/friends")
+@login_required
+def api_chat_friends():
+    user = session["username"]
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT user1, user2, status, requester
+        FROM friendships WHERE (user1=%s OR user2=%s) AND status='accepted'
+    """, (user, user))
+    friends = []
+    for r in cursor.fetchall():
+        friend = r[0] if r[1] == user else r[1]
+        friends.append({"username": friend})
+    # 获取好友昵称
+    for f in friends:
+        cursor.execute("SELECT nickname FROM user_profiles WHERE username=%s", (f["username"],))
+        row = cursor.fetchone()
+        f["nickname"] = row[0] if row else f["username"]
+    cursor.close()
+    conn.close()
+    return jsonify(friends)
+
+@app.route("/api/chat/friends/requests")
+@login_required
+def api_chat_friend_requests():
+    user = session["username"]
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT user1, user2, requester FROM friendships
+        WHERE user2=%s AND status='pending'
+    """, (user,))
+    requests = [{"from": r[0], "nickname": r[0]} for r in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return jsonify(requests)
+
+@app.route("/api/chat/friends/request", methods=["POST"])
+@login_required
+def api_chat_friend_request():
+    data = request.get_json()
+    target = sanitize_input((data or {}).get("username", ""), 50)
+    if not target or target == session["username"]:
+        return jsonify({"error": "无效用户"}), 400
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO friendships (user1, user2, requester) VALUES (%s,%s,%s)",
+            (session["username"], target, session["username"])
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True})
+    except pymysql.MySQLError:
+        return jsonify({"error": "已发送过好友请求"}), 400
+
+@app.route("/api/chat/friends/accept", methods=["POST"])
+@login_required
+def api_chat_friend_accept():
+    data = request.get_json()
+    other = sanitize_input((data or {}).get("username", ""), 50)
+    user = session["username"]
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE friendships SET status='accepted' WHERE user1=%s AND user2=%s AND status='pending'",
+        (other, user)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/chat/friends/remove", methods=["POST"])
+@login_required
+def api_chat_friend_remove():
+    data = request.get_json()
+    other = sanitize_input((data or {}).get("username", ""), 50)
+    user = session["username"]
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM friendships WHERE (user1=%s AND user2=%s) OR (user1=%s AND user2=%s)",
+        (user, other, other, user)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/chat/messages/<int:mid>", methods=["DELETE"])
+@login_required
+def api_chat_recall(mid):
+    """撤回消息（仅发送者本人）"""
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("SELECT sender, content FROM chat_messages WHERE id=%s", (mid,))
+    row = cursor.fetchone()
+    if not row:
+        return jsonify({"error": "消息不存在"}), 404
+    if row[0] != session["username"] and session.get("permission") != "administrator":
+        return jsonify({"error": "只能撤回自己的消息"}), 403
+    # 标记撤回而非物理删除
+    cursor.execute("UPDATE chat_messages SET content=%s WHERE id=%s", ("[消息已撤回]", mid))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
 
 
 

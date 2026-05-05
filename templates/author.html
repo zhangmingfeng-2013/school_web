@@ -1,60 +1,825 @@
 {% extends "base.html" %}
 {% block title %}关于作者{% endblock %}
 {% block content %}
-<h2 class="mb-4">👨‍💻 关于作者</h2>
+<style>
+/* ============================================
+   JetBrains 风格 · 关于作者
+   ============================================ */
+:root {
+    --bg: #0b0b14;
+    --bg-card: rgba(255,255,255,.035);
+    --border: rgba(255,255,255,.07);
+    --border-hover: rgba(255,255,255,.12);
+    --text: #e8e8f0;
+    --text-muted: #7a7a9a;
+    --accent-1: #6366f1;
+    --accent-2: #8b5cf6;
+    --accent-3: #06b6d4;
+    --glow: rgba(99,102,241,.2);
+}
 
-<div class="card">
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-8">
-                <h3>张铭枫</h3>
-                <hr>
-                <table class="table table-sm">
-                    <tr><td style="width:100px;color:#666">性别</td><td>男</td></tr>
-                    <tr><td style="color:#666">生日</td><td>2013年5月26日</td></tr>
-                    <tr><td style="color:#666">民族</td><td>蒙古族</td></tr>
-                    <tr><td style="color:#666">学校</td><td>重庆大学城人民小学</td></tr>
-                    <tr><td style="color:#666">特长</td><td>💻 编程</td></tr>
-                    <tr><td style="color:#666">住址</td><td>重庆市高新区富力城书香里</td></tr>
+/* ---- 全局 ---- */
+.author-page {
+    position: relative;
+    min-height: 100vh;
+    padding-bottom: 5rem;
+    overflow-x: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* 点阵网格背景 */
+.author-page::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* ---- 浮动渐变色球 (JetBrains 风格) ---- */
+.floating-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+    will-change: transform;
+}
+.floating-orb:nth-child(1) {
+    width: 500px; height: 500px;
+    background: rgba(99,102,241,.12);
+    top: -10%; right: -10%;
+    animation: orbFloat1 18s ease-in-out infinite;
+}
+.floating-orb:nth-child(2) {
+    width: 400px; height: 400px;
+    background: rgba(139,92,246,.10);
+    bottom: -5%; left: -8%;
+    animation: orbFloat2 22s ease-in-out infinite;
+}
+.floating-orb:nth-child(3) {
+    width: 350px; height: 350px;
+    background: rgba(6,182,212,.08);
+    top: 40%; left: 50%;
+    animation: orbFloat3 16s ease-in-out infinite;
+}
+@keyframes orbFloat1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(-80px, 60px) scale(1.1); }
+    66%      { transform: translate(40px, -40px) scale(.95); }
+}
+@keyframes orbFloat2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(60px, -50px) scale(1.15); }
+    66%      { transform: translate(-50px, 40px) scale(.9); }
+}
+@keyframes orbFloat3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(90px, 30px) scale(1.08); }
+}
+
+/* ---- 鼠标跟踪聚光灯 ---- */
+#spotlight {
+    position: fixed;
+    width: 700px; height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99,102,241,.07) 0%, transparent 60%);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+    will-change: left, top;
+}
+
+/* ---- 容器层级 ---- */
+.author-page > .container {
+    position: relative;
+    z-index: 1;
+}
+
+/* ============================================
+   HERO
+   ============================================ */
+.hero-section {
+    position: relative;
+    padding: 5.5rem 0 3.5rem;
+    text-align: center;
+}
+
+/* 头像 */
+.hero-avatar-wrap {
+    width: 140px; height: 140px;
+    margin: 0 auto 1.5rem;
+    position: relative;
+    cursor: pointer;
+}
+.hero-avatar-ring {
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--accent-1), var(--accent-3), var(--accent-2), var(--accent-1));
+    animation: spinRing 5s linear infinite;
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px));
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px));
+    transition: transform .4s ease;
+}
+.hero-avatar-wrap:hover .hero-avatar-ring {
+    transform: scale(1.08);
+}
+@keyframes spinRing {
+    to { transform: rotate(360deg); }
+}
+.hero-avatar {
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 52px; font-weight: 700; color: #fff;
+    position: relative; z-index: 1;
+    transition: transform .4s cubic-bezier(.34,1.56,.64,1);
+    box-shadow: 0 0 40px rgba(99,102,241,.25);
+}
+.hero-avatar-wrap:hover .hero-avatar {
+    transform: scale(1.06);
+}
+
+/* 名字 - 渐变动画 */
+.hero-name {
+    font-size: 3.2rem;
+    font-weight: 800;
+    margin-bottom: .3rem;
+    letter-spacing: 3px;
+    background: linear-gradient(135deg, #e4e4ed 0%, #818cf8 40%, #22d3ee 70%, #818cf8 100%);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradText 6s ease-in-out infinite;
+}
+@keyframes gradText {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+}
+
+.hero-subtitle {
+    font-size: 1.05rem;
+    color: var(--text-muted);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: .6rem;
+}
+.hero-tagline {
+    font-size: 1.05rem;
+    color: rgba(255,255,255,.35);
+    max-width: 460px;
+    margin: .8rem auto 0;
+    line-height: 1.7;
+}
+.hero-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2.5rem;
+    margin-top: 2rem;
+}
+.hero-stat {
+    text-align: center;
+}
+.hero-stat-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.hero-stat-label {
+    font-size: .78rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ============================================
+   3D Tilt 卡片
+   ============================================ */
+.tilt-card {
+    perspective: 1200px;
+    position: relative;
+    z-index: 1;
+}
+.tilt-card-inner {
+    position: relative;
+    border-radius: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    padding: 1.8rem;
+    overflow: hidden;
+    transform-style: preserve-3d;
+    will-change: transform;
+    transition: box-shadow .4s ease, border-color .4s ease;
+}
+/* 卡片光晕 (跟随鼠标) */
+.tilt-card-inner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: radial-gradient(circle at var(--glow-x, 50%) var(--glow-y, 50%), rgba(99,102,241,.08) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity .3s ease;
+}
+.tilt-card:hover .tilt-card-inner::before {
+    opacity: 1;
+}
+/* 渐变边框 (hover) */
+.tilt-card-inner::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 17px;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2), var(--accent-3), transparent 60%);
+    opacity: 0;
+    transition: opacity .4s ease;
+    z-index: -1;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    padding: 1px;
+}
+.tilt-card:hover .tilt-card-inner::after {
+    opacity: 1;
+}
+.tilt-card:hover .tilt-card-inner {
+    border-color: transparent;
+    box-shadow: 0 8px 50px rgba(99,102,241,.12);
+}
+
+.tilt-card-inner > * {
+    position: relative; z-index: 1;
+}
+
+/* ---- 卡片标题 ---- */
+.section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+}
+
+/* ============================================
+   基本信息表格
+   ============================================ */
+.info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.info-table td {
+    padding: .6rem .8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+.info-table td:first-child {
+    width: 80px;
+    color: var(--text-muted);
+    font-size: .88rem;
+    white-space: nowrap;
+}
+.info-table td:last-child { font-weight: 500; }
+.info-table tr:last-child td { border-bottom: none; }
+
+/* ============================================
+   饼图
+   ============================================ */
+#pieWrapper {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.5rem;
+    justify-content: center;
+}
+#pieChart svg { display: block; }
+#pieChart g {
+    transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+    cursor: pointer;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .25s ease;
+}
+.legend-item:hover,
+.legend-item.active {
+    background: rgba(255,255,255,.06);
+    transform: translateX(4px);
+}
+.legend-dot {
+    width: 14px; height: 14px;
+    border-radius: 4px; flex-shrink: 0;
+}
+.legend-label { font-size: 14px; }
+.legend-pct {
+    font-size: 14px; font-weight: 600;
+    color: var(--text-muted); margin-left: auto;
+}
+
+/* ============================================
+   荣誉项
+   ============================================ */
+.honor-category-label {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: .85rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: .8rem;
+}
+.honor-card-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: .9rem;
+    padding: 1.1rem 1.3rem;
+}
+.honor-icon-box {
+    width: 38px; height: 38px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+    border: 1px solid var(--border);
+    font-size: 1.2rem;
+}
+.honor-name {
+    font-weight: 600;
+    font-size: .92rem;
+    line-height: 1.45;
+}
+.honor-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+.honor-date {
+    font-size: .8rem;
+    color: var(--text-muted);
+}
+.honor-badge {
+    display: inline-block;
+    padding: 1px 10px;
+    border-radius: 20px;
+    font-size: .76rem;
+    font-weight: 600;
+    letter-spacing: .5px;
+}
+
+/* 校内小卡片 */
+.school-honor {
+    text-align: center;
+    width: 100%;
+    padding: .2rem 0;
+}
+.school-honor .star-icon {
+    font-size: 2rem;
+    margin-bottom: 6px;
+    display: block;
+}
+.school-honor .honor-name {
+    font-size: .88rem;
+}
+.school-honor .honor-date {
+    font-size: .75rem;
+    margin-top: 2px;
+}
+
+/* ============================================
+   滚动入场动画 (更精细)
+   ============================================ */
+.reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity .7s cubic-bezier(.25,.46,.45,.94),
+                transform .7s cubic-bezier(.25,.46,.45,.94);
+}
+.reveal.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: .1s; }
+.reveal-delay-2 { transition-delay: .2s; }
+.reveal-delay-3 { transition-delay: .3s; }
+.reveal-delay-4 { transition-delay: .4s; }
+
+/* ============================================
+   响应式
+   ============================================ */
+@media (max-width: 991px) {
+    .hero-name { font-size: 2.6rem; }
+}
+@media (max-width: 768px) {
+    .hero-section { padding: 3.5rem 0 2.5rem; }
+    .hero-name { font-size: 2rem; }
+    .hero-avatar-wrap { width: 110px; height: 110px; }
+    .hero-avatar { font-size: 40px; }
+    .hero-stats { gap: 1.5rem; }
+    .hero-stat-num { font-size: 1.2rem; }
+    .tilt-card-inner { padding: 1.3rem; }
+}
+@media (max-width: 576px) {
+    .hero-name { font-size: 1.6rem; letter-spacing: 1px; }
+    .hero-subtitle { font-size: .9rem; letter-spacing: 3px; }
+    .hero-tagline { font-size: .9rem; }
+    .hero-stats { gap: 1rem; }
+    .info-table td { padding: .5rem; font-size: .88rem; }
+    .info-table td:first-child { width: 60px; font-size: .8rem; }
+    .honor-card-inner { padding: .9rem 1rem; }
+}
+
+/* ---- 打印 ---- */
+@media print {
+    .author-page { background: #fff !important; color: #000 !important; }
+    .author-page::before, .floating-orb, #spotlight { display: none !important; }
+}
+</style>
+
+<div class="author-page">
+
+<!-- 浮动渐变色球 (JetBrains 标志性效果) -->
+<div class="floating-orb"></div>
+<div class="floating-orb"></div>
+<div class="floating-orb"></div>
+
+<!-- 鼠标跟踪聚光灯 -->
+<div id="spotlight"></div>
+
+<div class="container">
+
+<!-- ==================== HERO ==================== -->
+<section class="hero-section reveal">
+    <div class="hero-avatar-wrap" id="avatarWrap">
+        <div class="hero-avatar-ring"></div>
+        <div class="hero-avatar">铭</div>
+    </div>
+    <h1 class="hero-name">张铭枫</h1>
+    <p class="hero-subtitle">少年编程爱好者</p>
+    <p class="hero-tagline">用代码构建未来的 12 岁开发者 · 热爱创造与探索</p>
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <div class="hero-stat-num">2</div>
+            <div class="hero-stat-label">年编程经验</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-num">5</div>
+            <div class="hero-stat-label">门编程语言</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-num">12</div>
+            <div class="hero-stat-label">项荣誉奖项</div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== 信息 + 技能 ==================== -->
+<div class="row g-4 mb-5">
+    <div class="col-lg-6">
+        <div class="tilt-card reveal reveal-delay-1">
+            <div class="tilt-card-inner tilt-layer">
+                <h3 class="section-title">📋 基本信息</h3>
+                <table class="info-table">
+                    <tr><td>性别</td><td>男</td></tr>
+                    <tr><td>生日</td><td>2013年5月26日</td></tr>
+                    <tr><td>民族</td><td>蒙古族</td></tr>
+                    <tr><td>学校</td><td>重庆大学城人民小学</td></tr>
+                    <tr><td>特长</td><td>💻 编程</td></tr>
+                    <tr><td>住址</td><td>重庆市高新区富力城书香里</td></tr>
                 </table>
             </div>
-            <div class="col-md-4 text-center">
-                <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:48px;font-weight:700;line-height:120px;margin:0 auto">铭</div>
-                <p class="mt-2 text-muted">少年编程爱好者</p>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="tilt-card reveal reveal-delay-2">
+            <div class="tilt-card-inner tilt-layer">
+                <h3 class="section-title">💻 编程语言技能</h3>
+                <div id="pieWrapper">
+                    <div id="pieChart" style="width:270px;height:270px;">
+                        <svg viewBox="0 0 320 320" width="270" height="270"></svg>
+                    </div>
+                    <div id="pieLegend" style="min-width:130px;"></div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 荣誉 -->
-<div class="card mt-3">
-    <div class="card-body">
-        <h5 class="mb-3">🏆 市级荣誉</h5>
-        <ul class="list-group list-group-flush mb-4">
-            <li class="list-group-item">2024年7月 全国青少年信息素养大赛西南赛区（重庆）编程挑战赛 <span class="badge bg-warning text-dark">二等奖</span></li>
-            <li class="list-group-item">2024年6月 第二十五届全国学生信息素养提升实践活动重庆市级选拔活动 <span class="badge bg-warning text-dark">二等奖</span></li>
-        </ul>
+<!-- ==================== 荣誉奖项 ==================== -->
+<div class="reveal reveal-delay-3">
+    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;">🏆 荣誉奖项</h2>
 
-        <h5 class="mb-3">🏅 区级荣誉</h5>
-        <ul class="list-group list-group-flush mb-4">
-            <li class="list-group-item">2025年5月 重庆高新区第二十六届全国学生信息素养提升实践活动 <span class="badge bg-success">一等奖</span></li>
-            <li class="list-group-item">2024年5月 重庆高新区第二十五届全国学生信息素养提升实践活动 <span class="badge bg-success">一等奖</span></li>
-        </ul>
+    <!-- 市级 -->
+    <div class="honor-category-label">🎖 市级荣誉</div>
+    <div class="row g-3 mb-4">
+        {% set honors_city = [
+            ("全国青少年信息素养大赛西南赛区（重庆）编程挑战赛", "2024年7月", "bg-warning text-dark", "二等奖"),
+            ("全国学生信息素养提升实践活动重庆市级选拔活动", "2024年6月", "bg-warning text-dark", "二等奖"),
+        ] %}
+        {% for name, date, cls, badge in honors_city %}
+        <div class="col-md-6">
+            <div class="tilt-card">
+                <div class="tilt-card-inner tilt-layer honor-card-inner">
+                    <div class="honor-icon-box">🏅</div>
+                    <div class="honor-name-wrapper">
+                        <div class="honor-name">{{ name }}</div>
+                        <div class="honor-meta">
+                            <span class="honor-date">{{ date }}</span>
+                            <span class="honor-badge {{ cls }}">{{ badge }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 
-        <h5 class="mb-3">📜 考级荣誉</h5>
-        <ul class="list-group list-group-flush mb-4">
-            <li class="list-group-item">2025年9月 青少年软件编程等级考试 <span class="badge bg-info">Level-3 G</span></li>
-            <li class="list-group-item">2025年6月 青少年软件编程等级考试 <span class="badge bg-info">Level-2 E</span></li>
-            <li class="list-group-item">2024年10月 青少年软件编程等级考试 <span class="badge bg-info">Level-1 E</span></li>
-        </ul>
+    <!-- 区级 -->
+    <div class="honor-category-label">🥇 区级荣誉</div>
+    <div class="row g-3 mb-4">
+        {% set honors_dist = [
+            ("重庆高新区第二十六届全国学生信息素养提升实践活动", "2025年5月", "bg-success", "一等奖"),
+            ("重庆高新区第二十五届全国学生信息素养提升实践活动", "2024年5月", "bg-success", "一等奖"),
+        ] %}
+        {% for name, date, cls, badge in honors_dist %}
+        <div class="col-md-6">
+            <div class="tilt-card">
+                <div class="tilt-card-inner tilt-layer honor-card-inner">
+                    <div class="honor-icon-box">🏅</div>
+                    <div class="honor-name-wrapper">
+                        <div class="honor-name">{{ name }}</div>
+                        <div class="honor-meta">
+                            <span class="honor-date">{{ date }}</span>
+                            <span class="honor-badge {{ cls }}">{{ badge }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 
-        <h5 class="mb-3">🌟 校内荣誉</h5>
-        <ul class="list-group list-group-flush">
-            <li class="list-group-item">2025年6月 第二学期 "进步之星"</li>
-            <li class="list-group-item">2025年1月 第一学期 "数学之星"</li>
-            <li class="list-group-item">2022年6月 第二学期 "学习小标兵"</li>
-            <li class="list-group-item">2022年1月 第一学期 "学习小明星"</li>
-        </ul>
+    <!-- 考级 -->
+    <div class="honor-category-label">📜 考级荣誉</div>
+    <div class="row g-3 mb-4">
+        {% set honors_level = [
+            ("青少年软件编程等级考试", "2025年9月", "bg-info", "Level-3 G"),
+            ("青少年软件编程等级考试", "2025年6月", "bg-info", "Level-2 E"),
+            ("青少年软件编程等级考试", "2024年10月", "bg-info", "Level-1 E"),
+        ] %}
+        {% for name, date, cls, badge in honors_level %}
+        <div class="col-md-4">
+            <div class="tilt-card">
+                <div class="tilt-card-inner tilt-layer honor-card-inner">
+                    <div class="honor-icon-box">📜</div>
+                    <div class="honor-name-wrapper">
+                        <div class="honor-name">{{ name }}</div>
+                        <div class="honor-meta">
+                            <span class="honor-date">{{ date }}</span>
+                            <span class="honor-badge {{ cls }}">{{ badge }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 校内 -->
+    <div class="honor-category-label">🌟 校内荣誉</div>
+    <div class="row g-3">
+        {% set honors_school = [
+            ("进步之星", "2025年6月"),
+            ("数学之星", "2025年1月"),
+            ("学习小标兵", "2022年6月"),
+            ("学习小明星", "2022年1月"),
+        ] %}
+        {% for name, date in honors_school %}
+        <div class="col-md-3 col-6">
+            <div class="tilt-card">
+                <div class="tilt-card-inner tilt-layer" style="padding:1.2rem 1rem;">
+                    <div class="school-honor">
+                        <span class="star-icon">⭐</span>
+                        <div class="honor-name">{{ name }}</div>
+                        <div class="honor-date">{{ date }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
+
+</div><!-- .container -->
+</div><!-- .author-page -->
+
+<script>
+(function(){
+    'use strict';
+
+    /* ========================
+       1. 鼠标跟踪聚光灯
+       ======================== */
+    const spotlight = document.getElementById('spotlight');
+    let mx = window.innerWidth / 2, my = window.innerHeight / 2;
+    let cx = mx, cy = my;
+
+    document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+    function tickSpotlight() {
+        cx += (mx - cx) * .07;
+        cy += (my - cy) * .07;
+        spotlight.style.left = cx + 'px';
+        spotlight.style.top  = cy + 'px';
+        requestAnimationFrame(tickSpotlight);
+    }
+    tickSpotlight();
+
+    /* ========================
+       2. 3D Tilt + 光晕跟随
+       ======================== */
+    const tiltCards = document.querySelectorAll('.tilt-card');
+    tiltCards.forEach(card => {
+        const inner = card.querySelector('.tilt-card-inner');
+        if (!inner) return;
+
+        card.addEventListener('mousemove', e => {
+            const r = card.getBoundingClientRect();
+            const x = e.clientX - r.left, y = e.clientY - r.top;
+            const hw = r.width / 2, hh = r.height / 2;
+            const rx = ((y - hh) / hh) * -7;  // max ±7°
+            const ry = ((x - hw) / hw) * 7;
+            inner.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg) scale(1.025)`;
+            inner.style.setProperty('--glow-x', (x / r.width  * 100) + '%');
+            inner.style.setProperty('--glow-y', (y / r.height * 100) + '%');
+        });
+
+        card.addEventListener('mouseleave', () => {
+            inner.style.transform = 'rotateX(0deg) rotateY(0deg) scale(1)';
+        });
+    });
+
+    /* ========================
+       3. 磁性鼠标 (头像)
+       ======================== */
+    const avatarWrap = document.getElementById('avatarWrap');
+    if (avatarWrap) {
+        const avatar = avatarWrap.querySelector('.hero-avatar');
+        const ring   = avatarWrap.querySelector('.hero-avatar-ring');
+        avatarWrap.addEventListener('mousemove', e => {
+            const r = avatarWrap.getBoundingClientRect();
+            const x = e.clientX - r.left, y = e.clientY - r.top;
+            const hw = r.width / 2, hh = r.height / 2;
+            const dx = (x - hw) / hw * 6;
+            const dy = (y - hh) / hh * 6;
+            avatar.style.transform = `translate(${dx}px, ${dy}px) scale(1.06)`;
+            ring.style.transform  = `translate(${dx * .5}px, ${dy * .5}px) scale(1.08)`;
+        });
+        avatarWrap.addEventListener('mouseleave', () => {
+            avatar.style.transform = '';
+            ring.style.transform  = '';
+        });
+    }
+
+    /* ========================
+       4. 滚动入场
+       ======================== */
+    const revealEls = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('show');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: .12, rootMargin: '0px 0px -20px 0px' });
+    revealEls.forEach(el => observer.observe(el));
+
+    /* ========================
+       5. 饼图 (不变)
+       ======================== */
+    const data = [
+        { label: 'Python',       percent: 50,  color: '#3776AB' },
+        { label: 'C/C++',        percent: 40,  color: '#00599C' },
+        { label: 'SQL',          percent: 5,   color: '#E38C00' },
+        { label: 'JavaScript',   percent: 2.5, color: '#F7DF1E' },
+        { label: 'Java',         percent: 2.5, color: '#ED8B00' },
+    ];
+
+    const cxP = 160, cyP = 160, rP = 135;
+    const svg = document.querySelector('#pieChart svg');
+    const legend = document.getElementById('pieLegend');
+    if (!svg || !legend) return;
+
+    function polar(deg) {
+        const rad = deg * Math.PI / 180;
+        return { x: cxP + rP * Math.sin(rad), y: cyP - rP * Math.cos(rad) };
+    }
+    function arcPath(s, e) {
+        const a = polar(s), b = polar(e);
+        const large = e - s > 180 ? 1 : 0;
+        return `M ${cxP} ${cyP} L ${a.x} ${a.y} A ${rP} ${rP} 0 ${large} 1 ${b.x} ${b.y} Z`;
+    }
+    function mid(s, e) { return (s + e) / 2; }
+    function hov(el, idx, active) {
+        const d = data[idx];
+        const m = mid(d.startAngle, d.endAngle);
+        const r = m * Math.PI / 180;
+        const o = active ? 18 : 0;
+        const dx = o * Math.sin(r), dy = -o * Math.cos(r);
+        el.style.transform = active ? `translate(${dx}px,${dy}px) scale(1.15)` : '';
+        el.style.transformOrigin = `${cxP}px ${cyP}px`;
+    }
+
+    let sa = 0;
+    data.forEach((d, i) => {
+        const slice = d.percent * 360 / 100;
+        const end = sa + slice;
+        d.startAngle = sa; d.endAngle = end;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.dataset.idx = i;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', arcPath(sa, end));
+        path.setAttribute('fill', d.color);
+        path.setAttribute('stroke', '#11111f');
+        path.setAttribute('stroke-width', '2');
+        g.appendChild(path);
+
+        if (d.percent >= 8) {
+            const m = mid(sa, end);
+            const mr = m * Math.PI / 180;
+            const tx = cxP + (rP * .55) * Math.sin(mr);
+            const ty = cyP - (rP * .55) * Math.cos(mr);
+            const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            txt.setAttribute('x', tx);
+            txt.setAttribute('y', ty);
+            txt.setAttribute('text-anchor', 'middle');
+            txt.setAttribute('dominant-baseline', 'central');
+            txt.setAttribute('fill', '#fff');
+            txt.setAttribute('font-size', Math.min(22, Math.max(14, d.percent * .36)));
+            txt.setAttribute('font-weight', 'bold');
+            txt.textContent = d.percent === 50 ? 'Python\u00a0' : d.percent + '%';
+            g.appendChild(txt);
+        }
+
+        g.addEventListener('mouseenter', function() {
+            hov(this, +this.dataset.idx, true);
+            const items = document.querySelectorAll('.legend-item');
+            if (items[i]) items[i].classList.add('active');
+        });
+        g.addEventListener('mouseleave', function() {
+            hov(this, +this.dataset.idx, false);
+            const items = document.querySelectorAll('.legend-item');
+            if (items[i]) items[i].classList.remove('active');
+        });
+
+        svg.appendChild(g);
+        sa = end;
+    });
+
+    data.forEach((d, i) => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = `<span class="legend-dot" style="background:${d.color}"></span>
+            <span class="legend-label">${d.label}</span>
+            <span class="legend-pct">${d.percent}%</span>`;
+        item.addEventListener('mouseenter', () => { hov(svg.children[i], i, true); item.classList.add('active'); });
+        item.addEventListener('mouseleave', () => { hov(svg.children[i], i, false); item.classList.remove('active'); });
+        item.addEventListener('click', () => {
+            const active = item.classList.contains('active');
+            document.querySelectorAll('.legend-item').forEach(e => e.classList.remove('active'));
+            for (let j = 0; j < svg.children.length; j++) hov(svg.children[j], j, false);
+            if (!active) { hov(svg.children[i], i, true); item.classList.add('active'); }
+        });
+        legend.appendChild(item);
+    });
+})();
+</script>
 {% endblock %}
