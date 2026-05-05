@@ -2,1012 +2,644 @@
 {% block title %}关于作者{% endblock %}
 {% block content %}
 <style>
-/* ============================================
-   JetBrains Ultra · 关于作者
-   ============================================ */
+/* ===== 全局 ===== */
 :root {
+    --text: #f2f2f2;
+    --bgt: #222222d0;
+    --theme: #61ccff;
+    --sele: #61ccff60;
     --bg: #090912;
-    --bg-card: rgba(255,255,255,.03);
-    --border: rgba(255,255,255,.06);
-    --text: #ececf5;
-    --text-muted: #7a7a9a;
-    --a1: #6366f1;
-    --a2: #8b5cf6;
-    --a3: #06b6d4;
-    --a4: #f59e0b;
 }
-
-/* ---- 全局 ---- */
+*::selection { background: var(--sele); color: var(--text); }
+body { background: var(--bg) !important; overflow-x: hidden; transition: background .5s ease; }
+body.light {
+    --text: #1a1a2e;
+    --bgt: rgba(255,255,255,.88);
+    --theme: #2563eb;
+    --sele: #2563eb30;
+    --bg: #f0f2f5;
+}
+.container-main { max-width: 100% !important; padding: 0 !important; }
 .author-page {
     position: relative;
-    min-height: 100vh;
-    padding-bottom: 5rem;
-    overflow: hidden;
-    background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
-    -webkit-font-smoothing: antialiased;
+    transition: color .5s ease;
 }
 
-/* 噪点纹理 */
-.author-page::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    pointer-events: none;
-    opacity: .035;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-repeat: repeat;
-    background-size: 256px 256px;
-}
-
-/* ---- Canvas: 粒子网络 (底层) ---- */
-#particleCanvas {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
-    pointer-events: none;
-}
-
-/* ---- 浮动几何体 ---- */
-.floating-geo {
-    position: fixed;
-    pointer-events: none;
-    z-index: 0;
-    opacity: .06;
-}
-.floating-geo.s1 {
-    width: 200px; height: 200px;
-    border: 2px solid var(--a1);
-    border-radius: 50%;
-    top: 8%; left: 5%;
-    animation: geoFloat1 20s ease-in-out infinite;
-}
-.floating-geo.s2 {
-    width: 120px; height: 120px;
-    border: 2px solid var(--a3);
-    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-    bottom: 12%; right: 8%;
-    animation: geoFloat2 16s ease-in-out infinite;
-}
-.floating-geo.s3 {
-    width: 80px; height: 80px;
-    border: 2px solid var(--a2);
-    transform: rotate(45deg);
-    top: 45%; right: 12%;
-    animation: geoFloat3 14s ease-in-out infinite;
-}
-.floating-geo.s4 {
-    width: 60px; height: 60px;
-    background: var(--a4);
-    border-radius: 5px;
-    bottom: 30%; left: 6%;
-    opacity: .04;
-    animation: geoFloat4 18s ease-in-out infinite;
-}
-@keyframes geoFloat1 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    25%  { transform: translate(40px, -60px) scale(1.08); }
-    50%  { transform: translate(-30px, 80px) scale(.95); }
-    75%  { transform: translate(50px, 20px) scale(1.05); }
-}
-@keyframes geoFloat2 {
-    0%, 100% { transform: translate(0, 0) rotate(0deg); }
-    33%  { transform: translate(-50px, -30px) rotate(120deg); }
-    66%  { transform: translate(40px, 50px) rotate(240deg); }
-}
-@keyframes geoFloat3 {
-    0%, 100% { transform: translate(0, 0) rotate(45deg); }
-    50%  { transform: translate(-60px, 40px) rotate(225deg); }
-}
-@keyframes geoFloat4 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50%  { transform: translate(50px, -70px) scale(1.2); }
-}
-
-/* ---- 自定义鼠标光标 ---- */
-#customCursor {
-    position: fixed;
-    width: 28px; height: 28px;
-    border: 2px solid rgba(255,255,255,.3);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 10000;
-    transform: translate(-50%, -50%);
-    transition: width .3s, height .3s, border-color .3s, background .3s;
-    will-change: left, top;
-}
-#customCursor.hover {
-    width: 48px; height: 48px;
-    border-color: var(--a1);
-    background: rgba(99,102,241,.08);
-}
-#customCursorDot {
-    position: fixed;
-    width: 4px; height: 4px;
-    background: var(--a1);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 10001;
-    transform: translate(-50%, -50%);
-    will-change: left, top;
-}
-
-/* ---- 鼠标跟踪聚光灯 ---- */
-#spotlight {
-    position: fixed;
-    width: 800px; height: 800px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(99,102,241,.06) 0%, transparent 55%);
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    z-index: 0;
-    will-change: left, top;
-}
-
-/* ---- 浮点粒子拖尾 ---- */
-#sparkleContainer {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 9998;
-}
-.particle-sparkle {
-    position: absolute;
-    width: 4px; height: 4px;
-    border-radius: 50%;
-    pointer-events: none;
-}
-
-/* ---- 容器层级 ---- */
-.container { position: relative; z-index: 1; }
-
-/* ============================================
-   HERO
-   ============================================ */
-.hero-section {
-    position: relative;
-    padding: 5rem 0 3rem;
-    text-align: center;
-}
-
-/* 头像 */
-.hero-avatar-wrap {
-    width: 150px; height: 150px;
-    margin: 0 auto 1.5rem;
-    position: relative;
-    cursor: pointer;
-}
-.hero-avatar-ring {
-    position: absolute;
-    inset: -6px;
-    border-radius: 50%;
-    background: conic-gradient(from 0deg, var(--a1), var(--a3), var(--a2), var(--a4), var(--a1));
-    animation: spinRing 4s linear infinite;
-    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px));
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 3px));
-    transition: transform .4s ease;
-}
-.hero-avatar-wrap:hover .hero-avatar-ring {
-    animation-duration: 1.5s;
-    transform: scale(1.1);
-}
-@keyframes spinRing {
-    to { transform: rotate(360deg); }
-}
-.hero-avatar {
+/* ---- 星空背景 ---- */
+#starCanvas {
+    position: fixed; inset: 0;
     width: 100%; height: 100%;
+    z-index: 0; pointer-events: none;
+    transition: opacity .5s ease;
+}
+body.light #starCanvas { opacity: .25; }
+
+/* ---- 加载遮罩 ---- */
+#loadingOverlay {
+    position: fixed; inset: 0;
+    z-index: 9999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity .8s ease, visibility .8s ease;
+}
+#loadingOverlay.hidden {
+    opacity: 0; visibility: hidden;
+    pointer-events: none;
+}
+#loadingOverlay p {
+    font-size: 1rem; color: rgba(255,255,255,.5);
+    letter-spacing: 6px; margin-top: 2rem;
+}
+.loading-spinner {
+    width: 48px; height: 48px;
+    border: 3px solid rgba(255,255,255,.1);
+    border-top-color: var(--theme);
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 54px; font-weight: 700; color: #fff;
+    animation: lspin .8s linear infinite;
+}
+@keyframes lspin { to { transform: rotate(360deg); } }
+
+/* ---- 主容器 ---- */
+.author-main {
     position: relative; z-index: 1;
-    transition: transform .4s cubic-bezier(.34,1.56,.64,1);
-    box-shadow: 0 0 50px rgba(99,102,241,.3), 0 0 100px rgba(99,102,241,.1);
-    user-select: none;
-}
-.hero-avatar-wrap:hover .hero-avatar {
-    transform: scale(1.06);
-    box-shadow: 0 0 60px rgba(99,102,241,.4), 0 0 120px rgba(99,102,241,.15);
+    max-width: 900px; margin: 0 auto;
+    padding: 2rem 1.5rem;
 }
 
-/* 名字 */
-.hero-name {
-    font-size: 3.4rem;
-    font-weight: 800;
-    margin-bottom: .3rem;
-    letter-spacing: 4px;
-    background: linear-gradient(135deg, #e4e4ed 0%, #818cf8 30%, #22d3ee 60%, #818cf8 80%, #e4e4ed 100%);
-    background-size: 400% 400%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: gradText 5s ease-in-out infinite;
-}
-@keyframes gradText {
-    0%, 100% { background-position: 0% 50%; }
-    25%  { background-position: 50% 50%; }
-    50%  { background-position: 100% 50%; }
-    75%  { background-position: 50% 50%; }
-}
-
-.hero-subtitle {
-    font-size: 1rem;
-    color: var(--text-muted);
-    letter-spacing: 8px;
-    text-transform: uppercase;
-    margin-bottom: .4rem;
-}
-
-/* Tagline 打字机 */
-#typewriter {
-    font-size: 1.05rem;
-    color: rgba(255,255,255,.35);
-    max-width: 480px;
-    margin: .6rem auto 0;
-    line-height: 1.7;
-    min-height: 1.7em;
-}
-#typewriter .cursor {
-    display: inline-block;
-    width: 2px;
-    height: 1.1em;
-    background: var(--a1);
-    margin-left: 2px;
-    vertical-align: text-bottom;
-    animation: blink 1s step-end infinite;
-}
-@keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-}
-
-/* 统计数字 (动画计数) */
-.hero-stats {
-    display: flex;
+/* ---- 全屏分节 ---- */
+.lay {
+    min-height: 86vh;
+    display: flex; flex-direction: column;
     justify-content: center;
-    gap: 3rem;
-    margin-top: 2rem;
+    padding: 3rem 0;
+    opacity: 0; transform: translateY(40px);
+    transition: opacity .8s ease, transform .8s ease;
 }
-.hero-stat {
-    text-align: center;
-    cursor: pointer;
+.lay.visible {
+    opacity: 1; transform: translateY(0);
 }
-.hero-stat-num {
-    font-size: 1.6rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, var(--a1), var(--a3));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    transition: transform .3s ease;
-}
-.hero-stat:hover .hero-stat-num {
-    transform: scale(1.2);
-}
-.hero-stat-label {
-    font-size: .78rem;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
+.lay.first { padding-top: 30vh; padding-bottom: 10vh; }
 
-/* ============================================
-   卡片系统
-   ============================================ */
-.tilt-card {
-    perspective: 1200px;
-    position: relative;
-    z-index: 1;
+/* ---- 诗/格言 ---- */
+.poem {
+    text-align: center;
+    line-height: 2;
+    margin-bottom: 3rem;
 }
-.tilt-card-inner {
-    position: relative;
+.poem p { margin: .3rem 0; font-weight: 300; }
+.poem .big { font-size: 1.8rem; }
+.poem .med { font-size: 1.4rem; }
+.poem .sm { font-size: 1rem; }
+.poem .right { text-align: right; margin-top: 1rem; opacity: .6; }
+
+/* ---- 卡片 ---- */
+.card-3d {
+    perspective: 1200px;
+    margin-bottom: 2rem;
+}
+.card-3d-inner {
+    background: var(--bgt);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-radius: 16px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
-    padding: 1.8rem;
-    overflow: hidden;
+    padding: 2rem;
+    border: 1px solid rgba(255,255,255,.08);
+    transition: transform .3s ease, box-shadow .3s ease;
     transform-style: preserve-3d;
     will-change: transform;
-    transition: box-shadow .4s ease, border-color .4s ease;
+}
+.card-3d:hover .card-3d-inner {
+    box-shadow: 0 12px 50px rgba(0,0,0,.3);
+}
+.card-tit {
+    font-size: 1.8rem;
+    margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 8px;
 }
 
-/* 深度层 */
-.tilt-layer-1 { transform: translateZ(20px); }
-.tilt-layer-2 { transform: translateZ(40px); }
-.tilt-layer-3 { transform: translateZ(60px); }
-
-/* 卡片光晕跟随鼠标 */
-.tilt-card-inner::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 16px;
-    background: radial-gradient(circle at var(--gx,50%) var(--gy,50%),
-        rgba(99,102,241,.1) 0%,
-        rgba(6,182,212,.04) 40%,
-        transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0;
-    transition: opacity .35s ease;
+/* ---- 欢迎区 ---- */
+.greeting {
+    text-align: center;
+    margin-bottom: 3rem;
 }
-.tilt-card:hover .tilt-card-inner::before {
-    opacity: 1;
+.greeting h1 {
+    font-size: 3.5rem;
+    margin-bottom: .5rem;
+    background: linear-gradient(135deg, #e4e4ed, #61ccff, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.greeting p {
+    font-size: 1.1rem;
+    opacity: .6;
+    line-height: 1.7;
 }
 
-/* 渐变边框 */
-.tilt-card-inner::after {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: 17px;
-    background: linear-gradient(135deg, var(--a1), var(--a2), var(--a3), transparent 60%);
-    opacity: 0;
-    transition: opacity .4s ease;
-    z-index: -1;
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask-composite: exclude;
-    -webkit-mask-composite: xor;
-    padding: 1px;
+/* ---- 信息表格 ---- */
+.info-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .6rem 1rem;
 }
-.tilt-card:hover .tilt-card-inner::after { opacity: 1; }
-.tilt-card:hover .tilt-card-inner {
-    border-color: transparent;
-    box-shadow: 0 8px 60px rgba(99,102,241,.14), inset 0 1px 0 rgba(255,255,255,.04);
+.info-grid .label { opacity: .5; font-size: .9rem; }
+.info-grid .value { font-weight: 500; }
+.info-grid hr {
+    grid-column: 1 / -1;
+    margin: .3rem 0;
+    opacity: .1;
+    border: none; height: 1px; background: var(--text);
 }
 
-.tilt-card-inner > * { position: relative; z-index: 1; }
+/* ---- 技能条 ---- */
+.skill-bar {
+    margin-bottom: .8rem;
+}
+.skill-bar .skill-label {
+    display: flex; justify-content: space-between;
+    font-size: .9rem; margin-bottom: 4px;
+}
+.skill-bar .skill-label .pct { opacity: .5; }
+.skill-bar .bar-track {
+    height: 10px;
+    background: rgba(255,255,255,.08);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.skill-bar .bar-fill {
+    height: 100%;
+    border-radius: 10px;
+    width: 0;
+    transition: width 2.5s cubic-bezier(.22,.68,0,1);
+}
 
-/* 卡片标题 */
-.section-title {
-    font-size: 1.2rem;
-    font-weight: 700;
-    margin-bottom: 1.2rem;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* ---- 荣誉 ---- */
+.honor-item {
+    display: flex; align-items: flex-start; gap: 1rem;
+    margin-bottom: 1rem;
 }
-.section-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, var(--border), transparent);
-}
-
-/* ============================================
-   基本信息
-   ============================================ */
-.info-table { width: 100%; border-collapse: collapse; }
-.info-table td {
-    padding: .55rem .8rem;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-}
-.info-table td:first-child {
-    width: 80px; color: var(--text-muted);
-    font-size: .86rem; white-space: nowrap;
-}
-.info-table td:last-child { font-weight: 500; }
-.info-table tr:last-child td { border-bottom: none; }
-
-/* ============================================
-   饼图
-   ============================================ */
-#pieWrapper {
-    display: flex; flex-wrap: wrap;
-    align-items: center; gap: 1.2rem;
-    justify-content: center;
-}
-#pieChart svg { display: block; }
-#pieChart g {
-    transition: transform .35s cubic-bezier(.34,1.56,.64,1);
-    cursor: pointer;
-}
-.legend-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 5px 10px; border-radius: 8px;
-    cursor: pointer; transition: all .25s ease;
-}
-.legend-item:hover, .legend-item.active {
-    background: rgba(255,255,255,.06);
-    transform: translateX(4px);
-}
-.legend-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
-.legend-label { font-size: 14px; }
-.legend-pct { font-size: 14px; font-weight: 600; color: var(--text-muted); margin-left: auto; }
-
-/* ============================================
-   荣誉
-   ============================================ */
-.honor-label {
-    font-weight: 600; font-size: .82rem;
-    letter-spacing: 2px; text-transform: uppercase;
-    color: var(--text-muted); margin-bottom: .8rem;
-}
-.honor-inner {
-    display: flex; align-items: flex-start; gap: .9rem;
-    padding: 1rem 1.3rem;
-}
-.honor-icon-box {
-    width: 38px; height: 38px; flex-shrink: 0;
+.honor-icon {
+    flex-shrink: 0;
+    width: 36px; height: 36px;
     display: flex; align-items: center; justify-content: center;
     border-radius: 10px;
-    background: rgba(255,255,255,.035);
-    border: 1px solid var(--border);
-    font-size: 1.2rem;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.06);
+    font-size: 1.1rem;
 }
-.honor-name { font-weight: 600; font-size: .9rem; line-height: 1.45; }
-.honor-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.honor-date { font-size: .78rem; color: var(--text-muted); }
-.honor-badge { display: inline-block; padding: 1px 10px; border-radius: 20px; font-size: .75rem; font-weight: 600; letter-spacing: .5px; }
-
-.school-honor { text-align: center; width: 100%; padding: .1rem 0; }
-.school-honor .star-icon { font-size: 2rem; margin-bottom: 4px; display: block; }
-.school-honor .honor-name { font-size: .85rem; }
-.school-honor .honor-date { font-size: .72rem; margin-top: 2px; }
-
-/* ============================================
-   滚动入场
-   ============================================ */
-.reveal { opacity: 0; transform: translateY(30px); }
-.reveal.show { opacity: 1; transform: translateY(0); }
-.reveal { transition: opacity .7s cubic-bezier(.22,.68,0,1), transform .7s cubic-bezier(.22,.68,0,1); }
-.r1 { transition-delay: .05s; }
-.r2 { transition-delay: .12s; }
-.r3 { transition-delay: .2s; }
-.r4 { transition-delay: .28s; }
-.r5 { transition-delay: .36s; }
-.r6 { transition-delay: .44s; }
-
-/* ============================================
-   响应式
-   ============================================ */
-@media (max-width: 768px) {
-    .hero-section { padding: 3rem 0 2rem; }
-    .hero-name { font-size: 2.2rem; }
-    .hero-avatar-wrap { width: 120px; height: 120px; }
-    .hero-avatar { font-size: 42px; }
-    .hero-stats { gap: 1.8rem; }
-    .hero-stat-num { font-size: 1.3rem; }
-    .tilt-card-inner { padding: 1.2rem; }
-    #customCursor, #customCursorDot { display: none; }
+.honor-body { flex: 1; min-width: 0; }
+.honor-name { font-weight: 600; font-size: .9rem; line-height: 1.4; }
+.honor-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.honor-date { font-size: .78rem; opacity: .4; }
+.honor-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 20px;
+    font-size: .72rem; font-weight: 600;
 }
-@media (max-width: 576px) {
-    .hero-name { font-size: 1.7rem; letter-spacing: 2px; }
-    .hero-subtitle { font-size: .85rem; letter-spacing: 4px; }
-    .hero-stats { gap: 1.2rem; }
-    .floating-geo { display: none; }
+.honor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: .8rem;
+}
+.honor-mini {
+    text-align: center;
+    padding: 1rem;
+    background: var(--bgt); backdrop-filter: blur(20px);
+    border-radius: 12px; border: 1px solid rgba(255,255,255,.06);
+}
+.honor-mini .star { font-size: 1.8rem; display: block; margin-bottom: 4px; }
+.honor-mini .name { font-weight: 600; font-size: .85rem; }
+.honor-mini .date { font-size: .72rem; opacity: .4; margin-top: 2px; }
+
+/* ---- 项目 ---- */
+.project-card {
+    display: flex; align-items: flex-start; gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1.2rem;
+    background: var(--bgt);
+    backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.06);
+    transition: transform .2s, box-shadow .2s;
+}
+.project-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0,0,0,.2);
+}
+.project-icon { flex-shrink: 0; font-size: 1.2rem; }
+.project-body { flex: 1; min-width: 0; }
+.project-name { font-weight: 600; font-size: .95rem; }
+.project-desc { font-size: .82rem; opacity: .5; margin-top: 3px; line-height: 1.5; }
+.project-lang {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 12px;
+    background: rgba(97,204,255,.12);
+    color: var(--theme); font-size: .72rem; font-weight: 600;
+    margin-top: 6px;
+}
+.project-lang .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--theme); }
+
+/* ---- 链接 ---- */
+.a { color: var(--theme); text-decoration: none; cursor: pointer; }
+.a:hover { opacity: .7; }
+
+/* ---- 按钮 ---- */
+.btn-start {
+    display: inline-block;
+    padding: .6rem 2rem;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,.15);
+    background: rgba(255,255,255,.04);
+    color: var(--text);
+    font-size: .9rem;
+    cursor: pointer;
+    transition: all .3s;
+    backdrop-filter: blur(10px);
+    letter-spacing: 2px;
+    margin-top: 1.5rem;
+}
+.btn-start:hover {
+    background: rgba(97,204,255,.12);
+    border-color: var(--theme);
+    box-shadow: 0 0 20px rgba(97,204,255,.2);
 }
 
-@media print {
-    .author-page { background: #fff !important; color: #000 !important; }
-    .author-page::after, #particleCanvas, .floating-geo, #spotlight, #customCursor, #customCursorDot, #sparkleContainer { display: none !important; }
+/* ---- 主题切换 ---- */
+#themeBtn {
+    position: fixed; top: 80px; right: 16px;
+    z-index: 100; cursor: pointer;
+    width: 36px; height: 36px;
+    background: var(--bgt); backdrop-filter: blur(10px);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(255,255,255,.1);
+    font-size: 1.1rem;
+    transition: transform .3s;
 }
+#themeBtn:hover { transform: scale(1.1); }
+
+/* ---- 响应 ---- */
+@media (max-width: 600px) {
+    .greeting h1 { font-size: 2.2rem; }
+    .card-tit { font-size: 1.3rem; }
+    .card-3d-inner { padding: 1.2rem; }
+    .lay { min-height: auto; padding: 2rem 0; }
+    .honor-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---- 明亮主题 ---- */
+.author-page.light {
+    --text: #1a1a2e;
+    --bgt: rgba(255,255,255,.85);
+    --theme: #2563eb;
+    --sele: #2563eb30;
+    --bg: #f0f2f5;
+}
+.author-page.light .card-3d-inner { border-color: rgba(0,0,0,.08); }
+.author-page.light .project-card { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
+.author-page.light .honor-mini { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
+.author-page.light .btn-start { color: #1a1a2e; border-color: rgba(0,0,0,.15); }
+.author-page.light .btn-start:hover { background: rgba(37,99,235,.08); border-color: #2563eb; }
+.author-page.light #loadingOverlay { background: #f0f2f5; }
+.author-page.light #starCanvas { opacity: .3; }
 </style>
 
 <div class="author-page">
 
-<!-- Canvas 粒子网络 -->
-<canvas id="particleCanvas"></canvas>
+<!-- 加载遮罩 -->
+<div id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <p>正在加载</p>
+</div>
 
-<!-- 浮动几何体 -->
-<div class="floating-geo s1"></div>
-<div class="floating-geo s2"></div>
-<div class="floating-geo s3"></div>
-<div class="floating-geo s4"></div>
+<!-- 星空 -->
+<canvas id="starCanvas"></canvas>
 
-<!-- 聚光灯 -->
-<div id="spotlight"></div>
+<!-- 主题 -->
+<div id="themeBtn" onclick="toggleTheme()">🌙</div>
 
-<!-- 自定义光标 -->
-<div id="customCursor"></div>
-<div id="customCursorDot"></div>
-<div id="sparkleContainer"></div>
+<div class="author-main">
 
-<div class="container">
-
-<!-- ==================== HERO ==================== -->
-<section class="hero-section reveal">
-    <div class="hero-avatar-wrap" id="avatarWrap">
-        <div class="hero-avatar-ring"></div>
-        <img src="/api/avatar/铭?size=150&bg=667eea&color=fff" alt="铭" class="hero-avatar" style="object-fit:cover;border-radius:50%;">
+<!-- ===== Section 1: 诗词 ===== -->
+<section class="lay first" id="sec1">
+    <div class="poem">
+        <p class="big">沧桑再顾，沧海一粟，代码悠悠兮波起伏</p>
+        <p class="med">字节起处，星辰一如，</p>
+        <p class="med right">像素皎皎兮光闪耀。</p>
+        <p class="sm right">———《少年码农 · 铭》</p>
     </div>
-    <h1 class="hero-name">张铭枫</h1>
-    <p class="hero-subtitle">少年编程爱好者</p>
-    <div id="typewriter"></div>
-
-    <div class="hero-stats">
-        <div class="hero-stat">
-            <div class="hero-stat-num" data-count="2">0</div>
-            <div class="hero-stat-label">年编程经验</div>
-        </div>
-        <div class="hero-stat">
-            <div class="hero-stat-num" data-count="5">0</div>
-            <div class="hero-stat-label">门编程语言</div>
-        </div>
-        <div class="hero-stat">
-            <div class="hero-stat-num" data-count="12">0</div>
-            <div class="hero-stat-label">项荣誉奖项</div>
-        </div>
+    <div style="text-align:center;">
+        <button class="btn-start" onclick="scrollToSection('sec2')">开始探索 →</button>
     </div>
 </section>
 
-<!-- ==================== 信息 + 技能 ==================== -->
-<div class="row g-4 mb-5">
-    <div class="col-lg-6">
-        <div class="tilt-card reveal r2">
-            <div class="tilt-card-inner">
-                <h3 class="section-title tilt-layer-1">📋 基本信息</h3>
-                <table class="info-table tilt-layer-2">
-                    <tr><td>性别</td><td>男</td></tr>
-                    <tr><td>生日</td><td>2013年5月26日</td></tr>
-                    <tr><td>民族</td><td>蒙古族</td></tr>
-                    <tr><td>学校</td><td>重庆大学城人民小学</td></tr>
-                    <tr><td>特长</td><td>💻 编程</td></tr>
-                    <tr><td>住址</td><td>重庆市高新区富力城书香里</td></tr>
-                </table>
-            </div>
+<!-- ===== Section 2: 欢迎 ===== -->
+<section class="lay" id="sec2">
+    <div class="greeting">
+        <div style="width:130px;height:130px;margin:0 auto 1.2rem;border-radius:50%;overflow:hidden;box-shadow:0 0 40px rgba(99,102,241,.25);">
+            <img src="/static/img/avatar_ming.png" alt="铭" style="width:100%;height:100%;object-fit:cover;">
         </div>
+        <h1>张铭枫</h1>
+        <p>少年编程爱好者 · 12 岁开发者<br>用代码构建未来，热爱创造与探索</p>
     </div>
-    <div class="col-lg-6">
-        <div class="tilt-card reveal r2">
-            <div class="tilt-card-inner">
-                <h3 class="section-title tilt-layer-1">💻 编程语言技能</h3>
-                <div id="pieWrapper" class="tilt-layer-2">
-                    <div id="pieChart" style="width:260px;height:260px;">
-                        <svg viewBox="0 0 320 320" width="260" height="260"></svg>
-                    </div>
-                    <div id="pieLegend" style="min-width:120px;"></div>
-                </div>
+    <div class="card-3d">
+        <div class="card-3d-inner">
+            <div class="card-tit">📋 基本信息</div>
+            <div class="info-grid">
+                <span class="label">性别</span><span class="value">男</span>
+                <span class="label">生日</span><span class="value">2013年5月26日</span>
+                <span class="label">民族</span><span class="value">蒙古族</span>
+                <span class="label">学校</span><span class="value">重庆大学城人民小学</span>
+                <span class="label">特长</span><span class="value">💻 编程</span>
+                <span class="label">住址</span><span class="value">重庆市高新区富力城书香里</span>
+                <hr>
+                <span class="label">经验</span><span class="value">2 年编程</span>
+                <span class="label">语言</span><span class="value">9 门</span>
+                <span class="label">荣誉</span><span class="value">12 项</span>
             </div>
         </div>
-    </div>
-</div>
-
-<!-- ==================== 开源项目 ==================== -->
-<div class="reveal r3">
-    <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:1.5rem;">📂 开源项目</h2>
-
-    {% set projects = [
-        ("ToolBoxHub", "zhang-mingfeng9773_admin_admin", "tool-box-hub", "一个集合多种实用工具的开源项目，旨在为普通人和开发者提供便捷、高效的一站式工具网站", "Python/HTML/JavaScript"),
-        ("PyMaster", "zhang-mingfeng9773_admin", "py-master", "专注 Python 全栈技术的开源项目，整合从语法基础到 LLM 应用的体系化资源，涵盖 Web 开发 / 数据科学实战案例与核心库源码解析", "Python"),
-        ("Examination_grades", "zhang-mingfeng9773_admin", "exam-grades", "GESP（全国青少年软件编程等级考试）与 CIE（中国电子学会编程等级考试）的考级资源整合，涵盖 Python/C++ 等语言的历年真题、分模块专项训练及考纲解析", "C++"),
-        ("myplusplus", "zhang-mingfeng9773_admin", "myplusplus", "系统性存储个人日常练习的 C++ 代码，涵盖数据结构实现（链表/树/图）、算法题解（LeetCode/NOIP 真题）、编程项目实战等模块", "C++"),
-    ] %}
-
-    <div class="row g-3">
-        {% for name, user, repo, desc, lang in projects %}
-        <div class="col-md-6">
-            <div class="tilt-card reveal r3">
-                <div class="tilt-card-inner honor-inner" style="padding:1.2rem 1.3rem;">
-                    <div class="honor-icon-box tilt-layer-1" style="font-size:1rem;width:42px;height:42px;">📦</div>
-                    <div class="tilt-layer-2" style="flex:1;min-width:0;">
-                        <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" style="color:var(--text);text-decoration:none;">
-                            <div class="honor-name" style="font-size:1rem;">{{ name }}</div>
-                        </a>
-                        <div style="font-size:.82rem;color:var(--text-muted);margin-top:3px;line-height:1.5;">{{ desc }}</div>
-                        <div class="honor-meta" style="margin-top:6px;">
-                            <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:rgba(99,102,241,.12);color:var(--a1);font-size:.72rem;font-weight:600;">
-                                <span style="width:6px;height:6px;border-radius:50%;background:var(--a1);"></span>
-                                {{ lang }}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <a href="https://gitee.com/organizations/zhang-mingfeng9773_admin/projects" target="_blank" style="display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border-radius:12px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.15);color:var(--a1);text-decoration:none;font-size:.85rem;font-weight:500;transition:all .3s ease;"
-           onmouseenter="this.style.background='rgba(99,102,241,.15)';this.style.borderColor='rgba(99,102,241,.3)';"
-           onmouseleave="this.style.background='rgba(99,102,241,.08)';this.style.borderColor='rgba(99,102,241,.15)';">
-            <span>🔗</span>
-            <span>在 Gitee 上查看全部项目 →</span>
-        </a>
+        <button class="btn-start" onclick="scrollToSection('sec3')">查看技能 →</button>
     </div>
-</div>
+</section>
 
-<!-- ==================== 荣誉 ==================== -->
-<div class="reveal r3">
-    <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:1.5rem;">🏆 荣誉奖项</h2>
-
-    <div class="honor-label">🎖 市级荣誉</div>
-    <div class="row g-3 mb-4">
-        {% set h = [
-            ("全国青少年信息素养大赛西南赛区（重庆）编程挑战赛","2024年7月","bg-warning text-dark","二等奖"),
-            ("全国学生信息素养提升实践活动重庆市级选拔活动","2024年6月","bg-warning text-dark","二等奖"),
-        ] %}
-        {% for n,d,c,b in h %}
-        <div class="col-md-6"><div class="tilt-card reveal r3"><div class="tilt-card-inner honor-inner">
-            <div class="honor-icon-box tilt-layer-1">🏅</div>
-            <div class="tilt-layer-2"><div class="honor-name">{{ n }}</div>
-            <div class="honor-meta"><span class="honor-date">{{ d }}</span><span class="honor-badge {{ c }}">{{ b }}</span></div></div>
-        </div></div></div>
-        {% endfor %}
+<!-- ===== Section 3: 技能 ===== -->
+<section class="lay" id="sec3">
+    <div class="card-3d">
+        <div class="card-3d-inner">
+            <div class="card-tit">💻 编程语言技能</div>
+            <div id="skillBars"></div>
+        </div>
     </div>
-
-    <div class="honor-label">🥇 区级荣誉</div>
-    <div class="row g-3 mb-4">
-        {% set h = [
-            ("重庆高新区第二十六届全国学生信息素养提升实践活动","2025年5月","bg-success","一等奖"),
-            ("重庆高新区第二十五届全国学生信息素养提升实践活动","2024年5月","bg-success","一等奖"),
-        ] %}
-        {% for n,d,c,b in h %}
-        <div class="col-md-6"><div class="tilt-card reveal r4"><div class="tilt-card-inner honor-inner">
-            <div class="honor-icon-box tilt-layer-1">🏅</div>
-            <div class="tilt-layer-2"><div class="honor-name">{{ n }}</div>
-            <div class="honor-meta"><span class="honor-date">{{ d }}</span><span class="honor-badge {{ c }}">{{ b }}</span></div></div>
-        </div></div></div>
-        {% endfor %}
+    <div style="text-align:center;margin-top:1rem;">
+        <button class="btn-start" onclick="scrollToSection('sec4')">查看荣誉 →</button>
     </div>
+</section>
 
-    <div class="honor-label">📜 考级荣誉</div>
-    <div class="row g-3 mb-4">
-        {% set h = [
-            ("青少年软件编程等级考试","2025年9月","bg-info","Level-3 G"),
-            ("青少年软件编程等级考试","2025年6月","bg-info","Level-2 E"),
-            ("青少年软件编程等级考试","2024年10月","bg-info","Level-1 E"),
-        ] %}
-        {% for n,d,c,b in h %}
-        <div class="col-md-4"><div class="tilt-card reveal r5"><div class="tilt-card-inner honor-inner">
-            <div class="honor-icon-box tilt-layer-1">📜</div>
-            <div class="tilt-layer-2"><div class="honor-name">{{ n }}</div>
-            <div class="honor-meta"><span class="honor-date">{{ d }}</span><span class="honor-badge {{ c }}">{{ b }}</span></div></div>
-        </div></div></div>
-        {% endfor %}
+<!-- ===== Section 4: 荣誉 ===== -->
+<section class="lay" id="sec4">
+    <div class="card-3d">
+        <div class="card-3d-inner">
+            <div class="card-tit">🏆 荣誉奖项</div>
+
+            <div style="font-size:.85rem;opacity:.5;margin-bottom:1rem;">🎖 市级荣誉</div>
+            {% set h = [
+                ("全国青少年信息素养大赛西南赛区（重庆）编程挑战赛","2024年7月","bg-warning text-dark","二等奖"),
+                ("全国学生信息素养提升实践活动重庆市级选拔活动","2024年6月","bg-warning text-dark","二等奖"),
+            ] %}
+            {% for n,d,c,b in h %}
+            <div class="honor-item">
+                <div class="honor-icon">🏅</div>
+                <div class="honor-body">
+                    <div class="honor-name">{{ n }}</div>
+                    <div class="honor-meta">
+                        <span class="honor-date">{{ d }}</span>
+                        <span class="honor-badge" style="background:rgba(234,179,8,.15);color:#eab308;">{{ b }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🥇 区级荣誉</div>
+            {% set h = [
+                ("重庆高新区第二十六届全国学生信息素养提升实践活动","2025年5月","一等奖"),
+                ("重庆高新区第二十五届全国学生信息素养提升实践活动","2024年5月","一等奖"),
+            ] %}
+            {% for n,d,b in h %}
+            <div class="honor-item">
+                <div class="honor-icon">🏅</div>
+                <div class="honor-body">
+                    <div class="honor-name">{{ n }}</div>
+                    <div class="honor-meta">
+                        <span class="honor-date">{{ d }}</span>
+                        <span class="honor-badge" style="background:rgba(34,197,94,.15);color:#22c55e;">{{ b }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">📜 考级荣誉</div>
+            {% set h = [("青少年软件编程等级考试","2025年9月","Level-3 G"),("青少年软件编程等级考试","2025年6月","Level-2 E"),("青少年软件编程等级考试","2024年10月","Level-1 E")] %}
+            {% for n,d,b in h %}
+            <div class="honor-item">
+                <div class="honor-icon">📜</div>
+                <div class="honor-body">
+                    <div class="honor-name">{{ n }}</div>
+                    <div class="honor-meta">
+                        <span class="honor-date">{{ d }}</span>
+                        <span class="honor-badge" style="background:rgba(59,130,246,.15);color:#3b82f6;">{{ b }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🌟 校内荣誉</div>
+            <div class="honor-grid">
+                {% set h = [("进步之星","2025年6月"),("数学之星","2025年1月"),("学习小标兵","2022年6月"),("学习小明星","2022年1月")] %}
+                {% for n,d in h %}
+                <div class="honor-mini">
+                    <span class="star">⭐</span>
+                    <div class="name">{{ n }}</div>
+                    <div class="date">{{ d }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
-
-    <div class="honor-label">🌟 校内荣誉</div>
-    <div class="row g-3">
-        {% set h = [("进步之星","2025年6月"),("数学之星","2025年1月"),("学习小标兵","2022年6月"),("学习小明星","2022年1月")] %}
-        {% for n,d in h %}
-        <div class="col-md-3 col-6"><div class="tilt-card reveal r6"><div class="tilt-card-inner" style="padding:1.1rem 1rem;">
-            <div class="school-honor tilt-layer-1"><span class="star-icon">⭐</span><div class="honor-name">{{ n }}</div><div class="honor-date">{{ d }}</div></div>
-        </div></div></div>
-        {% endfor %}
+    <div style="text-align:center;margin-top:1rem;">
+        <button class="btn-start" onclick="scrollToSection('sec5')">查看项目 →</button>
     </div>
-</div>
+</section>
 
-</div><!-- .container -->
+<!-- ===== Section 5-8: 每个开源项目独立展示 ===== -->
+{% set projs = [
+    ("ToolBoxHub","zhang-mingfeng9773_admin_admin","tool-box-hub",
+     "一个集合多种实用工具的开源项目，为普通人和开发者提供便捷、高效的一站式工具网站","Python/HTML/JS","🛠"),
+    ("PyMaster","zhang-mingfeng9773_admin","py-master",
+     "专注 Python 全栈技术，整合从语法基础到 LLM 应用的体系化资源，涵盖 Web 开发、数据科学实战案例与核心库源码解析","Python","🐍"),
+    ("Examination_grades","zhang-mingfeng9773_admin","exam-grades",
+     "GESP 与 CIE 编程等级考试考级资源整合，涵盖 Python/C++ 历年真题、分模块专项训练及考纲解析","C++","📝"),
+    ("myplusplus","zhang-mingfeng9773_admin","myplusplus",
+     "系统性存储个人日常 C++ 练习代码，涵盖数据结构实现、算法题解、LeetCode/NOIP 真题等模块","C++","💻"),
+] %}
+{% for name,user,repo,desc,lang,emoji in projs %}
+{% set sec_id = 'sec' ~ (5 + loop.index0) %}
+{% set next_sec = 'sec' ~ (6 + loop.index0) if not loop.last else '' %}
+<section class="lay" id="{{ sec_id }}">
+    <div class="card-3d">
+        <div class="card-3d-inner" style="text-align:center;">
+            <div style="font-size:3rem;margin-bottom:1rem;">{{ emoji }}</div>
+            <h2 style="font-size:1.8rem;font-weight:700;margin-bottom:.5rem;">
+                <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" class="a">{{ name }}</a>
+            </h2>
+            <p style="opacity:.55;max-width:500px;margin:1rem auto;line-height:1.7;font-size:.95rem;">{{ desc }}</p>
+            <div style="margin-top:1rem;">
+                <span class="project-lang"><span class="dot"></span>{{ lang }}</span>
+            </div>
+            <div style="margin-top:1.5rem;">
+                <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" class="btn-start">在 Gitee 上查看 →</a>
+            </div>
+        </div>
+    </div>
+    {% if not loop.last %}
+    <div style="text-align:center;margin-top:1.5rem;">
+        <button class="btn-start" onclick="scrollToSection('{{ next_sec }}')">下一个项目 ↓</button>
+    </div>
+    {% endif %}
+</section>
+{% endfor %}
+
+<!-- ===== 结尾 ===== -->
+<section class="lay" id="sec{{ 5 + projs|length }}">
+    <div style="text-align:center;padding:3rem 1.5rem;">
+        <p style="font-size:1.2rem;opacity:.5;margin-bottom:1rem;">感谢你花时间了解我 ❤️</p>
+        <a href="https://gitee.com/organizations/zhang-mingfeng9773_admin/projects" target="_blank" class="a" style="font-size:.85rem;opacity:.35;">在 Gitee 上查看全部项目 →</a>
+    </div>
+</section>
+
+</div><!-- .author-main -->
 </div><!-- .author-page -->
 
 <script>
-(function(){
-    'use strict';
+/* ===== 1. 加载遮罩 ===== */
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+    }, 800);
+});
 
-    /* ==========================================
-       1. Canvas 粒子网络
-       ========================================== */
-    const canvas = document.getElementById('particleCanvas');
-    const ctx = canvas.getContext('2d');
-    let W, H, particles = [], mouse = { x: -9999, y: -9999 };
+/* ===== 2. 星空 Canvas ===== */
+(function() {
+    const c = document.getElementById('starCanvas');
+    const ctx = c.getContext('2d');
+    let W, H, stars = [];
 
     function resize() {
-        W = canvas.width = window.innerWidth;
-        H = canvas.height = window.innerHeight;
+        W = c.width = window.innerWidth;
+        H = c.height = window.innerHeight;
     }
     window.addEventListener('resize', resize);
     resize();
 
-    // 生成粒子
-    const COUNT = 90;
+    const COUNT = 120;
     for (let i = 0; i < COUNT; i++) {
-        particles.push({
+        stars.push({
             x: Math.random() * W, y: Math.random() * H,
-            vx: (Math.random() - .5) * .3,
-            vy: (Math.random() - .5) * .3,
-            r: Math.random() * 2 + 1,
-            o: Math.random() * .5 + .2
+            r: Math.random() * 1.5 + .5,
+            a: Math.random() * .6 + .2,
+            s: Math.random() * .2 + .02
         });
     }
 
-    document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-    document.addEventListener('mouseleave', () => { mouse.x = -9999; mouse.y = -9999; });
-
-    function drawParticles() {
+    function draw() {
         ctx.clearRect(0, 0, W, H);
-
-        for (let i = 0; i < particles.length; i++) {
-            const p = particles[i];
-            // 鼠标吸引力
-            const dx = mouse.x - p.x, dy = mouse.y - p.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < 250) {
-                const force = (250 - dist) / 250 * .02;
-                p.vx += dx * force * .01;
-                p.vy += dy * force * .01;
-            }
-
-            p.x += p.vx; p.y += p.vy;
-            p.vx *= .99; p.vy *= .99;
-
-            // 边界
-            if (p.x < 0) p.x = W;
-            if (p.x > W) p.x = 0;
-            if (p.y < 0) p.y = H;
-            if (p.y > H) p.y = 0;
-
-            // 绘制粒子
+        stars.forEach(st => {
+            st.a += (Math.random() - .5) * .02;
+            st.a = Math.max(.1, Math.min(.8, st.a));
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(99, 102, 241, ${p.o})`;
+            ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255,255,255,${st.a})`;
             ctx.fill();
-        }
-
-        // 连线
-        for (let i = 0; i < particles.length; i++) {
-            for (let j = i + 1; j < particles.length; j++) {
-                const dx = particles[i].x - particles[j].x;
-                const dy = particles[i].y - particles[j].y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist < 150) {
-                    const alpha = (1 - dist / 150) * .3;
-                    ctx.beginPath();
-                    ctx.moveTo(particles[i].x, particles[i].y);
-                    ctx.lineTo(particles[j].x, particles[j].y);
-                    ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
-                    ctx.lineWidth = .6;
-                    ctx.stroke();
-                }
-            }
-        }
-
-        requestAnimationFrame(drawParticles);
-    }
-    drawParticles();
-
-    /* ==========================================
-       2. 自定义光标
-       ========================================== */
-    const cursor = document.getElementById('customCursor');
-    const cursorDot = document.getElementById('customCursorDot');
-    let cuX = W/2, cuY = H/2;
-    let cdX = W/2, cdY = H/2;
-
-    document.addEventListener('mousemove', e => {
-        cuX = e.clientX; cuY = e.clientY;
-    });
-
-    function tickCursor() {
-        cdX += (cuX - cdX) * .15;
-        cdY += (cuY - cdY) * .15;
-        cursor.style.left = cuX + 'px';
-        cursor.style.top = cuY + 'px';
-        cursorDot.style.left = cdX + 'px';
-        cursorDot.style.top = cdY + 'px';
-        requestAnimationFrame(tickCursor);
-    }
-    tickCursor();
-
-    // 交互元素 hover 状态
-    document.querySelectorAll('a, button, .tilt-card, .hero-avatar-wrap, .hero-stat, .legend-item, #pieChart g').forEach(el => {
-        el.addEventListener('mouseenter', () => cursor.classList.add('hover'));
-        el.addEventListener('mouseleave', () => cursor.classList.remove('hover'));
-    });
-
-    // 隐藏默认光标
-    document.body.style.cursor = 'none';
-
-    /* ==========================================
-       3. 鼠标拖尾粒子
-       ========================================== */
-    const sparkles = document.getElementById('sparkleContainer');
-    let lastSpark = 0;
-
-    document.addEventListener('mousemove', e => {
-        const now = Date.now();
-        if (now - lastSpark < 40) return;
-        lastSpark = now;
-
-        const colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#f59e0b', '#fff'];
-        for (let k = 0; k < 2; k++) {
-            const el = document.createElement('div');
-            el.className = 'particle-sparkle';
-            el.style.cssText = `
-                left:${e.clientX + (Math.random()-.5)*12}px;
-                top:${e.clientY + (Math.random()-.5)*12}px;
-                background:${colors[Math.floor(Math.random()*colors.length)]};
-                width:${Math.random()*4+2}px;
-                height:${Math.random()*4+2}px;
-                opacity:${Math.random()*.5+.5};
-                transition: all ${.6 + Math.random()*.4}s ease-out;
-            `;
-            sparkles.appendChild(el);
-            requestAnimationFrame(() => {
-                el.style.transform = `translate(${(Math.random()-.5)*30}px, ${(Math.random()-.5)*30 - 10}px) scale(0)`;
-                el.style.opacity = '0';
-            });
-            setTimeout(() => el.remove(), 1200);
-        }
-    });
-
-    /* ==========================================
-       4. 跟踪聚光灯
-       ========================================== */
-    const spotlight = document.getElementById('spotlight');
-    let smx = W/2, smy = H/2;
-    let scx = smx, scy = smy;
-
-    document.addEventListener('mousemove', e => { smx = e.clientX; smy = e.clientY; });
-
-    function tickSpotlight() {
-        scx += (smx - scx) * .05;
-        scy += (smy - scy) * .05;
-        spotlight.style.left = scx + 'px';
-        spotlight.style.top  = scy + 'px';
-        requestAnimationFrame(tickSpotlight);
-    }
-    tickSpotlight();
-
-    /* ==========================================
-       5. 3D Tilt + 深度
-       ========================================== */
-    const tiltCards = document.querySelectorAll('.tilt-card');
-    tiltCards.forEach(card => {
-        const inner = card.querySelector('.tilt-card-inner');
-        if (!inner) return;
-
-        card.addEventListener('mousemove', e => {
-            const r = card.getBoundingClientRect();
-            const x = e.clientX - r.left, y = e.clientY - r.top;
-            const hw = r.width/2, hh = r.height/2;
-            const rx = ((y - hh) / hh) * -8;
-            const ry = ((x - hw) / hw) * 8;
-            inner.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg) scale(1.025)`;
-            inner.style.setProperty('--gx', (x / r.width * 100) + '%');
-            inner.style.setProperty('--gy', (y / r.height * 100) + '%');
-
-            // 深度层跟随
-            const layers = inner.querySelectorAll('.tilt-layer-1, .tilt-layer-2, .tilt-layer-3');
-            layers.forEach(l => {
-                const d = l.classList.contains('tilt-layer-1') ? 20 :
-                          l.classList.contains('tilt-layer-2') ? 40 : 60;
-                const lrx = ((y - hh) / hh) * -8 * (d/60);
-                const lry = ((x - hw) / hw) * 8 * (d/60);
-                l.style.transform = `translateZ(${d}px) rotateX(${lrx}deg) rotateY(${lry}deg)`;
-            });
         });
-
-        card.addEventListener('mouseleave', () => {
-            inner.style.transform = 'rotateX(0) rotateY(0) scale(1)';
-            inner.querySelectorAll('.tilt-layer-1, .tilt-layer-2, .tilt-layer-3').forEach(l => {
-                l.style.transform = '';
-            });
-        });
-    });
-
-    /* ==========================================
-       6. 磁性鼠标: 头像
-       ========================================== */
-    const aw = document.getElementById('avatarWrap');
-    if (aw) {
-        const av = aw.querySelector('.hero-avatar'),
-              ring = aw.querySelector('.hero-avatar-ring');
-        aw.addEventListener('mousemove', e => {
-            const r = aw.getBoundingClientRect();
-            const x = e.clientX - r.left, y = e.clientY - r.top;
-            const dx = (x - r.width/2) / (r.width/2) * 8;
-            const dy = (y - r.height/2) / (r.height/2) * 8;
-            av.style.transform = `translate(${dx}px,${dy}px) scale(1.06)`;
-            ring.style.transform = `translate(${dx*.5}px,${dy*.5}px) scale(1.1)`;
-        });
-        aw.addEventListener('mouseleave', () => {
-            av.style.transform = ''; ring.style.transform = '';
-        });
+        requestAnimationFrame(draw);
     }
+    draw();
+})();
 
-    /* ==========================================
-       7. 打字机效果
-       ========================================== */
-    (function typewriter() {
-        const el = document.getElementById('typewriter');
-        if (!el) return;
-        const text = '用代码构建未来的 12 岁开发者 · 热爱创造与探索';
-        let idx = 0;
-        el.innerHTML = '';
-        function type() {
-            if (idx < text.length) {
-                el.innerHTML = text.slice(0, idx+1) + '<span class="cursor"></span>';
-                idx++;
-                const delay = text[idx-1] === '·' || text[idx-1] === '。' ? 300 :
-                             Math.random() * 60 + 40;
-                setTimeout(type, delay);
-            } else {
-                el.innerHTML = text;
-            }
-        }
-        setTimeout(type, 600);
-    })();
-
-    /* ==========================================
-       8. 数字动画计数
-       ========================================== */
-    (function counter() {
-        const nums = document.querySelectorAll('[data-count]');
-        if (!nums.length) return;
-
-        const obs = new IntersectionObserver(entries => {
-            entries.forEach(entry => {
-                if (!entry.isIntersecting) return;
-                const el = entry.target;
-                const target = parseInt(el.dataset.count);
-                const dur = 1200;
-                const start = performance.now();
-
-                function frame(now) {
-                    const p = Math.min(1, (now - start) / dur);
-                    // easeOutExpo
-                    const ep = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
-                    el.textContent = Math.round(ep * target);
-                    if (p < 1) requestAnimationFrame(frame);
-                    else { el.textContent = target; obs.unobserve(el); }
-                }
-                requestAnimationFrame(frame);
-                obs.unobserve(el);
-            });
-        }, { threshold: .5 });
-        nums.forEach(el => obs.observe(el));
-    })();
-
-    /* ==========================================
-       9. 滚动入场
-       ========================================== */
-    const revealEls = document.querySelectorAll('.reveal');
+/* ===== 3. 滚动显示 ===== */
+(function() {
+    const lays = document.querySelectorAll('.lay');
     const obs = new IntersectionObserver(entries => {
         entries.forEach(e => {
             if (e.isIntersecting) {
-                e.target.classList.add('show');
+                e.target.classList.add('visible');
+            }
+        });
+    }, { threshold: .1 });
+    lays.forEach(el => obs.observe(el));
+    // 显示第一屏
+    document.getElementById('sec1')?.classList.add('visible');
+})();
+
+/* ===== 4. 滚动到指定屏 ===== */
+function scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ===== 5. 3D 倾斜卡片 ===== */
+(function() {
+    document.querySelectorAll('.card-3d').forEach(card => {
+        const inner = card.querySelector('.card-3d-inner');
+        if (!inner) return;
+        card.addEventListener('mousemove', e => {
+            const r = card.getBoundingClientRect();
+            const x = e.clientX - r.left, y = e.clientY - r.top;
+            const rx = ((y - r.height/2) / (r.height/2)) * -6;
+            const ry = ((x - r.width/2) / (r.width/2)) * 6;
+            inner.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg) scale(1.01)`;
+        });
+        card.addEventListener('mouseleave', () => {
+            inner.style.transform = 'rotateX(0) rotateY(0) scale(1)';
+        });
+    });
+})();
+
+/* ===== 6. 技能条动画 ===== */
+(function() {
+    const skills = [
+        { name: 'Scratch', pct: 95, color: '#4D97FF' },
+        { name: 'Markdown', pct: 90, color: '#083fa1' },
+        { name: 'Python', pct: 80, color: '#3776AB' },
+        { name: 'OpenClaw', pct: 63, color: '#6366f1' },
+        { name: 'C/C++', pct: 25, color: '#00599C' },
+        { name: 'Linux', pct: 25, color: '#FCC624' },
+        { name: 'SQL', pct: 17, color: '#E38C00' },
+        { name: 'Vue3', pct: 11, color: '#42b883' },
+        { name: 'JavaScript', pct: 10, color: '#F7DF1E' },
+    ];
+    const container = document.getElementById('skillBars');
+    if (!container) return;
+
+    container.innerHTML = skills.map(s => `
+        <div class="skill-bar">
+            <div class="skill-label">
+                <span>${s.name}</span>
+                <span class="pct">${s.pct}%</span>
+            </div>
+            <div class="bar-track">
+                <div class="bar-fill" data-pct="${Math.max(s.pct, 5)}" style="background:${s.color};"></div>
+            </div>
+        </div>
+    `).join('');
+
+    // 滚动时触发动画
+    const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.querySelectorAll('.bar-fill').forEach((bar, idx) => {
+                    setTimeout(() => {
+                        bar.style.width = bar.dataset.pct + '%';
+                    }, 150 + idx * 200);
+                });
                 obs.unobserve(e.target);
             }
         });
-    }, { threshold: .1, rootMargin: '0px 0px -30px 0px' });
-    revealEls.forEach(el => obs.observe(el));
-
-    /* ==========================================
-       10. 饼图
-       ========================================== */
-    const data = [
-        { label:'Python',     percent:50,  color:'#3776AB' },
-        { label:'C/C++',      percent:40,  color:'#00599C' },
-        { label:'SQL',        percent:5,   color:'#E38C00' },
-        { label:'JavaScript', percent:2.5, color:'#F7DF1E' },
-        { label:'Java',       percent:2.5, color:'#ED8B00' },
-    ];
-    const CX=160,CY=160,R=135;
-    const svg=document.querySelector('#pieChart svg');
-    const legend=document.getElementById('pieLegend');
-    if(svg&&legend){
-        function pol(d){const r=d*Math.PI/180;return{x:CX+R*Math.sin(r),y:CY-R*Math.cos(r)}}
-        function arc(s,e){const a=pol(s),b=pol(e),lg=e-s>180?1:0;return`M ${CX} ${CY} L ${a.x} ${a.y} A ${R} ${R} 0 ${lg} 1 ${b.x} ${b.y} Z`}
-        function mid(s,e){return(s+e)/2}
-        function hov(el,i,a){const d=data[i],m=mid(d.startAngle,d.endAngle),r=m*Math.PI/180,o=a?18:0;el.style.transform=a?`translate(${o*Math.sin(r)}px,${-o*Math.cos(r)}px) scale(1.15)`:'';el.style.transformOrigin=`${CX}px ${CY}px`}
-        let sa=0;
-        data.forEach((d,i)=>{
-            const si=d.percent*360/100,end=sa+si;d.startAngle=sa;d.endAngle=end;
-            const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.dataset.idx=i;
-            const p=document.createElementNS('http://www.w3.org/2000/svg','path');
-            p.setAttribute('d',arc(sa,end));p.setAttribute('fill',d.color);p.setAttribute('stroke','#11111f');p.setAttribute('stroke-width','2');
-            g.appendChild(p);
-            if(d.percent>=8){const m=mid(sa,end),mr=m*Math.PI/180;const tx=CX+(R*.55)*Math.sin(mr),ty=CY-(R*.55)*Math.cos(mr);const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',tx);t.setAttribute('y',ty);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('fill','#fff');t.setAttribute('font-size',Math.min(22,Math.max(14,d.percent*.36)));t.setAttribute('font-weight','bold');t.textContent=d.percent===50?'Python\u00a0':d.percent+'%';g.appendChild(t)}
-            g.addEventListener('mouseenter',function(){hov(this,+this.dataset.idx,1);const q=document.querySelectorAll('.legend-item');if(q[i])q[i].classList.add('active')});
-            g.addEventListener('mouseleave',function(){hov(this,+this.dataset.idx,0);const q=document.querySelectorAll('.legend-item');if(q[i])q[i].classList.remove('active')});
-            svg.appendChild(g);sa=end
-        });
-        data.forEach((d,i)=>{
-            const it=document.createElement('div');it.className='legend-item';
-            it.innerHTML=`<span class="legend-dot" style="background:${d.color}"></span><span class="legend-label">${d.label}</span><span class="legend-pct">${d.percent}%</span>`;
-            it.addEventListener('mouseenter',()=>{hov(svg.children[i],i,1);it.classList.add('active')});
-            it.addEventListener('mouseleave',()=>{hov(svg.children[i],i,0);it.classList.remove('active')});
-            it.addEventListener('click',()=>{const a=it.classList.contains('active');document.querySelectorAll('.legend-item').forEach(e=>e.classList.remove('active'));for(let j=0;j<svg.children.length;j++)hov(svg.children[j],j,0);if(!a){hov(svg.children[i],i,1);it.classList.add('active')}});
-            legend.appendChild(it)
-        });
-    }
+    }, { threshold: .3 });
+    const el = container.closest('.card-3d') || container;
+    obs.observe(el);
 })();
+
+/* ===== 7. 主题切换 ===== */
+function toggleTheme() {
+    const body = document.body;
+    const btn = document.getElementById('themeBtn');
+    const isDark = !body.classList.contains('light');
+    body.classList.toggle('light');
+    btn.textContent = isDark ? '☀️' : '🌙';
+}
 </script>
 {% endblock %}

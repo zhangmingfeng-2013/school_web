@@ -3,8 +3,8 @@
 {% block content %}
 <div class="text-center mb-4">
     <h2>👋 欢迎，{{ username }}</h2>
-    <span class="badge fs-6 {% if permission == 'administrator' %}bg-danger{% elif permission == 'guest' %}bg-secondary{% else %}bg-info{% endif %}">
-        {{ '🔑 管理员' if permission == 'administrator' else ('👤 访客' if permission == 'guest' else '👤 用户') }}
+    <span class="badge fs-6 {% if permission == 'administrator' %}bg-danger{% elif permission == 'vip' %}bg-warning text-dark{% elif permission == 'guest' %}bg-secondary{% else %}bg-info{% endif %}">
+        {{ '🔑 管理员' if permission == 'administrator' else ('⭐ VIP' if permission == 'vip' else ('👤 访客' if permission == 'guest' else '👤 用户')) }}
     </span>
 </div>
 
@@ -58,13 +58,19 @@
                 ⏳ 你的管理员申请已提交，请等待现有管理员审核。
             </div>
             {% else %}
-            <button class="btn btn-warning btn-sm" onclick="requestAdmin()" style="font-weight:600;">
+            <button class="btn btn-warning btn-sm me-2" onclick="requestAdmin()" style="font-weight:600;">
                 🔑 申请成为管理员
             </button>
-            <div style="font-size:.75rem;color:#888;margin-top:4px;">
-                排行榜第一名可申请，通过管理员审核后将获得管理权限
-            </div>
             {% endif %}
+        </div>
+        {% endif %}
+        <!-- VIP申请（非管理员/非VIP） -->
+        {% if permission != 'administrator' and permission != 'vip' %}
+        <div class="mt-2 text-center">
+            <button class="btn btn-outline-warning btn-sm" onclick="requestVIP()" style="font-weight:600;">
+                ⭐ 申请VIP权限
+            </button>
+            <div style="font-size:.75rem;color:#888;margin-top:2px;">VIP可解锁全部相册功能和网络工具</div>
         </div>
         {% endif %}
 
@@ -130,8 +136,8 @@
     </div>
     {% endif %}
 
-    <!-- 网络工具（仅管理员） -->
-    {% if permission == 'administrator' %}
+    <!-- 网络工具（管理员/VIP） -->
+    {% if permission in ('administrator', 'vip') %}
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('network_tools') }}" class="text-decoration-none text-dark">
             <div class="card h-100">
@@ -319,6 +325,21 @@
             </div>
         </a>
     </div>
+
+    <!-- 支持打赏 -->
+    <div class="col-md-6 col-lg-4">
+        <a href="/donate" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:1px solid rgba(245,158,11,.3)">
+                <div class="card-body text-center">
+                    <div class="feature-icon mx-auto" style="background:rgba(245,158,11,.1)!important;">
+                        <span style="font-size:2rem;">❤️</span>
+                    </div>
+                    <h5>打赏支持</h5>
+                    <p class="text-muted small">自愿原则 · 维护网站</p>
+                </div>
+            </div>
+        </a>
+    </div>
 </div>
 
 <!-- 跳转网页弹窗 -->
@@ -356,6 +377,17 @@ function goWeb() {
 function requestAdmin() {
     if (!confirm('确认申请成为管理员？\n\n只有排行榜第一名可以申请。\n申请提交后将由现有管理员审核。')) return;
     fetch('/api/admin-request', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            alert(d.message || d.error);
+            if (d.message) location.reload();
+        })
+        .catch(() => alert('请求失败，请稍后重试'));
+}
+
+function requestVIP() {
+    if (!confirm('申请 VIP 权限？\n\nVIP 可以解锁全部相册功能和网络工具。\n申请提交后将由管理员审核。')) return;
+    fetch('/api/vip-request', { method: 'POST' })
         .then(r => r.json())
         .then(d => {
             alert(d.message || d.error);

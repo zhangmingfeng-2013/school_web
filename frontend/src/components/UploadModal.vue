@@ -8,7 +8,7 @@
           <label>分类</label>
           <div class="radio-group">
             <label><input type="radio" v-model="category" value="graduation"> 🎓 毕业图片</label>
-            <label><input type="radio" v-model="category" value="daily"> 📷 平时图片</label>
+            <label><input type="radio" v-model="category" value="daily"> 📷 精彩瞬间</label>
           </div>
         </div>
         <div class="field">

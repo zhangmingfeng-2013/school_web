@@ -319,7 +319,11 @@ let serverTabActive = false, ipTabActive = true;
 // ====== IP 统计 ======
 async function refreshIPStats() {
     try {
-        const resp = await fetch('/api/admin/ip_stats');
+        const resp = await fetch('/api/admin/ip_stats', {credentials:'include'});
+        if (!resp.ok) {
+            document.getElementById('ipTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-3">加载失败，请检查管理员登录状态</td></tr>';
+            return;
+        }
         const data = await resp.json();
         const tbody = document.getElementById('ipTableBody');
 
@@ -449,7 +453,8 @@ async function removeWhitelistIP(ip) {
 
 async function refreshWhitelist() {
     try {
-        const resp = await fetch('/api/admin/whitelist');
+        const resp = await fetch('/api/admin/whitelist', {credentials:'include'});
+        if (!resp.ok) return;
         const data = await resp.json();
         document.getElementById('wlCount').textContent = data.count;
         document.getElementById('mbCount').textContent = 0; // updated from ip_stats
@@ -656,13 +661,19 @@ function showAdminRequests() {
                 var sb = r.status === 'pending' ? '<span class="badge bg-warning text-dark">待审核</span>' :
                     r.status === 'approved' ? '<span class="badge bg-success">已通过</span>' : '<span class="badge bg-secondary">已拒绝</span>';
                 var acts = r.status === 'pending' ?
-                    '<button class="btn btn-sm btn-success me-1" onclick="reviewReq(' + r.id + ',\\'approve\\')">通过</button><button class="btn btn-sm btn-danger" onclick="reviewReq(' + r.id + ',\\'reject\\')">拒绝</button>' :
+                    '<button class="btn btn-sm btn-success me-1" data-action="approve" data-id="' + r.id + '">通过</button><button class="btn btn-sm btn-danger" data-action="reject" data-id="' + r.id + '">拒绝</button>' :
                     '<small class="text-muted">' + (r.reviewed_by || '') + '</small>';
                 html += '<tr><td>' + r.username + '</td><td>' + r.score + '</td><td>' + sb + '</td><td>' + (r.requested_at||'').slice(0,16) + '</td><td>' + acts + '</td></tr>';
             });
             html += '</tbody></table></div>';
             document.getElementById('adminReqBody').innerHTML = html;
             new bootstrap.Modal(document.getElementById('adminReqModal')).show();
+            // 事件委托：处理审核按钮点击
+            document.getElementById('adminReqBody').addEventListener('click', function(e) {
+                var btn = e.target.closest('button');
+                if (!btn || !btn.dataset.action) return;
+                reviewReq(parseInt(btn.dataset.id), btn.dataset.action);
+            });
         });
 }
 
@@ -671,7 +682,7 @@ function reviewReq(id, action) {
     fetch('/api/admin-review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, action: action }) })
         .then(r => r.json())
         .then(d => { alert(d.message || d.error); location.reload(); })
-        .catch(() => alert('操作失败'));
+        .catch(function() { alert('操作失败'); });
 }
 
 async function saveRateConfig() {

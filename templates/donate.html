@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}支持我们 - 打赏{% endblock %}
+{% block content %}
+<style>
+.donate-container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    text-align: center;
+}
+.donate-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: .5rem;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.donate-subtitle {
+    color: #888;
+    margin-bottom: 2rem;
+}
+.qr-grid {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+}
+.qr-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    width: 260px;
+    transition: transform .3s, box-shadow .3s;
+}
+.qr-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0,0,0,.12);
+}
+.qr-card img {
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+.qr-card h4 {
+    font-size: 1.1rem;
+    margin: 0;
+    color: #333;
+}
+.disclaimer {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    background: rgba(245,158,11,.06);
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    text-align: left;
+    line-height: 1.8;
+    color: #666;
+    font-size: .92rem;
+}
+.disclaimer strong {
+    color: #333;
+}
+.thank-you {
+    margin-top: 2rem;
+    font-size: 1.2rem;
+    color: #f59e0b;
+}
+</style>
+
+<div class="donate-container">
+    <h1 class="donate-title">❤️ 支持我们</h1>
+    <p class="donate-subtitle">您的每一份支持，都是我们前进的动力</p>
+
+    <div class="qr-grid">
+        <div class="qr-card">
+            <img src="/static/donate_wx.jpg" alt="微信收款码">
+            <h4>💚 微信支付</h4>
+        </div>
+        <div class="qr-card">
+            <img src="/static/donate_zfb.jpg" alt="支付宝收款码">
+            <h4>💙 支付宝</h4>
+        </div>
+    </div>
+
+    <div class="disclaimer">
+        <strong>📢 声明：</strong><br>
+        打赏是自愿原则，不强求。<br>
+        打赏的钱用来维护网站（服务器、域名、CDN等），<br>
+        坚决不私吞一分钱！
+    </div>
+
+    <p class="thank-you">感谢每一位支持者 🙏</p>
+</div>
+{% endblock %}

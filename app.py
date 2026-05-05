@@ -154,6 +154,7 @@ ip_blocked_probes = {}  # {ip: probe_count}
 ip_whitelist = set()    # 白名单 IP，不受速率限制
 ip_manual_blocked = {}  # {ip: blocked_until_timestamp} 手动封禁
 recent_blocks = []  # [(ip, timestamp, reason)] — 最近封禁记录，供通知功能使用
+recent_blocks_lock = threading.Lock()
 
 # ---------- IP 白名单持久化 ----------
 WHITELIST_FILE = os.path.join(os.path.dirname(__file__), "ip_whitelist.json")
@@ -297,9 +298,10 @@ def check_rate_limit():
         if len(q) > rate_config["RATE_LIMIT"]:
             ip_blocked[ip] = now + rate_config["BLOCK_DURATION"]
             ip_blocked_probes[ip] = 0
-            recent_blocks.append((ip, now, "请求超限"))
-            if len(recent_blocks) > 100:
-                recent_blocks.pop(0)
+            with recent_blocks_lock:
+                recent_blocks.append((ip, now, "请求超限"))
+                if len(recent_blocks) > 100:
+                    recent_blocks.pop(0)
             del ip_requests[ip]
             return jsonify({"error": f"请求过于频繁，IP已被封禁 {rate_config['BLOCK_DURATION']} 秒"}), 403
 
@@ -337,8 +339,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin-", "/api/notifications", "/api/avatar")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip")
 
 @app.before_request
 def check_global_captcha():
@@ -449,10 +451,18 @@ def _init_album_tables(conn):
             motto TEXT,
             interests TEXT,
             future_plan TEXT,
+            class_name VARCHAR(30) DEFAULT '',
             created_by VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # 确保 class_name 列存在（兼容旧表）
+    cursor.execute("""
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA='sample' AND TABLE_NAME='album_classmates' AND COLUMN_NAME='class_name'
+    """)
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("ALTER TABLE album_classmates ADD COLUMN class_name VARCHAR(30) DEFAULT ''")
     # 毕业寄语
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS album_wishes (
@@ -619,8 +629,19 @@ def admin_required(f):
 def non_guest_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if session.get("permission") == "guest":
-            flash("访客权限无法访问该功能", "warning")
+        perm = session.get("permission", "guest")
+        if perm == "guest":
+            flash("访客无法使用此功能，请申请 VIP 权限", "warning")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+def vip_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        perm = session.get("permission", "guest")
+        if perm not in ("administrator", "vip"):
+            flash("需要 VIP 或管理员权限", "danger")
             return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
@@ -1157,6 +1178,65 @@ def api_admin_review():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ---------- VIP 申请/审核 ----------
+@app.route("/api/vip-request", methods=["POST"])
+@login_required
+def api_vip_request():
+    username = session["username"]
+    perm = session.get("permission", "guest")
+    if perm in ("administrator", "vip"):
+        return jsonify({"error": "你已有更高的权限"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM admin_requests WHERE username=%s AND status='pending'", (username,))
+        if cursor.fetchone():
+            return jsonify({"error": "你已有待审核的申请"}), 400
+        cursor.execute(
+            "INSERT INTO admin_requests (username, status, score) VALUES (%s, 'pending', 0)",
+            (username,)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": "VIP 申请已提交，请等待管理员审核"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/vip-review", methods=["POST"])
+@login_required
+def api_vip_review():
+    """管理员审核 VIP 申请或直接设置 VIP"""
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "仅管理员可操作"}), 403
+    username = request.json.get("username", "").strip()
+    action = request.json.get("action", "approve")
+    if not username:
+        return jsonify({"error": "需要指定用户名"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        new_perm = "vip" if action == "approve" else "guest"
+        cursor.execute("UPDATE users SET Access_Permission=%s WHERE User_Name=%s", (new_perm, username))
+        if cursor.rowcount == 0:
+            return jsonify({"error": "用户不存在"}), 404
+        # 更新对应的待审核申请
+        cursor.execute(
+            "UPDATE admin_requests SET status=%s, reviewed_by=%s, reviewed_at=NOW() WHERE username=%s AND status='pending'",
+            ("approved" if action == "approve" else "rejected", session["username"], username)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        write_log("VIP审核", f"管理员: {session['username']}, 目标用户: {username}, 操作: {'通过' if action == 'approve' else '拒绝'}")
+        return jsonify({"message": f"已{'设为VIP' if action == 'approve' else '降为访客'}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ---------- 路由：本地头像生成 (PNG) ----------
 AVATAR_CACHE_DIR = os.path.join(os.path.dirname(__file__), "static", "avatars")
 os.makedirs(AVATAR_CACHE_DIR, exist_ok=True)
@@ -1262,9 +1342,21 @@ def api_notifications():
             pass
         try:
             cutoff = time.time() - 3600
-            result["blocked_ips"] = sum(1 for _, ts, _ in recent_blocks if ts > cutoff)
+            with recent_blocks_lock:
+                result["blocked_ips"] = sum(1 for _, ts, _ in recent_blocks if ts > cutoff)
         except Exception:
             result["blocked_ips"] = 0
+        # 待审核照片数
+        try:
+            conn2 = get_album_db()
+            if conn2:
+                cur2 = conn2.cursor()
+                cur2.execute("SELECT COUNT(*) FROM album_images WHERE COALESCE(status,'approved')='pending'")
+                result["pending_photos"] = cur2.fetchone()[0]
+                cur2.close()
+                conn2.close()
+        except Exception:
+            pass
 
     return jsonify(result)
 
@@ -1367,6 +1459,14 @@ def author():
                            permission=session.get("permission", ""))
 
 
+# ---------- 路由：打赏 ----------
+@app.route("/donate")
+def donate():
+    return render_template("donate.html",
+                           username=session.get("username", ""),
+                           permission=session.get("permission", ""))
+
+
 # ---------- 路由：聊天 ----------
 @app.route("/chat")
 @login_required
@@ -1453,7 +1553,7 @@ def api_system_info():
 # ---------- 路由：网络工具 ----------
 @app.route("/network_tools", methods=["GET", "POST"])
 @login_required
-@admin_required
+@vip_required
 def network_tools():
     result = None
     result_type = None
@@ -1809,15 +1909,19 @@ def api_album_images():
             join_clause = " JOIN album_image_tags ait ON album_images.id=ait.image_id"
             where += " AND ait.tag_id=%s"
             params.append(int(tag_id))
+        # 非管理员只看已审核的，管理员看所有
+        if session.get("permission") != "administrator":
+            where += " AND (COALESCE(album_images.status, 'approved') = 'approved')"
         order = "ORDER BY upload_time DESC" if sort == "newest" else "ORDER BY upload_time ASC"
-        cursor.execute(f"SELECT DISTINCT album_images.id, category, name, filename, uploader, uploader_name, upload_time FROM album_images{join_clause} {where} {order}", params)
+        cursor.execute(f"SELECT DISTINCT album_images.id, category, name, filename, uploader, uploader_name, upload_time, COALESCE(album_images.status,'approved') FROM album_images{join_clause} {where} {order}", params)
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
         return jsonify([{
             "id": r[0], "category": r[1], "name": r[2], "filename": r[3],
             "uploader": r[4], "uploaderName": r[5],
-            "uploadTime": r[6].strftime("%Y-%m-%d %H:%M") if r[6] else ""
+            "uploadTime": r[6].strftime("%Y-%m-%d %H:%M") if r[6] else "",
+            "status": r[7] if len(r) > 7 else "approved"
         } for r in rows])
     except pymysql.MySQLError as e:
         return jsonify({"error": str(e)}), 500
@@ -1878,8 +1982,109 @@ def api_album_image_manage(img_id):
     return jsonify({"error": "未知操作"}), 400
 
 
+# ---------- 照片审核（管理员） ----------
+@app.route("/api/album/pending")
+@login_required
+def api_album_pending():
+    """获取待审核照片"""
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "权限不足"}), 403
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, category, name, filename, uploader, uploader_name, upload_time FROM album_images WHERE status='pending' ORDER BY upload_time DESC"
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify([{
+            "id": r[0], "category": r[1], "name": r[2], "filename": r[3],
+            "uploader": r[4], "uploaderName": r[5],
+            "uploadTime": r[6].strftime("%Y-%m-%d %H:%M") if r[6] else ""
+        } for r in rows])
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/album/pending/count")
+@login_required
+def api_album_pending_count():
+    """待审核照片数量"""
+    if session.get("permission") != "administrator":
+        return jsonify({"count": 0})
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"count": 0})
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM album_images WHERE status='pending'")
+        count = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+        return jsonify({"count": count})
+    except Exception:
+        return jsonify({"count": 0})
+
+@app.route("/api/album/images/<int:img_id>/approve", methods=["POST"])
+@login_required
+def api_album_image_approve(img_id):
+    """审核通过照片"""
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "权限不足"}), 403
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE album_images SET status='approved' WHERE id=%s AND status='pending'", [img_id])
+        conn.commit()
+        affected = cursor.rowcount
+        cursor.close()
+        conn.close()
+        if affected:
+            write_log("审核通过照片", f"管理员: {session['username']}, 图片ID: {img_id}")
+            return jsonify({"success": True, "message": "照片已审核通过"})
+        return jsonify({"error": "照片不存在或无需审核"}), 404
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/album/images/<int:img_id>/reject", methods=["POST"])
+@login_required
+def api_album_image_reject(img_id):
+    """拒绝照片（删除）"""
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "权限不足"}), 403
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename FROM album_images WHERE id=%s AND status='pending'", [img_id])
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); conn.close()
+            return jsonify({"error": "待审核照片不存在"}), 404
+        filename = row[0]
+        cursor.execute("DELETE FROM album_likes WHERE image_id=%s", [img_id])
+        cursor.execute("DELETE FROM album_image_comments WHERE image_id=%s", [img_id])
+        cursor.execute("DELETE FROM album_images WHERE id=%s", [img_id])
+        conn.commit()
+        cursor.close()
+        conn.close()
+        filepath = os.path.join(ALBUM_DIR, filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        write_log("拒绝照片", f"管理员: {session['username']}, 图片ID: {img_id}")
+        return jsonify({"success": True, "message": "照片已拒绝删除"})
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/album/upload", methods=["POST"])
 @login_required
+@non_guest_required
 def api_album_upload():
     file = request.files.get("image")
     if not file or not file.filename:
@@ -1928,9 +2133,21 @@ def api_album_upload():
         return jsonify({"error": "DB"}), 500
     try:
         cursor = conn.cursor()
+        # 确保 status 列存在
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA='sample' AND TABLE_NAME='album_images' AND COLUMN_NAME='status'
+        """)
+        has_status = cursor.fetchone()[0] > 0
+        if not has_status:
+            cursor.execute("ALTER TABLE album_images ADD COLUMN status VARCHAR(20) DEFAULT 'approved'")
+            conn.commit()
+
+        upload_status = "approved" if session.get("permission") == "administrator" else "pending"
         cursor.execute(
-            "INSERT INTO album_images (category, name, filename, uploader, uploader_name) VALUES (%s,%s,%s,%s,%s)",
-            [category, name, save_name, session["username"], session["username"]]
+            """INSERT INTO album_images (category, name, filename, uploader, uploader_name, status)
+               VALUES (%s,%s,%s,%s,%s,%s)""",
+            [category, name, save_name, session["username"], session["username"], upload_status]
         )
         conn.commit()
         img_id = cursor.lastrowid
@@ -1938,7 +2155,8 @@ def api_album_upload():
         conn.close()
         write_log("上传图片", f"用户: {session['username']}, 图片: {name}, ID: {img_id}")
         record_activity(session["username"], "上传图片", 5)
-        return jsonify({"success": True, "id": img_id})
+        is_approved = session.get("permission") == "administrator"
+        return jsonify({"success": True, "id": img_id, "approved": is_approved})
     except pymysql.MySQLError as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1946,6 +2164,7 @@ def api_album_upload():
 # ---------- 点赞 ----------
 @app.route("/api/album/images/<int:img_id>/like", methods=["GET", "POST", "DELETE"])
 @login_required
+@non_guest_required
 def api_album_like(img_id):
     conn = get_album_db()
     if not conn:
@@ -2322,12 +2541,17 @@ def api_album_classmates():
     if not conn:
         return jsonify([])
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM album_classmates ORDER BY name")
+    class_filter = request.args.get("class", "").strip()
+    if class_filter:
+        cursor.execute("SELECT * FROM album_classmates WHERE class_name=%s ORDER BY name", (class_filter,))
+    else:
+        cursor.execute("SELECT * FROM album_classmates ORDER BY class_name, name")
     cols = [d[0] for d in cursor.description]
     rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
     for r in rows:
         if r.get("birthday"): r["birthday"] = str(r["birthday"])
-        r["created_at"] = str(r["created_at"])
+        if r.get("created_at"): r["created_at"] = str(r["created_at"])
+        r["class_name"] = r.get("class_name") or ""
     cursor.close()
     conn.close()
     return jsonify(rows)
@@ -2344,12 +2568,12 @@ def api_album_classmates_add():
         return jsonify({"error": "DB"}), 500
     cursor = conn.cursor()
     cursor.execute(
-        """INSERT INTO album_classmates (name, nickname, avatar_url, birthday, phone, email, motto, interests, future_plan, created_by)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        """INSERT INTO album_classmates (name, nickname, avatar_url, birthday, phone, email, motto, interests, future_plan, class_name, created_by)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (name, sanitize_input(data.get("nickname","")), sanitize_input(data.get("avatar_url",""),500),
          data.get("birthday","") or None, sanitize_input(data.get("phone","")), sanitize_input(data.get("email","")),
          sanitize_input(data.get("motto",""),500), sanitize_input(data.get("interests",""),500),
-         sanitize_input(data.get("future_plan",""),500), session["username"])
+         sanitize_input(data.get("future_plan",""),500), sanitize_input(data.get("class_name",""),30), session["username"])
     )
     conn.commit()
     cid = cursor.lastrowid
@@ -3427,8 +3651,16 @@ if __name__ == "__main__":
     print("=" * 50)
     print("  多合一工具箱 Web 版启动")
     print(f"  本地访问: http://127.0.0.1:5800")
-    print(f"  局域网访问: http://192.168.3.204:5800")
+    # 自动检测本机局域网 IP
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+        print(f"  局域网访问: http://{lan_ip}:5800")
+    except Exception:
+        print(f"  局域网访问: http://192.168.3.160:5800")
     print(f"  调试模式: {'开启' if os.environ.get('FLASK_DEBUG') else '关闭'}")
     print("=" * 50)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
-    app.run(host="0.0.0.0", port=5800, debug=debug_mode)
+    app.run(host="0.0.0.0", port=5800, debug=debug_mode, threaded=True)
