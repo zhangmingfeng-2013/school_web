@@ -85,17 +85,27 @@
         var bell = document.getElementById('notifBell'), badge = document.getElementById('notifBadge'),
             menu = document.getElementById('notifMenu'), firstLoad = true;
 
+        function fmtNow() {
+            var d = new Date();
+            return d.getFullYear() + '-' +
+                String(d.getMonth()+1).padStart(2,'0') + '-' +
+                String(d.getDate()).padStart(2,'0') + ' ' +
+                String(d.getHours()).padStart(2,'0') + ':' +
+                String(d.getMinutes()).padStart(2,'0') + ':' +
+                String(d.getSeconds()).padStart(2,'0');
+        }
+
         function getLastRead() {
             var ts = localStorage.getItem('notifLastRead');
             if (!ts) {
-                ts = new Date().toISOString().slice(0,19);
+                ts = fmtNow();
                 localStorage.setItem('notifLastRead', ts);
             }
             return ts;
         }
 
         function markAllRead() {
-            localStorage.setItem('notifLastRead', new Date().toISOString().slice(0,19));
+            localStorage.setItem('notifLastRead', fmtNow());
             bell.classList.remove('has-notif');
             badge.style.display = 'none';
             menu.innerHTML = '<div class="empty-msg">暂无新通知</div>';

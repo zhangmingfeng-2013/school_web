@@ -1157,21 +1157,71 @@ def api_admin_review():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ---------- 路由：本地头像生成 ----------
+# ---------- 路由：本地头像生成 (PNG) ----------
+AVATAR_CACHE_DIR = os.path.join(os.path.dirname(__file__), "static", "avatars")
+os.makedirs(AVATAR_CACHE_DIR, exist_ok=True)
+
 @app.route("/api/avatar/<seed>")
 def api_avatar(seed):
-    """生成初始头像SVG"""
+    """生成初始头像PNG"""
+    from PIL import Image, ImageDraw, ImageFont
     size = request.args.get("size", 140, type=int)
     bgcolor = request.args.get("bg", "667eea")
     color = request.args.get("color", "fff")
     text = seed[0].upper() if seed else "?"
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">
-    <rect width="{size}" height="{size}" rx="{size/2}" fill="#{bgcolor}"/>
-    <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle"
-          fill="#{color}" font-size="{size*0.45}" font-weight="700"
-          font-family="-apple-system,BlinkMacSystemFont,'Noto Sans SC',sans-serif">{text}</text>
-    </svg>'''
-    return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
+
+    # 缓存文件名
+    cache_key = f"{seed}_{size}_{bgcolor}_{color}"
+    cache_file = os.path.join(AVATAR_CACHE_DIR, f"{cache_key}.png")
+
+    # 如果缓存存在则直接发送
+    if os.path.exists(cache_file):
+        return send_from_directory(AVATAR_CACHE_DIR, f"{cache_key}.png", mimetype="image/png")
+
+    # 解析颜色
+    try:
+        r = int(bgcolor[0:2], 16)
+        g = int(bgcolor[2:4], 16)
+        b = int(bgcolor[4:6], 16)
+        bg_rgb = (r, g, b)
+    except Exception:
+        bg_rgb = (102, 126, 234)
+    try:
+        fc = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+    except Exception:
+        fc = (255, 255, 255)
+
+    img = Image.new("RGBA", (size, size), bg_rgb + (255,))
+    draw = ImageDraw.Draw(img)
+
+    # 尝试加载中文字体
+    font_paths = [
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    ]
+    font = None
+    for fp in font_paths:
+        if os.path.exists(fp):
+            try:
+                font = ImageFont.truetype(fp, int(size * 0.5))
+                break
+            except Exception:
+                continue
+    if not font:
+        font = ImageFont.load_default()
+
+    # 绘制文字（居中）
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = (size - tw) / 2 - bbox[0]
+    ty = (size - th) / 2 - bbox[1]
+    draw.text((tx, ty), text, fill=fc, font=font)
+
+    # 保存并返回
+    img.save(cache_file, "PNG")
+    return send_from_directory(AVATAR_CACHE_DIR, f"{cache_key}.png", mimetype="image/png")
 
 # ---------- 路由：通知铃铛 API ----------
 @app.route("/api/notifications")
