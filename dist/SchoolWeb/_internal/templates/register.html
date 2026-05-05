@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}注册 - 多合一工具箱 Web 版{% endblock %}
+{% block content %}
+<div class="auth-card">
+    <div class="card">
+        <div class="card-body p-4">
+            <h3 class="text-center mb-4">📝 注册</h3>
+            <form method="POST" action="{{ url_for('register') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                <div class="mb-3">
+                    <label class="form-label">用户名</label>
+                    <input type="text" name="username" class="form-control form-control-lg" placeholder="请输入用户名" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">密码 <small class="text-muted">(至少8位)</small></label>
+                    <input type="password" name="password" id="regPwd" class="form-control form-control-lg" placeholder="请输入密码" required onkeyup="checkStrength()">
+                    <div id="strengthBar" class="mt-1" style="height:4px;border-radius:2px;background:#eee;overflow:hidden">
+                        <div id="strengthInner" style="height:100%;width:0;transition:all .3s"></div>
+                    </div>
+                    <small id="strengthText" class="text-muted"></small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">确认密码</label>
+                    <input type="password" name="confirm" class="form-control form-control-lg" placeholder="再次输入密码" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">管理密码 <small class="text-muted">(选填，填对则为管理员)</small></label>
+                    <input type="password" name="admin_pwd" class="form-control form-control-lg" placeholder="管理员权限密码">
+                </div>
+                <button type="submit" class="btn btn-success btn-lg w-100">注 册</button>
+            </form>
+            <div class="text-center mt-3">
+                <a href="{{ url_for('login') }}" class="text-decoration-none">已有账号？去登录 →</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function checkStrength() {
+    const pwd = document.getElementById('regPwd').value;
+    const bar = document.getElementById('strengthInner');
+    const text = document.getElementById('strengthText');
+    if (!pwd) { bar.style.width = '0'; text.textContent = ''; return; }
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (pwd.length >= 12) score++;
+    if (/\d/.test(pwd)) score++;
+    if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
+    if (/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(pwd)) score++;
+    const colors = { 0:'#dc3545', 1:'#dc3545', 2:'#ffc107', 3:'#ffc107', 4:'#0d6efd', 5:'#198754' };
+    const labels = { 0:'太短', 1:'弱', 2:'弱', 3:'中', 4:'中', 5:'强' };
+    bar.style.width = (score/5*100)+'%';
+    bar.style.background = colors[Math.min(score,5)];
+    text.textContent = '密码强度: '+labels[Math.min(score,5)];
+}
+</script>
+{% endblock %}

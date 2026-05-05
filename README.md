@@ -1061,6 +1061,9 @@ sudo systemctl start school-web
 - 提交 Issue：<https://gitee.com/zhang-mingfeng9773_admin_admin/tool-box-hub/issues>
 - 作者页面：访问应用内的作者页面
 - 捐赠：访问应用内的捐赠页面
+- 电话: +86 151 2346 9773(微信同号, 周一至周五 20:00-21:00, 周六 14:00-21:00/22:00, 周日全天除凌晨)
+- QQ: 503175021
+- 微信(WeChat): wxid_6t5bmudk2gnr12
 
 ***
 
