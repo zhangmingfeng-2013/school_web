@@ -77,7 +77,7 @@ textarea { resize:none; }
 </style>
 </head>
 <body>
-<script id="ud" type="application/json">{{ {"u":username,"p":permission,"t":true} | tojson | safe }}</script>
+<script id="ud" type="application/json">{{ {"u":username,"p":permission,"t":permission!="guest"} | tojson | safe }}</script>
 {% raw %}
 <div id="app" v-cloak>
   <!-- Header -->
@@ -106,7 +106,7 @@ textarea { resize:none; }
       <div v-if="images.length===0" class="empty-state">
         <div class="icon">{{ tab==='graduation'?'🎓':'📷' }}</div>
         <p style="font-size:15px">还没有{{ tab==='graduation'?'毕业图片':'精彩瞬间' }}</p>
-        <p class="text-sm mt-10">点击右下角 + 上传照片</p>
+        <p class="text-sm mt-10">{{ user.t ? '点击右下角 + 上传照片' : '访客不能上传，请申请VIP' }}</p>
       </div>
       <div v-else class="grid">
         <div v-for="img in images" :key="img.id" class="card" @click="openDetail(img)">
@@ -144,7 +144,7 @@ textarea { resize:none; }
   </main>
 
   <!-- Upload FAB -->
-  <button v-if="user.t" class="fab" @click="showUpload=true">+</button>
+  <button class="fab" @click="handleUploadClick">+</button>
 
   <!-- ===== Detail Modal ===== -->
   <div v-if="detailImage" class="overlay" @click.self="detailImage=null">
@@ -346,12 +346,21 @@ createApp({
     // ---------- Init ----------
     onMounted(() => loadImages());
 
+    function handleUploadClick() {
+      if (!user.t) {
+        alert('❌ 访客不能上传照片\n\n请到仪表盘申请 VIP 权限后再上传');
+        return;
+      }
+      showUpload.value = true;
+    }
+
     return {
       user, tab, images, boardMessages, imageComments, detailImage,
       isLoading, showUpload, boardText, commentText,
       uploadCategory, uploadName, uploadPreview, isUploading,
       goDashboard, switchTab, loadImages, openDetail, addImageComment,
-      loadBoard, addBoardMessage, onUploadFile, onUploadDrop, doUpload
+      loadBoard, addBoardMessage, onUploadFile, onUploadDrop, doUpload,
+      handleUploadClick
     };
   }
 }).mount('#app');
