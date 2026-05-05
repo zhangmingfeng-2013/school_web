@@ -653,6 +653,9 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 ### 会话配置
 
 ```python
+# 要先导入必要库
+import datetime
+
 # 会话超时时间（秒）
 SESSION_IDLE_TIMEOUT = 120  # 2分钟
 
