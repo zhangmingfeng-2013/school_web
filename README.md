@@ -321,7 +321,7 @@ School_Web/                              # 项目根目录
 1. **克隆项目**：
 
 ```bash
-git clone <repository-url>
+git clone https://gitee.com/zhang-mingfeng9773_admin_admin/tool-box-hub
 cd School_Web
 ```
 
@@ -339,8 +339,8 @@ pip install -r requirements.txt
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": "your_database_password",
-    "database": "your_database_name"
+    "password": "你的MySQL数据库root的密码",
+    "database": "smaple"
 }
 ```
 
