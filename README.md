@@ -1065,6 +1065,8 @@ sudo systemctl start school-web
 - QQ: 503175021
 - 微信(WeChat): wxid_6t5bmudk2gnr12
 
+🚀 如果这个项目对你有帮助，别忘了点个 Star ⭐！你的支持是我持续优化升级的动力！ ❤️
+
 ***
 
 ## 🌟 致谢
