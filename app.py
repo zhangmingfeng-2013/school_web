@@ -339,7 +339,7 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin"}
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate"}
 CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip")
 
 @app.before_request
@@ -452,6 +452,7 @@ def _init_album_tables(conn):
             interests TEXT,
             future_plan TEXT,
             class_name VARCHAR(30) DEFAULT '',
+            graduation_year VARCHAR(20) DEFAULT '',
             created_by VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -463,6 +464,13 @@ def _init_album_tables(conn):
     """)
     if cursor.fetchone()[0] == 0:
         cursor.execute("ALTER TABLE album_classmates ADD COLUMN class_name VARCHAR(30) DEFAULT ''")
+    # 确保 graduation_year 列存在（兼容旧表）
+    cursor.execute("""
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA='sample' AND TABLE_NAME='album_classmates' AND COLUMN_NAME='graduation_year'
+    """)
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("ALTER TABLE album_classmates ADD COLUMN graduation_year VARCHAR(20) DEFAULT ''")
     # 毕业寄语
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS album_wishes (
@@ -2552,6 +2560,7 @@ def api_album_classmates():
         if r.get("birthday"): r["birthday"] = str(r["birthday"])
         if r.get("created_at"): r["created_at"] = str(r["created_at"])
         r["class_name"] = r.get("class_name") or ""
+        r["graduation_year"] = r.get("graduation_year") or ""
     cursor.close()
     conn.close()
     return jsonify(rows)
@@ -2568,12 +2577,13 @@ def api_album_classmates_add():
         return jsonify({"error": "DB"}), 500
     cursor = conn.cursor()
     cursor.execute(
-        """INSERT INTO album_classmates (name, nickname, avatar_url, birthday, phone, email, motto, interests, future_plan, class_name, created_by)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        """INSERT INTO album_classmates (name, nickname, avatar_url, birthday, phone, email, motto, interests, future_plan, class_name, graduation_year, created_by)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
         (name, sanitize_input(data.get("nickname","")), sanitize_input(data.get("avatar_url",""),500),
          data.get("birthday","") or None, sanitize_input(data.get("phone","")), sanitize_input(data.get("email","")),
          sanitize_input(data.get("motto",""),500), sanitize_input(data.get("interests",""),500),
-         sanitize_input(data.get("future_plan",""),500), sanitize_input(data.get("class_name",""),30), session["username"])
+         sanitize_input(data.get("future_plan",""),500), sanitize_input(data.get("class_name",""),30),
+         sanitize_input(data.get("graduation_year",""),20), session["username"])
     )
     conn.commit()
     cid = cursor.lastrowid
