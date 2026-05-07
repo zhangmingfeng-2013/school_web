@@ -8,6 +8,7 @@
       <input v-model="form.name" placeholder="姓名 *" class="input">
       <input v-model="form.nickname" placeholder="昵称" class="input">
       <input v-model="form.class_name" placeholder="班级（如：1班、2班）" class="input" style="border-color:#667eea;">
+      <input v-model="form.graduation_year" placeholder="届数（如：2026届）" class="input" style="border-color:#667eea;">
       <input v-model="form.email" placeholder="邮箱" class="input">
       <input v-model="form.phone" placeholder="电话" class="input">
       <input type="date" v-model="form.birthday" class="input">
@@ -25,7 +26,10 @@
       <div class="cm-card" v-for="c in filtered" :key="c.id">
         <div class="cm-avatar">{{ c.name[0] }}</div>
         <div class="cm-name">{{ c.name }} <small v-if="c.nickname">({{ c.nickname }})</small></div>
-        <div class="cm-class" v-if="c.class_name">{{ c.class_name }}</div>
+        <div class="cm-class" v-if="c.class_name || c.graduation_year">
+          <span v-if="c.graduation_year" class="cm-grad">{{ c.graduation_year }}</span>
+          <span v-if="c.class_name">{{ c.class_name }}</span>
+        </div>
         <div class="cm-info" v-if="c.motto">💬 {{ c.motto }}</div>
         <div class="cm-info" v-if="c.interests">❤️ {{ c.interests }}</div>
         <div class="cm-info" v-if="c.email">📧 {{ c.email }}</div>
@@ -44,12 +48,24 @@ const props = defineProps(['isAdmin'])
 const classmates = ref([])
 const showForm = ref(false)
 const activeClass = ref('')
-const form = ref({ name: '', nickname: '', class_name: '', email: '', phone: '', birthday: '', motto: '', interests: '', future_plan: '' })
+const form = ref({ name: '', nickname: '', class_name: '', graduation_year: '', email: '', phone: '', birthday: '', motto: '', interests: '', future_plan: '' })
 
-const classes = computed(() => [...new Set(classmates.value.map(c => c.class_name).filter(Boolean))].sort())
+const classes = computed(() => {
+  const keys = classmates.value.map(c => {
+    const year = c.graduation_year || ''
+    const cls = c.class_name || ''
+    return year ? year + '·' + cls : cls
+  }).filter(Boolean)
+  return [...new Set(keys)].sort()
+})
 const filtered = computed(() => {
   if (!activeClass.value) return classmates.value
-  return classmates.value.filter(c => c.class_name === activeClass.value)
+  return classmates.value.filter(c => {
+    const year = c.graduation_year || ''
+    const cls = c.class_name || ''
+    const key = year ? year + '·' + cls : cls
+    return key === activeClass.value
+  })
 })
 
 const API = '/api/album'
@@ -57,7 +73,7 @@ async function load() { classmates.value = await fetch(API+'/classmates',{creden
 async function addClassmate() {
   if (!form.value.name) return alert('姓名必填')
   await fetch(API+'/classmates',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(form.value)})
-  form.value = { name: '', nickname: '', class_name: '', email: '', phone: '', birthday: '', motto: '', interests: '', future_plan: '' }; showForm.value = false; load()
+  form.value = { name: '', nickname: '', class_name: '', graduation_year: '', email: '', phone: '', birthday: '', motto: '', interests: '', future_plan: '' }; showForm.value = false; load()
 }
 async function delClassmate(id) { if(!confirm('确定删除？'))return; await fetch(API+'/classmates/'+id,{method:'DELETE',credentials:'include'}); load() }
 onMounted(load)
@@ -71,6 +87,7 @@ onMounted(load)
 .cm-avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-size: 24px; font-weight: 700; line-height: 56px; margin: 0 auto 10px; }
 .cm-name { font-weight: 700; font-size: 18px; color: #333; }
 .cm-class { display: inline-block; margin-top: 4px; padding: 1px 10px; border-radius: 12px; background: rgba(102,126,234,.1); color: #667eea; font-size: 12px; font-weight: 600; }
+.cm-grad { margin-right: 4px; background: rgba(118,75,162,.12); border-radius: 10px; padding: 0 6px; }
 .cm-info { margin-top: 4px; font-size: 13px; color: #666; }
 .add-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; background: #f8f9fa; padding: 14px; border-radius: 10px; max-width: 500px; }
 .empty { text-align: center; color: #999; padding: 40px; }
