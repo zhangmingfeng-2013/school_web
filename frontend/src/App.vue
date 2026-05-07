@@ -34,7 +34,7 @@
       <ImageGrid v-if="tab!=='board'&&tab!=='timeline'&&tab!=='classmates'&&tab!=='wishes'&&tab!=='playlist'&&tab!=='stats'" :key="tab+sort+search+activeTag" :category="tab" :sort="sort" :search="search" :tagId="activeTag" ref="grid" />
       <MessageBoard v-else-if="tab==='board'" />
       <Timeline v-else-if="tab==='timeline'" :isAdmin="isAdmin" />
-      <Classmates v-else-if="tab==='classmates'" :isAdmin="isAdmin" />
+      <Classmates v-else-if="tab==='classmates'" :isAdmin="isAdmin" :currentUser="currentUser" />
       <WishWall v-else-if="tab==='wishes'" :isAdmin="isAdmin" :currentUser="currentUser" />
       <Playlist v-else-if="tab==='playlist'" :isAdmin="isAdmin" />
       <StatsChart v-else-if="tab==='stats'" />

@@ -2591,6 +2591,42 @@ def api_album_classmates_add():
     conn.close()
     return jsonify({"success": True, "id": cid})
 
+@app.route("/api/album/classmates/<int:cid>", methods=["PUT"])
+@login_required
+def api_album_classmates_update(cid):
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("SELECT created_by FROM album_classmates WHERE id=%s", (cid,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"error": "记录不存在"}), 404
+    created_by = row[0]
+    # 创建者或管理员可以编辑
+    if session["username"] != created_by and session.get("permission") != "administrator":
+        cursor.close(); conn.close()
+        return jsonify({"error": "不可更改，只有创建者或管理员可以编辑"}), 403
+    data = request.get_json()
+    name = sanitize_input(data.get("name", ""))
+    if not name:
+        cursor.close(); conn.close()
+        return jsonify({"error": "姓名必填"}), 400
+    cursor.execute(
+        """UPDATE album_classmates SET name=%s, nickname=%s, avatar_url=%s, birthday=%s, phone=%s, 
+           email=%s, motto=%s, interests=%s, future_plan=%s, class_name=%s, graduation_year=%s
+           WHERE id=%s""",
+        (name, sanitize_input(data.get("nickname","")), sanitize_input(data.get("avatar_url",""),500),
+         data.get("birthday","") or None, sanitize_input(data.get("phone","")), sanitize_input(data.get("email","")),
+         sanitize_input(data.get("motto",""),500), sanitize_input(data.get("interests",""),500),
+         sanitize_input(data.get("future_plan",""),500), sanitize_input(data.get("class_name",""),30),
+         sanitize_input(data.get("graduation_year",""),20), cid)
+    )
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"success": True})
+
 @app.route("/api/album/classmates/<int:cid>", methods=["DELETE"])
 @login_required
 @admin_required

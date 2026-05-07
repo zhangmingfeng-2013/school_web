@@ -2,7 +2,7 @@
   <div class="classmates">
     <div class="cm-header">
       <h3>👥 同学录</h3>
-      <button class="btn-sm btn-primary" @click="showForm=!showForm">{{ showForm?'取消':'+ 添加同学' }}</button>
+      <button class="btn-sm btn-primary" @click="showForm ? resetForm() : (showForm=true)">{{ showForm?'取消':'+ 添加同学' }}</button>
     </div>
     <div v-if="showForm" class="add-form">
       <input v-model="form.name" placeholder="姓名 *" class="input">
@@ -15,7 +15,7 @@
       <input v-model="form.motto" placeholder="座右铭" class="input">
       <input v-model="form.interests" placeholder="兴趣爱好" class="input">
       <input v-model="form.future_plan" placeholder="未来计划" class="input">
-      <button class="btn-sm btn-primary" @click="addClassmate">提交</button>
+      <button class="btn-sm btn-primary" @click="addClassmate">{{ editingId ? '更新' : '提交' }}</button>
     </div>
     <!-- 班级标签 -->
     <div class="cm-classes" v-if="classes.length">
@@ -35,6 +35,7 @@
         <div class="cm-info" v-if="c.email">📧 {{ c.email }}</div>
         <div class="cm-info" v-if="c.phone">📱 {{ c.phone }}</div>
         <div class="cm-info" v-if="c.future_plan">🎯 {{ c.future_plan }}</div>
+        <button v-if="currentUser===c.created_by||isAdmin" class="btn-sm btn-primary mt-2" @click="editClassmate(c)">编辑</button>
         <button v-if="isAdmin" class="btn-sm btn-danger mt-2" @click="delClassmate(c.id)">删除</button>
       </div>
     </div>
@@ -44,9 +45,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-const props = defineProps(['isAdmin'])
+const props = defineProps(['isAdmin','currentUser'])
 const classmates = ref([])
 const showForm = ref(false)
+const editingId = ref(null)
 const activeClass = ref('')
 const form = ref({ name: '', nickname: '', class_name: '', graduation_year: '', email: '', phone: '', birthday: '', motto: '', interests: '', future_plan: '' })
 
@@ -72,8 +74,21 @@ const API = '/api/album'
 async function load() { classmates.value = await fetch(API+'/classmates',{credentials:'include'}).then(r=>r.json()) }
 async function addClassmate() {
   if (!form.value.name) return alert('姓名必填')
-  await fetch(API+'/classmates',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(form.value)})
-  form.value = { name: '', nickname: '', class_name: '', graduation_year: '', email: '', phone: '', birthday: '', motto: '', interests: '', future_plan: '' }; showForm.value = false; load()
+  if (editingId.value) {
+    await fetch(API+'/classmates/'+editingId.value,{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(form.value)})
+  } else {
+    await fetch(API+'/classmates',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(form.value)})
+  }
+  resetForm(); load()
+}
+function editClassmate(c) {
+  form.value = { name: c.name, nickname: c.nickname||'', class_name: c.class_name||'', graduation_year: c.graduation_year||'', email: c.email||'', phone: c.phone||'', birthday: c.birthday||'', motto: c.motto||'', interests: c.interests||'', future_plan: c.future_plan||'' }
+  editingId.value = c.id
+  showForm.value = true
+}
+function resetForm() {
+  form.value = { name: '', nickname: '', class_name: '', graduation_year: '', email: '', phone: '', birthday: '', motto: '', interests: '', future_plan: '' }
+  editingId.value = null; showForm.value = false
 }
 async function delClassmate(id) { if(!confirm('确定删除？'))return; await fetch(API+'/classmates/'+id,{method:'DELETE',credentials:'include'}); load() }
 onMounted(load)
