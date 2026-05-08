@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}管理后台{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
     .stat-card { border-radius: 12px; padding: 20px; }
     .ip-row { font-family: 'SF Mono', 'Courier New', monospace; font-size: 0.9rem; }
@@ -748,6 +749,155 @@ async function saveRateConfig() {
     document.getElementById('rateConfigCard').style.display = 'none';
     refreshIPStats();
 }
+</script>
+
+<!-- Leaflet + 网络请求地图 -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let cyberMap = null;
+let cyberMarkers = [];
+let cyberLines = [];
+let mapInitialized = false;
+
+function initCyberMap() {
+    if (mapInitialized) return;
+    const el = document.getElementById('cybermap');
+    if (!el || el.offsetWidth === 0) return;
+
+    cyberMap = L.map('cybermap', {
+        center: [25, 0],
+        zoom: 2.5,
+        zoomControl: false,
+        attributionControl: false,
+        minZoom: 2,
+        maxZoom: 10
+    });
+
+    // 深色底图
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 10
+    }).addTo(cyberMap);
+
+    // 缩放到合适范围
+    cyberMap.setMaxBounds([[-85, -180], [85, 180]]);
+    mapInitialized = true;
+    refreshCyberMap();
+}
+
+async function refreshCyberMap() {
+    initCyberMap();
+    if (!cyberMap) return;
+
+    try {
+        const resp = await fetch('/api/admin/ip_locations', {credentials:'include'});
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        // 清除旧标记和线
+        cyberMarkers.forEach(m => cyberMap.removeLayer(m));
+        cyberMarkers = [];
+        cyberLines.forEach(l => cyberMap.removeLayer(l));
+        cyberLines = [];
+
+        const points = [];
+        let totalReq = 0, blockedCount = 0;
+
+        data.forEach(d => {
+            const lat = d.lat, lon = d.lon;
+            totalReq += d.requests || 0;
+            if (d.blocked || d.manual_blocked) blockedCount++;
+
+            const size = Math.min(Math.max((d.requests || 1) * 2, 5), 20);
+            const color = d.manual_blocked ? '#ffaa00' : (d.blocked ? '#ff4444' : '#00ff88');
+            const glow = d.manual_blocked ? '#ffaa00' : (d.blocked ? '#ff4444' : '#00ff88');
+
+            // 脉冲圆点（外层光晕）
+            const pulseIcon = L.divIcon({
+                className: 'cyber-pulse',
+                html: `<div style="
+                    width:${size+8}px;height:${size+8}px;
+                    border-radius:50%;
+                    background:radial-gradient(circle, ${color}33 0%, transparent 70%);
+                    animation:cyberPulse 2s ease-out infinite;
+                "></div>
+                <div style="
+                    position:absolute;top:50%;left:50%;
+                    width:${size}px;height:${size}px;
+                    margin-left:-${size/2}px;margin-top:-${size/2}px;
+                    border-radius:50%;
+                    background:${color};
+                    box-shadow:0 0 ${size}px ${glow};
+                "></div>`,
+                iconSize: [size+10, size+10],
+                iconAnchor: [(size+10)/2, (size+10)/2]
+            });
+
+            const marker = L.marker([lat, lon], {icon: pulseIcon}).addTo(cyberMap);
+            marker.bindTooltip(
+                `${d.ip}<br>${d.city}, ${d.country}<br>请求: ${d.requests||0}${d.blocked?' 🔒':''}${d.manual_blocked?' 🚫':''}`,
+                {direction:'top',offset:[0,-size]}
+            );
+            cyberMarkers.push(marker);
+            points.push([lat, lon]);
+        });
+
+        // 从中心画飞线到各点
+        points.forEach(([lat, lon]) => {
+            const midLat = lat + (Math.random() - 0.5) * 20;
+            const midLon = lon + (Math.random() - 0.5) * 20;
+            const line = L.polyline(
+                [[midLat, midLon], [lat, lon]],
+                {
+                    color: '#00c6ff',
+                    weight: 1,
+                    opacity: 0.4,
+                    dashArray: '4 8',
+                    className: 'cyber-line'
+                }
+            ).addTo(cyberMap);
+            cyberLines.push(line);
+        });
+
+        // 更新统计
+        document.getElementById('mapPointCount').textContent = data.length;
+        document.getElementById('mapTotalRequests').textContent = totalReq;
+        document.getElementById('mapBlockedCount').textContent = blockedCount;
+        const now = new Date();
+        document.getElementById('mapUpdateTime').textContent =
+            '更新: ' + now.getHours().toString().padStart(2,'0') + ':' +
+            now.getMinutes().toString().padStart(2,'0') + ':' +
+            now.getSeconds().toString().padStart(2,'0');
+
+    } catch(e) { console.error('CyberMap:', e); }
+}
+
+// 切换到地图标签时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('#adminTabs a[data-bs-toggle="tab"]').forEach(function(tab) {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            if (e.target.getAttribute('href') === '#tab-cybermap') {
+                setTimeout(initCyberMap, 200);
+            }
+        });
+    });
+});
+
+// 脉冲动画
+const pulseStyle = document.createElement('style');
+pulseStyle.textContent = `
+    @keyframes cyberPulse {
+        0% { transform: scale(1); opacity: 0.8; }
+        100% { transform: scale(2.5); opacity: 0; }
+    }
+    .cyber-line {
+        animation: lineFlow 3s linear infinite;
+    }
+    @keyframes lineFlow {
+        0% { stroke-dashoffset: 24; }
+        100% { stroke-dashoffset: 0; }
+    }
+`;
+document.head.appendChild(pulseStyle);
 </script>
 
 <!-- 审核弹窗 -->
