@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}管理后台{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <style>
     .stat-card { border-radius: 12px; padding: 20px; }
     .ip-row { font-family: 'SF Mono', 'Courier New', monospace; font-size: 0.9rem; }
@@ -752,7 +752,7 @@ async function saveRateConfig() {
 </script>
 
 <!-- Leaflet + 网络请求地图 -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 let cyberMap = null;
 let cyberMarkers = [];
@@ -761,8 +761,18 @@ let mapInitialized = false;
 
 function initCyberMap() {
     if (mapInitialized) return;
+    if (typeof L === 'undefined') {
+        console.warn('CyberMap: Leaflet not loaded yet, retrying...');
+        setTimeout(initCyberMap, 500);
+        return;
+    }
     const el = document.getElementById('cybermap');
-    if (!el || el.offsetWidth === 0) return;
+    if (!el) return;
+    if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+        // tab 可能还在 fade 动画中，等一帧再试
+        requestAnimationFrame(() => initCyberMap());
+        return;
+    }
 
     cyberMap = L.map('cybermap', {
         center: [25, 0],
@@ -781,6 +791,10 @@ function initCyberMap() {
     // 缩放到合适范围
     cyberMap.setMaxBounds([[-85, -180], [85, 180]]);
     mapInitialized = true;
+
+    // 确保地图正确渲染（Bootstrap tab 切换后需要）
+    setTimeout(() => { if (cyberMap) cyberMap.invalidateSize(); }, 300);
+
     refreshCyberMap();
 }
 
@@ -803,10 +817,13 @@ async function refreshCyberMap() {
         let totalReq = 0, blockedCount = 0;
 
         data.forEach(d => {
-            const lat = d.lat, lon = d.lon;
             totalReq += d.requests || 0;
             if (d.blocked || d.manual_blocked) blockedCount++;
 
+            // 内网IP没有坐标，只统计不画点
+            if (d.lat == null || d.lon == null) return;
+
+            const lat = d.lat, lon = d.lon;
             const size = Math.min(Math.max((d.requests || 1) * 2, 5), 20);
             const color = d.manual_blocked ? '#ffaa00' : (d.blocked ? '#ff4444' : '#00ff88');
             const glow = d.manual_blocked ? '#ffaa00' : (d.blocked ? '#ff4444' : '#00ff88');
@@ -876,7 +893,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('#adminTabs a[data-bs-toggle="tab"]').forEach(function(tab) {
         tab.addEventListener('shown.bs.tab', function(e) {
             if (e.target.getAttribute('href') === '#tab-cybermap') {
-                setTimeout(initCyberMap, 200);
+                setTimeout(initCyberMap, 400);
             }
         });
     });

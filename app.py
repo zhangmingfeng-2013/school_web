@@ -119,10 +119,10 @@ RATE_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "rate_config.json")
 
 DEFAULT_RATE_CONFIG = {
     "RATE_LIMIT": 40,         # 最大请求数
-    "RATE_WINDOW": 15,        # 时间窗口（秒）
+    "RATE_WINDOW": 10,        # 时间窗口（秒）
     "BLOCK_DURATION": 240,    # 封禁时长（秒）
-    "BLOCK_PROBE_LIMIT": 200, # 封禁期间试探次数阈值
-    "BLOCK_EXTEND": 300,      # 试探超限后追加封禁（秒）
+    "BLOCK_PROBE_LIMIT": 50, # 封禁期间试探次数阈值
+    "BLOCK_EXTEND": 240,      # 试探超限后追加封禁（秒）
 }
 
 def _load_rate_config():
@@ -3724,29 +3724,10 @@ def api_admin_ip_locations():
                 ip_stats.setdefault(ip, {})["manual_blocked"] = True
                 ip_stats.setdefault(ip, {})["requests"] = ip_stats.get(ip, {}).get("requests", 0)
 
-    # 过滤掉内网 IP 和已缓存的
-    def is_public(ip):
-        parts = ip.split(".")
-        if len(parts) != 4:
-            return False
-        try:
-            a = int(parts[0])
-            b = int(parts[1])
-            if a == 10: return False
-            if a == 172 and 16 <= b <= 31: return False
-            if a == 192 and b == 168: return False
-            if a == 127: return False
-            if a == 0: return False
-            return True
-        except:
-            return False
-
     # 使用缓存，5分钟过期
     result = []
     uncached = []
     for ip in list(active_ips):
-        if not is_public(ip):
-            continue
         cached = ip_geo_cache.get(ip)
         if cached and cached["expire"] > now:
             result.append({
@@ -3772,8 +3753,11 @@ def api_admin_ip_locations():
                 timeout=10,
             )
             if resp.status_code == 200:
-                for item in resp.json():
+                items = resp.json()
+                found_ips = set()
+                for item in items:
                     ip = item.get("query", "")
+                    found_ips.add(ip)
                     lat = item.get("lat")
                     lon = item.get("lon")
                     if lat is not None and lon is not None:
@@ -3791,6 +3775,33 @@ def api_admin_ip_locations():
                             "lon": lon,
                             "country": entry["country"],
                             "city": entry["city"],
+                            "requests": ip_stats.get(ip, {}).get("requests", 0),
+                            "blocked": ip_stats.get(ip, {}).get("blocked", False),
+                            "manual_blocked": ip_stats.get(ip, {}).get("manual_blocked", False),
+                        })
+                    else:
+                        # 内网/无法定位的IP，仅统计不画点
+                        ip_geo_cache[ip] = {"lat": 0, "lon": 0, "country": "内网", "city": "", "expire": now + 300}
+                        result.append({
+                            "ip": ip,
+                            "lat": None,
+                            "lon": None,
+                            "country": "内网",
+                            "city": "",
+                            "requests": ip_stats.get(ip, {}).get("requests", 0),
+                            "blocked": ip_stats.get(ip, {}).get("blocked", False),
+                            "manual_blocked": ip_stats.get(ip, {}).get("manual_blocked", False),
+                        })
+                # 批量查询中未返回的IP也计入（可能是ip-api限流或超时）
+                for ip in batch:
+                    if ip not in found_ips:
+                        ip_geo_cache[ip] = {"lat": 0, "lon": 0, "country": "未知", "city": "", "expire": now + 300}
+                        result.append({
+                            "ip": ip,
+                            "lat": None,
+                            "lon": None,
+                            "country": "未知",
+                            "city": "",
                             "requests": ip_stats.get(ip, {}).get("requests", 0),
                             "blocked": ip_stats.get(ip, {}).get("blocked", False),
                             "manual_blocked": ip_stats.get(ip, {}).get("manual_blocked", False),
