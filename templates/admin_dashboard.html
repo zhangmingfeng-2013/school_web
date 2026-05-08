@@ -310,46 +310,56 @@
     </div>
 </div>
 
-<!-- Tab: 网络请求地图 -->
+<!-- Tab: 网络请求地图 — Kaspersky 风格 -->
 <div class="tab-pane fade" id="tab-cybermap">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <div>
-            <span class="badge bg-info me-2" id="mapPointCount">0</span> 个攻击源
-            <span class="text-muted small ms-2" id="mapUpdateTime"></span>
-        </div>
-        <button class="btn btn-sm btn-outline-info" onclick="refreshCyberMap()">🔄 刷新地图</button>
-    </div>
-    <div class="card" style="background:#0a0f1e;">
-        <div class="card-body p-0" style="height:72vh;position:relative;">
-            <div id="cybermap" style="width:100%;height:100%;border-radius:8px;"></div>
-            <!-- 地图图例 -->
-            <div style="position:absolute;bottom:16px;left:16px;background:rgba(0,0,0,.75);border-radius:8px;padding:10px 14px;z-index:1000;">
-                <div style="color:#aaa;font-size:11px;margin-bottom:6px;">图例</div>
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                    <span style="width:10px;height:10px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;"></span>
-                    <span style="color:#ccc;font-size:12px;">正常请求</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                    <span style="width:10px;height:10px;border-radius:50%;background:#ff4444;box-shadow:0 0 8px #ff4444;"></span>
-                    <span style="color:#ccc;font-size:12px;">被拦截/封禁</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <span style="width:10px;height:10px;border-radius:50%;background:#ffaa00;box-shadow:0 0 8px #ffaa00;"></span>
-                    <span style="color:#ccc;font-size:12px;">手动封禁</span>
+    <div class="card" style="background:#060b14;border:1px solid #1a2540;">
+        <div class="card-body p-0" style="height:72vh;position:relative;overflow:hidden;">
+            <div id="cybermap" style="width:100%;height:100%;"></div>
+            <!-- Canvas 飞线层 -->
+            <canvas id="cyberCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:500;"></canvas>
+            <!-- 顶部标题栏 -->
+            <div style="position:absolute;top:0;left:0;right:0;z-index:1000;background:linear-gradient(180deg,rgba(6,11,20,.95) 60%,transparent);padding:10px 16px 20px;">
+                <span style="color:#fff;font-size:16px;font-weight:700;">🌍 全球网络威胁态势</span>
+                <span style="color:#4a6fa5;font-size:12px;margin-left:8px;" id="mapUpdateTime"></span>
+                <button class="btn btn-sm btn-outline-info float-end" onclick="refreshCyberMap()" style="border-color:#1a3a5c;color:#4a8fcc;">🔄 刷新</button>
+            </div>
+            <!-- 底部攻击类型统计条 -->
+            <div style="position:absolute;bottom:0;left:0;right:0;z-index:1000;background:linear-gradient(0deg,rgba(6,11,20,.97) 60%,transparent);padding:20px 16px 10px;">
+                <div class="row g-3" style="margin:0;">
+                    <div class="col" style="min-width:120px;">
+                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">WEB 攻击</div>
+                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
+                            <div id="barWeb" style="height:100%;background:linear-gradient(90deg,#ff4444,#ff6b6b);border-radius:2px;transition:width .6s;width:0;"></div>
+                        </div>
+                        <div style="color:#ff6b6b;font-size:18px;font-weight:700;" id="countWeb">0</div>
+                    </div>
+                    <div class="col" style="min-width:120px;">
+                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">扫描探测</div>
+                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
+                            <div id="barScan" style="height:100%;background:linear-gradient(90deg,#ffaa00,#ffcc00);border-radius:2px;transition:width .6s;width:0;"></div>
+                        </div>
+                        <div style="color:#ffcc00;font-size:18px;font-weight:700;" id="countScan">0</div>
+                    </div>
+                    <div class="col" style="min-width:120px;">
+                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">正常流量</div>
+                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
+                            <div id="barNormal" style="height:100%;background:linear-gradient(90deg,#00c6ff,#00ff88);border-radius:2px;transition:width .6s;width:0;"></div>
+                        </div>
+                        <div style="color:#00ff88;font-size:18px;font-weight:700;" id="countNormal">0</div>
+                    </div>
+                    <div class="col" style="min-width:120px;">
+                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">内网/未知</div>
+                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
+                            <div id="barUnknown" style="height:100%;background:linear-gradient(90deg,#556677,#8899bb);border-radius:2px;transition:width .6s;width:0;"></div>
+                        </div>
+                        <div style="color:#8899bb;font-size:18px;font-weight:700;" id="countUnknown">0</div>
+                    </div>
                 </div>
             </div>
-            <!-- 统计面板 -->
-            <div style="position:absolute;top:16px;right:16px;background:rgba(0,0,0,.75);border-radius:8px;padding:12px 16px;z-index:1000;min-width:160px;">
-                <div style="color:#00c6ff;font-size:22px;font-weight:700;" id="mapTotalRequests">0</div>
-                <div style="color:#8899bb;font-size:11px;">总请求数</div>
-                <hr style="border-color:rgba(255,255,255,.1);margin:6px 0;">
-                <div style="color:#ff6b6b;font-size:18px;font-weight:700;" id="mapBlockedCount">0</div>
-                <div style="color:#8899bb;font-size:11px;">被拦截</div>
-            </div>
         </div>
     </div>
-    <div class="text-muted small mt-2">
-        💡 数据基于本网站 IP 请求统计，地理位置由 ip-api.com 提供，5分钟缓存
+    <div class="text-muted small mt-1">
+        💡 数据基于本网站 IP 请求统计 · 地理位置由 ip-api.com 提供 · 5分钟缓存
     </div>
 </div>
 </div>
@@ -751,53 +761,128 @@ async function saveRateConfig() {
 }
 </script>
 
-<!-- Leaflet + 网络请求地图 -->
+<!-- Leaflet + 网络请求地图 Kaspersky 风格 -->
 <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 let cyberMap = null;
 let cyberMarkers = [];
-let cyberLines = [];
+let cyberCanvas = null;
+let cyberCtx = null;
+let cyberFrameId = null;
+let cyberParticles = [];
 let mapInitialized = false;
+
+const SERVER_POS = [35, 105]; // 服务器位置（中国中部）
 
 function initCyberMap() {
     if (mapInitialized) return;
     if (typeof L === 'undefined') {
-        console.warn('CyberMap: Leaflet not loaded yet, retrying...');
-        setTimeout(initCyberMap, 500);
-        return;
+        setTimeout(initCyberMap, 500); return;
     }
     const el = document.getElementById('cybermap');
     if (!el) return;
     if (el.offsetWidth === 0 || el.offsetHeight === 0) {
-        // tab 可能还在 fade 动画中，等一帧再试
-        requestAnimationFrame(() => initCyberMap());
-        return;
+        requestAnimationFrame(() => initCyberMap()); return;
     }
 
     cyberMap = L.map('cybermap', {
-        center: [25, 0],
-        zoom: 2.5,
-        zoomControl: false,
-        attributionControl: false,
-        minZoom: 2,
-        maxZoom: 10
+        center: [20, 0], zoom: 2.3,
+        zoomControl: false, attributionControl: false,
+        minZoom: 2, maxZoom: 10
     });
 
-    // 深色底图
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 10
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 10, crossOrigin: true, className: 'dark-tiles'
     }).addTo(cyberMap);
 
-    // 缩放到合适范围
     cyberMap.setMaxBounds([[-85, -180], [85, 180]]);
+
+    // Canvas 覆盖
+    cyberCanvas = document.getElementById('cyberCanvas');
+    cyberCtx = cyberCanvas.getContext('2d');
+
     mapInitialized = true;
-
-    // 确保地图正确渲染（Bootstrap tab 切换后需要）
     setTimeout(() => { if (cyberMap) cyberMap.invalidateSize(); }, 300);
-
     refreshCyberMap();
+    startParticleLoop();
 }
 
+// ====== 弧线计算（大圆路径插值） ======
+function arcPoints(from, to, steps) {
+    const pts = [];
+    const lat1 = from[0] * Math.PI/180, lon1 = from[1] * Math.PI/180;
+    const lat2 = to[0] * Math.PI/180, lon2 = to[1] * Math.PI/180;
+    const d = 2 * Math.asin(Math.sqrt(
+        Math.pow(Math.sin((lat1-lat2)/2), 2) +
+        Math.cos(lat1)*Math.cos(lat2)*Math.pow(Math.sin((lon1-lon2)/2), 2)
+    ));
+    for (let i = 0; i <= steps; i++) {
+        const f = i / steps;
+        const A = Math.sin((1-f)*d) / Math.sin(d);
+        const B = Math.sin(f*d) / Math.sin(d);
+        const x = A*Math.cos(lat1)*Math.cos(lon1) + B*Math.cos(lat2)*Math.cos(lon2);
+        const y = A*Math.cos(lat1)*Math.sin(lon1) + B*Math.cos(lat2)*Math.sin(lon2);
+        const z = A*Math.sin(lat1) + B*Math.sin(lat2);
+        const lat = Math.atan2(z, Math.sqrt(x*x+y*y)) * 180/Math.PI;
+        const lon = Math.atan2(y, x) * 180/Math.PI;
+        pts.push([lat, lon + (f < 0.5 ? f * 8 : (1-f) * 8)]); // 弧线偏移
+    }
+    return pts;
+}
+
+// ====== 粒子系统 ======
+function startParticleLoop() {
+    function loop() {
+        cyberFrameId = requestAnimationFrame(loop);
+        if (!cyberMap || !cyberCtx || !cyberCanvas) return;
+        const w = cyberCanvas.width = cyberCanvas.clientWidth;
+        const h = cyberCanvas.height = cyberCanvas.clientHeight;
+        cyberCtx.clearRect(0, 0, w, h);
+
+        const now = Date.now();
+        for (let i = cyberParticles.length-1; i >= 0; i--) {
+            const p = cyberParticles[i];
+            p.t += 0.004 * p.speed;
+            if (p.t >= 1) { cyberParticles.splice(i, 1); continue; }
+
+            const pts = p.path;
+            const idx = Math.floor(p.t * (pts.length - 1));
+            const frac = p.t * (pts.length - 1) - idx;
+            const next = idx + 1 < pts.length ? idx + 1 : idx;
+            const latlng = [
+                pts[idx][0] + (pts[next][0] - pts[idx][0]) * frac,
+                pts[idx][1] + (pts[next][1] - pts[idx][1]) * frac
+            ];
+            const pt = cyberMap.latLngToContainerPoint(latlng);
+
+            // 粒子尾迹
+            cyberCtx.beginPath();
+            cyberCtx.arc(pt.x, pt.y, p.size * 2.5, 0, Math.PI*2);
+            cyberCtx.fillStyle = p.color.replace('1)', '0.08)');
+            cyberCtx.fill();
+
+            cyberCtx.beginPath();
+            cyberCtx.arc(pt.x, pt.y, p.size, 0, Math.PI*2);
+            cyberCtx.fillStyle = p.color;
+            cyberCtx.shadowColor = p.glow;
+            cyberCtx.shadowBlur = 8;
+            cyberCtx.fill();
+            cyberCtx.shadowBlur = 0;
+        }
+    }
+    loop();
+}
+
+function spawnParticles(path, color, glow, count) {
+    for (let i = 0; i < count; i++) {
+        cyberParticles.push({
+            path: path, t: Math.random(), speed: 0.5 + Math.random() * 1.5,
+            size: 1.5 + Math.random() * 2, color: color, glow: glow
+        });
+    }
+}
+
+// ====== 数据加载 ======
 async function refreshCyberMap() {
     initCyberMap();
     if (!cyberMap) return;
@@ -807,81 +892,119 @@ async function refreshCyberMap() {
         if (!resp.ok) return;
         const data = await resp.json();
 
-        // 清除旧标记和线
+        // 清除旧标记
         cyberMarkers.forEach(m => cyberMap.removeLayer(m));
         cyberMarkers = [];
-        cyberLines.forEach(l => cyberMap.removeLayer(l));
-        cyberLines = [];
+        cyberParticles = [];
 
-        const points = [];
-        let totalReq = 0, blockedCount = 0;
+        let unknownIdx = 0;
+        let cntWeb = 0, cntScan = 0, cntNormal = 0, cntUnknown = 0;
 
         data.forEach(d => {
-            totalReq += d.requests || 0;
-            if (d.blocked || d.manual_blocked) blockedCount++;
+            let lat, lon;
+            if (d.lat == null || d.lon == null) {
+                lat = -5 + (unknownIdx % 7 - 3) * 3;
+                lon = -5 + (unknownIdx % 5 - 2) * 4;
+                unknownIdx++; cntUnknown++;
+            } else {
+                lat = d.lat; lon = d.lon;
+            }
 
-            // 内网IP没有坐标，只统计不画点
-            if (d.lat == null || d.lon == null) return;
+            const isUnknown = (d.lat == null || d.lon == null);
+            const isBlocked = d.blocked || d.manual_blocked;
 
-            const lat = d.lat, lon = d.lon;
-            const size = Math.min(Math.max((d.requests || 1) * 2, 5), 20);
-            const color = d.manual_blocked ? '#ffaa00' : (d.blocked ? '#ff4444' : '#00ff88');
-            const glow = d.manual_blocked ? '#ffaa00' : (d.blocked ? '#ff4444' : '#00ff88');
+            // Kaspersky 分类颜色
+            let color, glow, category;
+            if (isUnknown) {
+                color = '#4a5568'; glow = '#4a5568'; category = 'unknown';
+            } else if (d.manual_blocked) {
+                color = '#ff4757'; glow = '#ff6b81'; category = 'web';
+                cntWeb++;
+            } else if (d.blocked) {
+                color = '#ff6348'; glow = '#ff7f50'; category = 'web';
+                cntWeb++;
+            } else if ((d.requests||0) > 20) {
+                color = '#ffa502'; glow = '#ffd32a'; category = 'scan';
+                cntScan++;
+            } else {
+                color = '#2ed573'; glow = '#7bed9f'; category = 'normal';
+                cntNormal++;
+            }
 
-            // 脉冲圆点（外层光晕）
+            const size = isUnknown ? 3 : Math.min(6 + (d.requests||1)*0.5, 18);
+
+            // 脉冲圆点
             const pulseIcon = L.divIcon({
                 className: 'cyber-pulse',
                 html: `<div style="
-                    width:${size+8}px;height:${size+8}px;
-                    border-radius:50%;
+                    width:${size+6}px;height:${size+6}px;border-radius:50%;
                     background:radial-gradient(circle, ${color}33 0%, transparent 70%);
-                    animation:cyberPulse 2s ease-out infinite;
+                    animation:kasperskyPulse 1.8s ease-out infinite;
                 "></div>
                 <div style="
                     position:absolute;top:50%;left:50%;
                     width:${size}px;height:${size}px;
                     margin-left:-${size/2}px;margin-top:-${size/2}px;
-                    border-radius:50%;
-                    background:${color};
-                    box-shadow:0 0 ${size}px ${glow};
+                    border-radius:50%;background:${color};
+                    box-shadow:0 0 ${size+4}px ${glow}, 0 0 ${size*2}px ${color}44;
                 "></div>`,
-                iconSize: [size+10, size+10],
-                iconAnchor: [(size+10)/2, (size+10)/2]
+                iconSize: [size+8, size+8], iconAnchor: [(size+8)/2, (size+8)/2]
             });
 
+            const label = isUnknown
+                ? `<span style="color:#8899bb">${d.ip}</span><br>${d.country||'内网'} · 无法定位`
+                : `${d.ip}<br>${d.city||''}, ${d.country||''}<br>请求: ${d.requests||0}${d.blocked?' 🔒':''}${d.manual_blocked?' 🚫':''}`;
+
             const marker = L.marker([lat, lon], {icon: pulseIcon}).addTo(cyberMap);
-            marker.bindTooltip(
-                `${d.ip}<br>${d.city}, ${d.country}<br>请求: ${d.requests||0}${d.blocked?' 🔒':''}${d.manual_blocked?' 🚫':''}`,
-                {direction:'top',offset:[0,-size]}
-            );
+            marker.bindTooltip(label, {direction:'top', offset:[0,-size]});
             cyberMarkers.push(marker);
-            points.push([lat, lon]);
+
+            // 弧线飞线
+            if (!isUnknown) {
+                const path = arcPoints([lat, lon], SERVER_POS, 32);
+                const line = L.polyline(path, {
+                    color: color, weight: 0.8, opacity: 0.35, dashArray: '2 6',
+                    className: 'kaspersky-line'
+                }).addTo(cyberMap);
+                cyberMarkers.push(line); // reuse array for cleanup
+                spawnParticles(path, color.replace(')', ',0.9)'), glow, Math.min(Math.ceil((d.requests||1)/5), 5));
+            }
         });
 
-        // 从中心画飞线到各点
-        points.forEach(([lat, lon]) => {
-            const midLat = lat + (Math.random() - 0.5) * 20;
-            const midLon = lon + (Math.random() - 0.5) * 20;
-            const line = L.polyline(
-                [[midLat, midLon], [lat, lon]],
-                {
-                    color: '#00c6ff',
-                    weight: 1,
-                    opacity: 0.4,
-                    dashArray: '4 8',
-                    className: 'cyber-line'
-                }
-            ).addTo(cyberMap);
-            cyberLines.push(line);
+        // 服务器位置大光点
+        const serverIcon = L.divIcon({
+            className: '',
+            html: `<div style="
+                width:16px;height:16px;border-radius:50%;background:#00d2ff;
+                box-shadow:0 0 20px #00d2ff, 0 0 40px #00d2ff44, 0 0 60px #00d2ff22;
+                animation:kasperskyPulse 1.5s ease-out infinite;
+            "></div>
+            <div style="
+                position:absolute;top:50%;left:50%;width:40px;height:40px;
+                margin-left:-20px;margin-top:-20px;border-radius:50%;
+                border:1px solid rgba(0,210,255,.3);
+                animation:kasperskyRing 2s ease-out infinite;
+            "></div>`,
+            iconSize: [40, 40], iconAnchor: [20, 20]
         });
+        const serverMarker = L.marker(SERVER_POS, {icon: serverIcon}).addTo(cyberMap);
+        serverMarker.bindTooltip('🖥 本站服务器<br>中国', {direction:'top'});
+        cyberMarkers.push(serverMarker);
 
-        // 更新统计
-        document.getElementById('mapPointCount').textContent = data.length;
-        document.getElementById('mapTotalRequests').textContent = totalReq;
-        document.getElementById('mapBlockedCount').textContent = blockedCount;
+        // 更新底部统计条
+        const maxCnt = Math.max(cntWeb, cntScan, cntNormal, cntUnknown, 1);
+        document.getElementById('countWeb').textContent = cntWeb;
+        document.getElementById('barWeb').style.width = (cntWeb/maxCnt*100) + '%';
+        document.getElementById('countScan').textContent = cntScan;
+        document.getElementById('barScan').style.width = (cntScan/maxCnt*100) + '%';
+        document.getElementById('countNormal').textContent = cntNormal;
+        document.getElementById('barNormal').style.width = (cntNormal/maxCnt*100) + '%';
+        document.getElementById('countUnknown').textContent = cntUnknown;
+        document.getElementById('barUnknown').style.width = (cntUnknown/maxCnt*100) + '%';
+
         const now = new Date();
         document.getElementById('mapUpdateTime').textContent =
-            '更新: ' + now.getHours().toString().padStart(2,'0') + ':' +
+            '更新 ' + now.getHours().toString().padStart(2,'0') + ':' +
             now.getMinutes().toString().padStart(2,'0') + ':' +
             now.getSeconds().toString().padStart(2,'0');
 
@@ -899,19 +1022,32 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// 脉冲动画
+// 动画样式
 const pulseStyle = document.createElement('style');
 pulseStyle.textContent = `
-    @keyframes cyberPulse {
-        0% { transform: scale(1); opacity: 0.8; }
-        100% { transform: scale(2.5); opacity: 0; }
+    @keyframes kasperskyPulse {
+        0% { transform: scale(1); opacity: 0.9; }
+        100% { transform: scale(2.8); opacity: 0; }
     }
-    .cyber-line {
-        animation: lineFlow 3s linear infinite;
+    @keyframes kasperskyRing {
+        0% { transform: scale(1); opacity: 0.6; }
+        100% { transform: scale(2.2); opacity: 0; }
     }
-    @keyframes lineFlow {
-        0% { stroke-dashoffset: 24; }
+    .kaspersky-line {
+        animation: kasperskyFlow 2s linear infinite;
+    }
+    @keyframes kasperskyFlow {
+        0% { stroke-dashoffset: 16; }
         100% { stroke-dashoffset: 0; }
+    }
+    .dark-tiles {
+        filter: invert(95%) hue-rotate(180deg) brightness(0.5) contrast(1.3) saturate(0.2);
+    }
+    .leaflet-container {
+        background: #060b14 !important;
+    }
+    .leaflet-tile:not([src]), .leaflet-tile[src=""], .leaflet-tile[src^="data:"] {
+        visibility: hidden !important;
     }
 `;
 document.head.appendChild(pulseStyle);
