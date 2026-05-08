@@ -3692,6 +3692,120 @@ def forbidden(e):
     return "<h2>禁止访问</h2>", 403
 
 
+# ---------- IP 地理位置（网络请求地图） ----------
+ip_geo_cache = {}  # ip -> {lat, lon, country, city, expire_time}
+
+@app.route("/api/admin/ip_locations")
+@login_required
+@admin_required
+def api_admin_ip_locations():
+    """返回活跃 IP 的地理位置（深色地图用）"""
+    now = time.time()
+    # 获取活跃 IP 列表
+    with rate_lock:
+        active_ips = set()
+        for ip in ip_requests:
+            active_ips.add(ip)
+        for ip, blocked_until in list(ip_blocked.items()):
+            if now < blocked_until:
+                active_ips.add(ip)
+        for ip, blocked_until in list(ip_manual_blocked.items()):
+            if now < blocked_until:
+                active_ips.add(ip)
+        ip_stats = {}
+        for ip, q in ip_requests.items():
+            ip_stats[ip] = {"requests": len(q), "blocked": False, "manual_blocked": False}
+        for ip, blocked_until in list(ip_blocked.items()):
+            if now < blocked_until:
+                ip_stats.setdefault(ip, {})["blocked"] = True
+                ip_stats.setdefault(ip, {})["requests"] = ip_stats.get(ip, {}).get("requests", 0)
+        for ip, blocked_until in list(ip_manual_blocked.items()):
+            if now < blocked_until:
+                ip_stats.setdefault(ip, {})["manual_blocked"] = True
+                ip_stats.setdefault(ip, {})["requests"] = ip_stats.get(ip, {}).get("requests", 0)
+
+    # 过滤掉内网 IP 和已缓存的
+    def is_public(ip):
+        parts = ip.split(".")
+        if len(parts) != 4:
+            return False
+        try:
+            a = int(parts[0])
+            b = int(parts[1])
+            if a == 10: return False
+            if a == 172 and 16 <= b <= 31: return False
+            if a == 192 and b == 168: return False
+            if a == 127: return False
+            if a == 0: return False
+            return True
+        except:
+            return False
+
+    # 使用缓存，5分钟过期
+    result = []
+    uncached = []
+    for ip in list(active_ips):
+        if not is_public(ip):
+            continue
+        cached = ip_geo_cache.get(ip)
+        if cached and cached["expire"] > now:
+            result.append({
+                "ip": ip,
+                "lat": cached["lat"],
+                "lon": cached["lon"],
+                "country": cached["country"],
+                "city": cached["city"],
+                "requests": ip_stats.get(ip, {}).get("requests", 0),
+                "blocked": ip_stats.get(ip, {}).get("blocked", False),
+                "manual_blocked": ip_stats.get(ip, {}).get("manual_blocked", False),
+            })
+        else:
+            uncached.append(ip)
+
+    # 批量查询未缓存的 IP（ip-api.com 最多 100 个一批）
+    if uncached:
+        batch = uncached[:100]
+        try:
+            resp = requests.post(
+                "http://ip-api.com/batch",
+                json=[{"query": ip, "fields": "country,city,lat,lon,query"} for ip in batch],
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                for item in resp.json():
+                    ip = item.get("query", "")
+                    lat = item.get("lat")
+                    lon = item.get("lon")
+                    if lat is not None and lon is not None:
+                        entry = {
+                            "lat": lat,
+                            "lon": lon,
+                            "country": item.get("country", ""),
+                            "city": item.get("city", ""),
+                            "expire": now + 300,  # 5分钟缓存
+                        }
+                        ip_geo_cache[ip] = entry
+                        result.append({
+                            "ip": ip,
+                            "lat": lat,
+                            "lon": lon,
+                            "country": entry["country"],
+                            "city": entry["city"],
+                            "requests": ip_stats.get(ip, {}).get("requests", 0),
+                            "blocked": ip_stats.get(ip, {}).get("blocked", False),
+                            "manual_blocked": ip_stats.get(ip, {}).get("manual_blocked", False),
+                        })
+        except Exception as e:
+            print(f"[IP Geo] batch lookup failed: {e}")
+
+    # 清理过期缓存
+    for ip in list(ip_geo_cache.keys()):
+        if ip_geo_cache[ip]["expire"] <= now:
+            del ip_geo_cache[ip]
+
+    return jsonify(result)
+
+
 # ---------- 启动 ----------
 if __name__ == "__main__":
     print("=" * 50)

@@ -312,20 +312,43 @@
 <!-- Tab: 网络请求地图 -->
 <div class="tab-pane fade" id="tab-cybermap">
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <span class="text-muted small">全球实时网络威胁地图 — 数据来源: Kaspersky</span>
+        <div>
+            <span class="badge bg-info me-2" id="mapPointCount">0</span> 个攻击源
+            <span class="text-muted small ms-2" id="mapUpdateTime"></span>
+        </div>
+        <button class="btn btn-sm btn-outline-info" onclick="refreshCyberMap()">🔄 刷新地图</button>
     </div>
-    <div class="card">
-        <div class="card-body p-0" style="height:75vh;">
-            <iframe src="https://cybermap.kaspersky.com/cn"
-                    style="width:100%;height:100%;border:0;border-radius:8px;"
-                    allowfullscreen loading="lazy"
-                    title="Kaspersky CyberMap">
-            </iframe>
+    <div class="card" style="background:#0a0f1e;">
+        <div class="card-body p-0" style="height:72vh;position:relative;">
+            <div id="cybermap" style="width:100%;height:100%;border-radius:8px;"></div>
+            <!-- 地图图例 -->
+            <div style="position:absolute;bottom:16px;left:16px;background:rgba(0,0,0,.75);border-radius:8px;padding:10px 14px;z-index:1000;">
+                <div style="color:#aaa;font-size:11px;margin-bottom:6px;">图例</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;"></span>
+                    <span style="color:#ccc;font-size:12px;">正常请求</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#ff4444;box-shadow:0 0 8px #ff4444;"></span>
+                    <span style="color:#ccc;font-size:12px;">被拦截/封禁</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:#ffaa00;box-shadow:0 0 8px #ffaa00;"></span>
+                    <span style="color:#ccc;font-size:12px;">手动封禁</span>
+                </div>
+            </div>
+            <!-- 统计面板 -->
+            <div style="position:absolute;top:16px;right:16px;background:rgba(0,0,0,.75);border-radius:8px;padding:12px 16px;z-index:1000;min-width:160px;">
+                <div style="color:#00c6ff;font-size:22px;font-weight:700;" id="mapTotalRequests">0</div>
+                <div style="color:#8899bb;font-size:11px;">总请求数</div>
+                <hr style="border-color:rgba(255,255,255,.1);margin:6px 0;">
+                <div style="color:#ff6b6b;font-size:18px;font-weight:700;" id="mapBlockedCount">0</div>
+                <div style="color:#8899bb;font-size:11px;">被拦截</div>
+            </div>
         </div>
     </div>
     <div class="text-muted small mt-2">
-        💡 提示: 部分浏览器可能限制 iframe 加载外部内容，如无法显示可点击
-        <a href="https://cybermap.kaspersky.com/cn" target="_blank" rel="noopener">此处打开原网站</a>
+        💡 数据基于本网站 IP 请求统计，地理位置由 ip-api.com 提供，5分钟缓存
     </div>
 </div>
 </div>
