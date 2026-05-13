@@ -1,0 +1,7 @@
+{
+  "name": "Hello World Plugin",
+  "version": "1.0.0",
+  "description": "一个示例插件，展示插件系统的基本功能",
+  "author": "School_Web",
+  "license": "MIT"
+}
