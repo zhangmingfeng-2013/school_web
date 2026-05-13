@@ -1,34 +1,34 @@
 {% extends "base.html" %}
-{% block title %}登录 - 多合一工具箱 Web 版{% endblock %}
+{% block title %}{{ _('login_title') }} - {{ _('app_title') }}{% endblock %}
 {% block content %}
 <div class="auth-card">
     <div class="card">
         <div class="card-body p-4">
-            <h3 class="text-center mb-4">🔐 登录系统</h3>
+            <h3 class="text-center mb-4">🔐 {{ _('login_title') }}</h3>
             <form method="POST" action="{{ url_for('login') }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <div class="mb-3">
-                    <label class="form-label">用户名</label>
-                    <input type="text" name="username" class="form-control form-control-lg" placeholder="请输入用户名" required>
+                    <label class="form-label">{{ _('login_username') }}</label>
+                    <input type="text" name="username" class="form-control form-control-lg" placeholder="{{ _('login_placeholder_user') }}" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">密码</label>
-                    <input type="password" name="password" class="form-control form-control-lg" placeholder="请输入密码" required>
+                    <label class="form-label">{{ _('login_password') }}</label>
+                    <input type="password" name="password" class="form-control form-control-lg" placeholder="{{ _('login_placeholder_pass') }}" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">验证码</label>
+                    <label class="form-label">{{ _('login_captcha') }}</label>
                     <div class="input-group">
-                        <input type="text" name="captcha" class="form-control" placeholder="输入验证码" maxlength="4" required style="font-size:18px;letter-spacing:4px">
-                        <img src="/api/captcha" onclick="this.src='/api/captcha?'+Date.now()" title="点击刷新" alt="验证码" style="height:46px;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer">
+                        <input type="text" name="captcha" class="form-control" placeholder="{{ _('login_placeholder_captcha') }}" maxlength="4" required style="font-size:18px;letter-spacing:4px">
+                        <img src="/api/captcha" onclick="this.src='/api/captcha?'+Date.now()" title="{{ _('login_captcha_click') }}" alt="{{ _('login_captcha') }}" style="height:46px;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-lg w-100 mb-2">登 录</button>
+                <button type="submit" class="btn btn-primary btn-lg w-100 mb-2">{{ _('login_submit') }}</button>
             </form>
             <div class="text-center mt-3">
-                <a href="{{ url_for('register') }}" class="text-decoration-none">还没有账号？去注册 →</a>
+                <a href="{{ url_for('register') }}" class="text-decoration-none">{{ _('login_register_link') }}</a>
             </div>
             <div class="text-center mt-2">
-                <a href="{{ url_for('forgot_password') }}" class="text-decoration-none text-muted small">忘记密码？</a>
+                <a href="{{ url_for('forgot_password') }}" class="text-decoration-none text-muted small">{{ _('login_forgot') }}</a>
             </div>
         </div>
     </div>
