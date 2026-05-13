@@ -1,27 +1,47 @@
 {% extends "base.html" %}
 {% block title %}{{ _('system_title') }} - {{ _('app_title') }}{% endblock %}
 {% block content %}
-<h2 class="mb-4">📊 {{ _('system_title') }} <small class="text-muted fs-6">1s 刷新</small></h2>
+<h2 class="mb-4">📊 {{ _('system_title') }} <small class="text-muted fs-6">实时监控</small></h2>
 
-<div class="row g-4">
-    <div class="col-lg-7" id="sysInfo">
-        <div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">{{ _('common_loading') }}</p></div>
+<ul class="nav nav-tabs mb-3" id="monitorTabs">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-server">🖥️ 服务器</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-users">👥 在线用户</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-client">💻 本机信息</button></li>
+</ul>
+
+<div class="tab-content">
+    <!-- 服务器 -->
+    <div class="tab-pane fade show active" id="tab-server">
+        <div class="row g-4">
+            <div class="col-lg-7" id="sysInfo">
+                <div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">{{ _('common_loading') }}</p></div>
+            </div>
+            <div class="col-lg-5" id="userInfo">
+                <div class="text-center py-5"><div class="spinner-border text-success"></div><p class="mt-2">{{ _('common_loading') }}</p></div>
+            </div>
+        </div>
     </div>
-    <div class="col-lg-5" id="userInfo">
-        <div class="text-center py-5"><div class="spinner-border text-success"></div><p class="mt-2">{{ _('common_loading') }}</p></div>
+
+    <!-- 在线用户 -->
+    <div class="tab-pane fade" id="tab-users">
+        <div id="userDetail"></div>
+    </div>
+
+    <!-- 本机信息 -->
+    <div class="tab-pane fade" id="tab-client">
+        <div id="clientInfo"></div>
     </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
+// ====== 服务器系统信息 ======
 async function fetchSysInfo() {
     try {
         const resp = await fetch('/api/system_info', {credentials:'include'});
         const d = await resp.json();
         if (d.error) { document.getElementById('sysInfo').innerHTML = `<div class="alert alert-danger">${d.error}</div>`; return; }
         let html = '';
-
-        // 基本信息
         html += '<div class="card mb-3"><div class="card-body">';
         html += `<h6>💻 基本信息</h6>`;
         html += `<span class="badge bg-dark me-1">${d.system}</span>`;
@@ -29,8 +49,6 @@ async function fetchSysInfo() {
         html += `<span class="badge bg-info">${d.uptime}</span>`;
         html += `<p class="mt-2 mb-0 small text-muted">Host: ${d.hostname} | ${d.version}</p>`;
         html += '</div></div>';
-
-        // CPU + 内存 一行
         html += '<div class="row g-3 mb-3"><div class="col-md-6"><div class="card h-100"><div class="card-body">';
         html += `<h6>🖥️ CPU <span class="badge bg-${d.cpu.percent>80?'danger':d.cpu.percent>50?'warning':'success'}">${d.cpu.percent}%</span></h6>`;
         html += `<div class="progress mb-1" style="height:6px"><div class="progress-bar bg-${d.cpu.percent>80?'danger':d.cpu.percent>50?'warning':'success'}" style="width:${d.cpu.percent}%"></div></div>`;
@@ -40,8 +58,6 @@ async function fetchSysInfo() {
         html += `<div class="progress mb-1" style="height:6px"><div class="progress-bar bg-${d.memory.percent>80?'danger':d.memory.percent>50?'warning':'success'}" style="width:${d.memory.percent}%"></div></div>`;
         html += `<small class="text-muted">${d.memory.used_gb} / ${d.memory.total_gb} GB</small>`;
         html += '</div></div></div></div>';
-
-        // 磁盘
         html += '<div class="card mb-3"><div class="card-body"><h6>💾 磁盘</h6>';
         for (const disk of d.disk) {
             const c = disk.percent>80?'danger':disk.percent>50?'warning':'success';
@@ -49,76 +65,206 @@ async function fetchSysInfo() {
             html += `<div class="progress" style="height:4px"><div class="progress-bar bg-${c}" style="width:${disk.percent}%"></div></div></div>`;
         }
         html += '</div></div>';
-
-        // 网络
         html += '<div class="card"><div class="card-body"><h6>📡 网络</h6>';
         html += `<div class="row text-center"><div class="col-3"><small class="text-muted">↑ 发送</small><div class="fw-bold">${d.network.sent_mb} MB</div></div>`;
         html += `<div class="col-3"><small class="text-muted">↓ 接收</small><div class="fw-bold">${d.network.recv_mb} MB</div></div>`;
         html += `<div class="col-3"><small class="text-muted">↑ 包</small><div>${(d.network.sent_packets/1000).toFixed(1)}K</div></div>`;
         html += `<div class="col-3"><small class="text-muted">↓ 包</small><div>${(d.network.recv_packets/1000).toFixed(1)}K</div></div></div>`;
         html += '</div></div>';
-
         document.getElementById('sysInfo').innerHTML = html;
-    } catch(e) {
-        document.getElementById('sysInfo').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
-    }
+    } catch(e) { document.getElementById('sysInfo').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`; }
 }
 
+// ====== 在线用户 ======
+let userData = null;
 async function fetchUserInfo() {
     try {
         const resp = await fetch('/api/system_users', {credentials:'include'});
         const d = await resp.json();
         if (!d.ok) { document.getElementById('userInfo').innerHTML = `<div class="alert alert-danger">${d.error||'Error'}</div>`; return; }
-
+        userData = d;
         let html = '';
-
-        // 总览卡片
         html += '<div class="card mb-3"><div class="card-body">';
         html += '<h6>👥 用户总览</h6>';
         html += '<div class="row text-center g-2">';
-        html += `<div class="col-4"><div class="p-2 rounded" style="background:#f0f4ff;"><div class="fs-4 fw-bold text-primary">${d.online_ips}</div><small>在线IP</small></div></div>`;
-        html += `<div class="col-4"><div class="p-2 rounded" style="background:#f0fff4;"><div class="fs-4 fw-bold text-success">${d.total_registered}</div><small>注册用户</small></div></div>`;
-        html += `<div class="col-4"><div class="p-2 rounded" style="background:#fff8f0;"><div class="fs-4 fw-bold text-danger">${d.total_blocked}</div><small>已封禁</small></div></div>`;
+        html += `<div class="col-3"><div class="p-2 rounded" style="background:#f0f4ff;"><div class="fs-4 fw-bold text-primary">${d.online_ips}</div><small>在线</small></div></div>`;
+        html += `<div class="col-3"><div class="p-2 rounded" style="background:#f0fff4;"><div class="fs-4 fw-bold text-success">${d.total_registered}</div><small>注册</small></div></div>`;
+        html += `<div class="col-3"><div class="p-2 rounded" style="background:#fff8f0;"><div class="fs-4 fw-bold text-danger">${d.total_blocked}</div><small>封禁</small></div></div>`;
+        html += `<div class="col-3"><div class="p-2 rounded" style="background:#fef3f0;"><div class="fs-4 fw-bold text-warning">${d.total_whitelisted}</div><small>白名单</small></div></div>`;
         html += '</div>';
         html += `<div class="row text-center g-2 mt-2">`;
-        html += `<div class="col-4"><small class="text-muted">管理员</small><div class="fw-bold text-danger">${d.admin_count}</div></div>`;
-        html += `<div class="col-4"><small class="text-muted">VIP</small><div class="fw-bold text-warning">${d.vip_count}</div></div>`;
-        html += `<div class="col-4"><small class="text-muted">白名单</small><div class="fw-bold text-success">${d.total_whitelisted}</div></div>`;
-        html += '</div>';
-        html += '</div></div>';
-
-        // 在线 IP 列表
+        html += `<div class="col-4"><small>管理员</small><div class="fw-bold text-danger">${d.admin_count}</div></div>`;
+        html += `<div class="col-4"><small>VIP</small><div class="fw-bold text-warning">${d.vip_count}</div></div>`;
+        html += `<div class="col-4"><small>在线</small><div class="fw-bold text-primary">${d.online_ips}</div></div>`;
+        html += '</div></div></div>';
         html += '<div class="card"><div class="card-body">';
-        html += `<h6>🌐 活跃IP (${d.online_users.length})</h6>`;
+        html += `<h6>🌐 活跃IP</h6>`;
         if (d.online_users.length === 0) {
-            html += '<p class="text-muted text-center py-2">暂无活跃连接</p>';
+            html += '<p class="text-muted text-center py-2">暂无</p>';
         } else {
-            html += '<div style="max-height:400px;overflow-y:auto;">';
+            html += '<div style="max-height:320px;overflow-y:auto;">';
             for (const u of d.online_users) {
                 let badge = '';
-                if (u.blocked) badge = '<span class="badge bg-danger ms-1">封禁</span>';
-                if (u.manual_blocked) badge += '<span class="badge bg-dark ms-1">手动封</span>';
-                if (u.whitelisted) badge += '<span class="badge bg-success ms-1">白名单</span>';
-                const idleColor = u.idle_seconds > 120 ? 'text-warning' : u.idle_seconds > 60 ? 'text-muted' : 'text-success';
-                html += `<div class="d-flex justify-content-between align-items-center py-1 border-bottom">`;
-                html += `<div><code style="font-size:12px;">${u.ip}</code>${badge}</div>`;
-                html += `<div><small class="${idleColor}">⏱ ${u.idle_str}</small> <small class="text-muted ms-1">${u.requests}req</small></div>`;
-                html += '</div>';
+                if (u.blocked) badge += '<span class="badge bg-danger ms-1">封</span>';
+                if (u.manual_blocked) badge += '<span class="badge bg-dark ms-1">手动</span>';
+                const c = u.idle_seconds>120?'text-warning':u.idle_seconds>60?'text-muted':'text-success';
+                html += `<div class="d-flex justify-content-between py-1 border-bottom"><div><code style="font-size:12px">${u.ip}</code>${badge}</div><div><small class="${c}">${u.idle_str}</small><small class="ms-1">${u.requests}次</small></div></div>`;
             }
             html += '</div>';
         }
         html += '</div></div>';
-
         document.getElementById('userInfo').innerHTML = html;
-    } catch(e) {
-        document.getElementById('userInfo').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+        renderUserDetail(d);
+    } catch(e) { document.getElementById('userInfo').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`; }
+}
+
+function renderUserDetail(d) {
+    let h = '<div class="card"><div class="card-body">';
+    h += `<h6>🌐 在线IP详情 (${d.online_users.length})</h6>`;
+    if (!d.online_users.length) { h += '<p class="text-muted text-center py-3">暂无活跃连接</p>'; }
+    else {
+        h += '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>IP</th><th>空闲</th><th>请求数</th><th>状态</th></tr></thead><tbody>';
+        for (const u of d.online_users) {
+            let st = u.whitelisted ? '<span class="badge bg-success">白名单</span>' : '';
+            if (u.blocked) st += '<span class="badge bg-danger ms-1">已封禁</span>';
+            if (u.manual_blocked) st += '<span class="badge bg-dark ms-1">手动封</span>';
+            if (!st) st = '<span class="badge bg-light text-dark">正常</span>';
+            h += `<tr><td><code>${u.ip}</code></td><td>${u.idle_str}</td><td>${u.requests}</td><td>${st}</td></tr>`;
+        }
+        h += '</tbody></table></div>';
+    }
+    h += '</div></div>';
+    document.getElementById('userDetail').innerHTML = h;
+}
+
+// ====== 本机客户端信息 ======
+function collectClientInfo() {
+    const n = navigator;
+    const s = screen;
+    const d = document;
+
+    // 解析 UA
+    let browser = 'Unknown', osName = 'Unknown';
+    const ua = n.userAgent;
+    if (ua.includes('Firefox/')) browser = 'Firefox ' + ua.match(/Firefox\/(\d+)/)[1];
+    else if (ua.includes('Chrome/') && !ua.includes('Edg/')) browser = 'Chrome ' + ua.match(/Chrome\/(\d+)/)[1];
+    else if (ua.includes('Safari/') && !ua.includes('Chrome/')) browser = 'Safari ' + ua.match(/Version\/(\d+)/)[1];
+    else if (ua.includes('Edg/')) browser = 'Edge ' + ua.match(/Edg\/(\d+)/)[1];
+    if (ua.includes('Mac OS X')) { const m = ua.match(/Mac OS X (\d+[._]\d+)/); osName = m ? 'macOS ' + m[1].replace('_','.') : 'macOS'; }
+    else if (ua.includes('Windows NT')) { const m = ua.match(/Windows NT (\d+\.\d+)/); const v = {'10.0':'10/11','6.3':'8.1','6.1':'7'}; osName = 'Windows ' + (v[m[1]]||m[1]); }
+    else if (ua.includes('Linux')) osName = 'Linux';
+    else if (ua.includes('Android')) osName = 'Android';
+    else if (ua.includes('iPhone')||ua.includes('iPad')) osName = 'iOS';
+
+    const perf = performance || {};
+    const mem = n.deviceMemory || 'N/A';
+    const cores = n.hardwareConcurrency || 'N/A';
+    const conn = n.connection || n.mozConnection || n.webkitConnection || {};
+
+    const info = {
+        browser, osName,
+        platform: n.platform || 'N/A',
+        language: n.language || 'N/A',
+        userAgent: ua,
+        screen: `${s.width}×${s.height} @ ${s.colorDepth}bit`,
+        availScreen: `${s.availWidth}×${s.availHeight}`,
+        pixelRatio: window.devicePixelRatio || 1,
+        cores, memory: mem + (mem!=='N/A'?' GB':''),
+        online: n.onLine,
+        cookieEnabled: n.cookieEnabled,
+        doNotTrack: n.doNotTrack || 'N/A',
+        touchPoints: n.maxTouchPoints || 0,
+        hardwareConcurrency: cores,
+        connectionType: conn.effectiveType || 'N/A',
+        downlink: conn.downlink || 'N/A',
+        rtt: conn.rtt || 'N/A',
+        saveData: conn.saveData || false,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        pageVisible: !d.hidden,
+        referrer: d.referrer || 'N/A',
+    };
+
+    // 电池
+    if (n.getBattery) {
+        n.getBattery().then(b => {
+            info.batteryLevel = b.level ? Math.round(b.level*100)+'%' : 'N/A';
+            info.batteryCharging = b.charging;
+            info.batteryTime = b.chargingTime === Infinity ? '∞' : b.dischargingTime === Infinity ? '∞' : 'N/A';
+            renderClientInfo(info);
+        }).catch(() => renderClientInfo(info));
+    } else {
+        renderClientInfo(info);
     }
 }
 
+let startTime = Date.now();
+function renderClientInfo(info) {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const m = Math.floor(elapsed/60), s = elapsed%60;
+    const elapsedStr = `${m}m${s}s`;
+
+    let h = '<div class="row g-3">';
+    // 基本信息
+    h += '<div class="col-md-6"><div class="card h-100"><div class="card-body">';
+    h += '<h6>🖥️ 操作系统 & 浏览器</h6>';
+    h += `<div class="mb-1"><strong>系统:</strong> ${info.osName}</div>`;
+    h += `<div class="mb-1"><strong>浏览器:</strong> ${info.browser}</div>`;
+    h += `<div class="mb-1"><strong>平台:</strong> ${info.platform}</div>`;
+    h += `<div class="mb-1"><strong>语言:</strong> ${info.language}</div>`;
+    h += `<div class="mb-1"><strong>时区:</strong> ${info.timezone}</div>`;
+    h += `<div><strong>在线状态:</strong> <span class="badge bg-${info.online?'success':'danger'}">${info.online?'在线':'离线'}</span></div>`;
+    h += '</div></div></div>';
+
+    // 硬件信息
+    h += '<div class="col-md-6"><div class="card h-100"><div class="card-body">';
+    h += '<h6>⚙️ 硬件</h6>';
+    h += `<div class="mb-1"><strong>CPU 核心:</strong> ${info.cores}</div>`;
+    h += `<div class="mb-1"><strong>内存:</strong> ${info.memory}</div>`;
+    h += `<div class="mb-1"><strong>屏幕:</strong> ${info.screen}</div>`;
+    h += `<div class="mb-1"><strong>可用区域:</strong> ${info.availScreen}</div>`;
+    h += `<div class="mb-1"><strong>像素比:</strong> ${info.pixelRatio}x</div>`;
+    h += `<div class="mb-1"><strong>触摸点:</strong> ${info.touchPoints}</div>`;
+    if (info.batteryLevel) {
+        h += `<div><strong>电池:</strong> ${info.batteryLevel} ${info.batteryCharging?'⚡充电中':''}</div>`;
+    }
+    h += '</div></div></div>';
+
+    // 网络信息
+    h += '<div class="col-md-6"><div class="card h-100"><div class="card-body">';
+    h += '<h6>🌐 网络连接</h6>';
+    h += `<div class="mb-1"><strong>网络类型:</strong> ${info.connectionType}</div>`;
+    h += `<div class="mb-1"><strong>下行带宽:</strong> ${info.downlink !== 'N/A' ? info.downlink+' Mbps' : 'N/A'}</div>`;
+    h += `<div class="mb-1"><strong>RTT:</strong> ${info.rtt !== 'N/A' ? info.rtt+' ms' : 'N/A'}</div>`;
+    h += `<div class="mb-1"><strong>省流量:</strong> ${info.saveData ? '✅ 开启' : '❌ 关闭'}</div>`;
+    h += `<div class="mb-1"><strong>Cookie:</strong> ${info.cookieEnabled ? '✅' : '❌'}</div>`;
+    h += `<div><strong>DNT:</strong> ${info.doNotTrack}</div>`;
+    h += '</div></div></div>';
+
+    // 会话
+    h += '<div class="col-md-6"><div class="card h-100"><div class="card-body">';
+    h += '<h6>📊 页面会话</h6>';
+    h += `<div class="mb-1"><strong>页面可见:</strong> <span class="badge bg-${info.pageVisible?'success':'warning'}">${info.pageVisible?'可见':'隐藏'}</span></div>`;
+    h += `<div class="mb-1"><strong>停留时间:</strong> ${elapsedStr}</div>`;
+    h += `<div class="mb-1"><strong>Referrer:</strong> <small class="text-muted">${info.referrer}</small></div>`;
+    h += `<div><strong>User Agent:</strong> <small class="text-muted" style="word-break:break-all;">${info.userAgent}</small></div>`;
+    h += '</div></div></div>';
+
+    h += '</div>';
+    document.getElementById('clientInfo').innerHTML = h;
+}
+
+// ====== 页面可见性追踪 ======
+document.addEventListener('visibilitychange', () => collectClientInfo());
+
+// ====== 初始化 ======
 fetchSysInfo(); fetchUserInfo();
+collectClientInfo();
 setInterval(fetchSysInfo, 1255);
 setInterval(fetchUserInfo, 3255);
+setInterval(collectClientInfo, 5000);
+
+// 标签切换时加载对应数据
+document.querySelector('[data-bs-target="#tab-users"]')?.addEventListener('shown.bs.tab', () => { if(userData) renderUserDetail(userData); });
+document.querySelector('[data-bs-target="#tab-client"]')?.addEventListener('shown.bs.tab', () => collectClientInfo());
 </script>
 {% endblock %}
-
-<!-- 没什么要追加的，直接替换文件 -->
