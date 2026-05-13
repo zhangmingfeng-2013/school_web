@@ -1642,6 +1642,73 @@ def api_system_info():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/system_users")
+@login_required
+@admin_required
+def api_system_users():
+    """返回当前在线用户及活动信息"""
+    now = time.time()
+    users = []
+    with session_lock:
+        for ip, last_active in list(ip_last_active.items()):
+            idle = int(now - last_active)
+            # 只展示 10 分钟内有活动的
+            if idle > 600:
+                continue
+            blocked = ip in ip_blocked and now < ip_blocked[ip]
+            whitelisted = ip in ip_whitelist
+            manual_blocked = ip in ip_manual_blocked and now < ip_manual_blocked[ip]
+
+            # 速率统计
+            reqs = 0
+            with rate_lock:
+                if ip in ip_requests:
+                    reqs = len(ip_requests[ip])
+
+            users.append({
+                "ip": ip,
+                "idle_seconds": idle,
+                "idle_str": f"{idle}s" if idle < 60 else f"{idle//60}m{idle%60}s",
+                "requests": reqs,
+                "blocked": blocked,
+                "whitelisted": whitelisted,
+                "manual_blocked": manual_blocked,
+            })
+
+    # 数据库中的注册用户统计
+    total_users = 0
+    admin_count = 0
+    vip_count = 0
+    try:
+        conn = get_db()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM users")
+            row = cursor.fetchone()
+            total_users = row[0] if row else 0
+            cursor.execute("SELECT COUNT(*) FROM users WHERE permission='administrator'")
+            row = cursor.fetchone()
+            admin_count = row[0] if row else 0
+            cursor.execute("SELECT COUNT(*) FROM users WHERE permission='vip'")
+            row = cursor.fetchone()
+            vip_count = row[0] if row else 0
+            cursor.close()
+            conn.close()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "online_ips": len(users),
+        "online_users": users,
+        "total_registered": total_users,
+        "admin_count": admin_count,
+        "vip_count": vip_count,
+        "total_blocked": len([u for u in users if u["blocked"]]),
+        "total_whitelisted": len([u for u in users if u["whitelisted"]]),
+    })
+
+
 # ---------- 路由：网络工具 ----------
 @app.route("/network_tools", methods=["GET", "POST"])
 @login_required
