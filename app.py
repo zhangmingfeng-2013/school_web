@@ -684,6 +684,8 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if "username" not in session:
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "error": "请先登录"}), 401
             flash("请先登录", "warning")
             return redirect(url_for("login"))
         return f(*args, **kwargs)
@@ -729,6 +731,8 @@ def vip_required(f):
     def decorated(*args, **kwargs):
         perm = session.get("permission", "guest")
         if perm not in ("administrator", "vip"):
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "error": "需要 VIP 或管理员权限"}), 403
             flash("需要 VIP 或管理员权限", "danger")
             return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
