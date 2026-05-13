@@ -1,96 +1,327 @@
 {% extends "base.html" %}
-{% block title %}网络工具 - 多合一工具箱 Web 版{% endblock %}
+{% block title %}{{ _('network_title') }} - {{ _('app_title') }}{% endblock %}
 {% block content %}
-<h2 class="mb-4">🌐 网络工具</h2>
+<h2 class="mb-4">🌐 {{ _('network_title') }}</h2>
 
-<ul class="nav nav-tabs mb-4" id="netTabs">
-    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ipQuery">IP查询</button></li>
-    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#portScan">端口扫描</button></li>
+<ul class="nav nav-tabs mb-4" id="netTabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ipQuery">{{ _('network_ip_query') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#portScan">{{ _('network_port_scan') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ping">{{ _('network_ping') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#traceroute">{{ _('network_traceroute') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#whois">{{ _('network_whois') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#dns">{{ _('network_dns') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#headers">{{ _('network_http_headers') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ssl">{{ _('network_ssl_check') }}</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#subnet">{{ _('network_subnet_calc') }}</button></li>
 </ul>
 
 <div class="tab-content">
     <!-- IP查询 -->
     <div class="tab-pane fade show active" id="ipQuery">
-        <div class="card">
-            <div class="card-body">
-                <form method="POST">
-                    <input type="hidden" name="action" value="ip_query">
-                    <div class="input-group mb-3">
-                        <input type="text" name="target" class="form-control form-control-lg" placeholder="输入域名或IP地址" required>
-                        <button type="submit" class="btn btn-primary btn-lg">🔍 查询</button>
-                    </div>
-                </form>
-                {% if result and result_type == 'ip_query' %}
-                <div class="mt-3">
-                    {% if result.error %}
-                    <div class="alert alert-danger">{{ result.error }}</div>
-                    {% else %}
-                    <table class="table table-bordered">
-                        <tr><th style="width:120px">输入</th><td>{{ result.hostname }}</td></tr>
-                        <tr><th>解析IP</th><td><strong>{{ result.ip }}</strong></td></tr>
-                        <tr><th>本机IP</th><td>{{ result.local_ip }}</td></tr>
-                        <tr><th>公网IP</th><td>{{ result.public_ip or '查询失败' }}</td></tr>
-                    </table>
-                    {% endif %}
+        <div class="card"><div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="ip_query">
+                <div class="input-group mb-3">
+                    <input type="text" name="target" class="form-control form-control-lg" placeholder="输入域名或IP地址" required>
+                    <button type="submit" class="btn btn-primary btn-lg">🔍 {{ _('common_search') }}</button>
                 </div>
+            </form>
+            {% if result and result_type == 'ip_query' %}
+            <div class="mt-3">
+                {% if result.error %}<div class="alert alert-danger">{{ result.error }}</div>
+                {% else %}
+                <table class="table table-bordered">
+                    <tr><th style="width:120px">输入</th><td>{{ result.hostname }}</td></tr>
+                    <tr><th>{{ _('network_resolved_ip') }}</th><td><strong>{{ result.ip }}</strong></td></tr>
+                    <tr><th>{{ _('network_local_ip') }}</th><td>{{ result.local_ip }}</td></tr>
+                    <tr><th>{{ _('network_public_ip') }}</th><td>{{ result.public_ip or '查询失败' }}</td></tr>
+                </table>
                 {% endif %}
             </div>
-        </div>
+            {% endif %}
+        </div></div>
     </div>
 
     <!-- 端口扫描 -->
     <div class="tab-pane fade" id="portScan">
-        <div class="card">
-            <div class="card-body">
-                <form method="POST">
-                    <input type="hidden" name="action" value="port_scan">
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label">目标主机</label>
-                            <input type="text" name="target" class="form-control" placeholder="IP地址" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">起始端口</label>
-                            <input type="number" name="start_port" class="form-control" value="1" min="1" max="65535">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">结束端口</label>
-                            <input type="number" name="end_port" class="form-control" value="1024" min="1" max="65535">
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-warning w-100">🚀 扫描</button>
-                        </div>
+        <div class="card"><div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="port_scan">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">{{ _('network_target') }}</label>
+                        <input type="text" name="target" class="form-control" placeholder="IP地址" required>
                     </div>
-                    <small class="text-muted">⚠️ 超过200个端口的范围将只扫描前200个常见端口</small>
-                </form>
-                {% if result and result_type == 'port_scan' %}
-                <div class="mt-3">
-                    {% if result.error %}
-                    <div class="alert alert-danger">{{ result.error }}</div>
-                    {% else %}
-                    <div class="card bg-dark text-light">
-                        <div class="card-body">
-                            <h6>📋 扫描结果</h6>
-                            <hr class="border-secondary">
-                            <p>目标: {{ result.target }} | 范围: {{ result.start }}-{{ result.end }}</p>
-                            <p>🖥️ 操作系统检测: <strong>{{ result.os_detected }}</strong></p>
-                            {% if result.open_ports %}
-                            <p>🔓 开放端口 ({{ result.open_ports|length }})：</p>
-                            <div class="d-flex flex-wrap gap-1">
-                            {% for port in result.open_ports %}
-                                <span class="badge bg-success fs-6">{{ port }}</span>
-                            {% endfor %}
-                            </div>
-                            {% else %}
-                            <p>未发现开放端口</p>
-                            {% endif %}
-                        </div>
+                    <div class="col-md-3">
+                        <label class="form-label">{{ _('network_start_port') }}</label>
+                        <input type="number" name="start_port" class="form-control" value="1" min="1" max="65535">
                     </div>
-                    {% endif %}
+                    <div class="col-md-3">
+                        <label class="form-label">{{ _('network_end_port') }}</label>
+                        <input type="number" name="end_port" class="form-control" value="1024" min="1" max="65535">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-warning w-100">🚀 {{ _('network_scan_btn') }}</button>
+                    </div>
                 </div>
+                <small class="text-muted">⚠️ 超过200个端口的范围将只扫描前200个常见端口</small>
+            </form>
+            {% if result and result_type == 'port_scan' %}
+            <div class="mt-3">
+                {% if result.error %}<div class="alert alert-danger">{{ result.error }}</div>
+                {% else %}
+                <div class="card bg-dark text-light"><div class="card-body">
+                    <h6>📋 扫描结果</h6><hr class="border-secondary">
+                    <p>目标: {{ result.target }} | 范围: {{ result.start }}-{{ result.end }}</p>
+                    <p>🖥️ {{ _('network_os_detected') }}: <strong>{{ result.os_detected }}</strong></p>
+                    {% if result.open_ports %}
+                    <p>🔓 {{ _('network_open_ports') }} ({{ result.open_ports|length }})：</p>
+                    <div class="d-flex flex-wrap gap-1">
+                    {% for port in result.open_ports %}<span class="badge bg-success fs-6">{{ port }}</span>{% endfor %}
+                    </div>
+                    {% else %}<p>未发现开放端口</p>{% endif %}
+                </div></div>
                 {% endif %}
             </div>
-        </div>
+            {% endif %}
+        </div></div>
+    </div>
+
+    <!-- Ping -->
+    <div class="tab-pane fade" id="ping">
+        <div class="card"><div class="card-body">
+            <form onsubmit="return toolSubmit(event, 'ping')">
+                <div class="input-group mb-3">
+                    <input type="text" id="pingTarget" class="form-control form-control-lg" placeholder="输入域名或IP地址" required>
+                    <input type="number" id="pingCount" class="form-control" value="4" min="1" max="20" style="max-width:80px;" title="次数">
+                    <button type="submit" class="btn btn-primary btn-lg">📡 Ping</button>
+                </div>
+            </form>
+            <pre id="pingOutput" class="bg-dark text-light p-3 rounded" style="display:none;max-height:400px;overflow-y:auto;font-size:13px;"></pre>
+        </div></div>
+    </div>
+
+    <!-- Traceroute -->
+    <div class="tab-pane fade" id="traceroute">
+        <div class="card"><div class="card-body">
+            <form onsubmit="return toolSubmit(event, 'traceroute')">
+                <div class="input-group mb-3">
+                    <input type="text" id="traceTarget" class="form-control form-control-lg" placeholder="输入域名或IP地址" required>
+                    <button type="submit" class="btn btn-info btn-lg">🗺️ Traceroute</button>
+                </div>
+            </form>
+            <pre id="traceOutput" class="bg-dark text-light p-3 rounded" style="display:none;max-height:400px;overflow-y:auto;font-size:13px;"></pre>
+        </div></div>
+    </div>
+
+    <!-- Whois -->
+    <div class="tab-pane fade" id="whois">
+        <div class="card"><div class="card-body">
+            <form onsubmit="return toolSubmit(event, 'whois')">
+                <div class="input-group mb-3">
+                    <input type="text" id="whoisTarget" class="form-control form-control-lg" placeholder="输入域名 (如 example.com)" required>
+                    <button type="submit" class="btn btn-dark btn-lg">🔎 Whois</button>
+                </div>
+            </form>
+            <pre id="whoisOutput" class="bg-dark text-light p-3 rounded" style="display:none;max-height:400px;overflow-y:auto;font-size:13px;"></pre>
+        </div></div>
+    </div>
+
+    <!-- DNS -->
+    <div class="tab-pane fade" id="dns">
+        <div class="card"><div class="card-body">
+            <form onsubmit="return toolSubmit(event, 'dns')">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-7">
+                        <input type="text" id="dnsTarget" class="form-control form-control-lg" placeholder="输入域名" required>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="dnsType" class="form-select form-select-lg">
+                            <option value="A">A (IPv4)</option>
+                            <option value="AAAA">AAAA (IPv6)</option>
+                            <option value="MX">MX (邮件)</option>
+                            <option value="NS">NS (域名服务器)</option>
+                            <option value="TXT">TXT</option>
+                            <option value="CNAME">CNAME</option>
+                            <option value="SOA">SOA</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-lg w-100">🔍</button>
+                    </div>
+                </div>
+            </form>
+            <div id="dnsOutput" style="display:none;"></div>
+        </div></div>
+    </div>
+
+    <!-- HTTP Headers -->
+    <div class="tab-pane fade" id="headers">
+        <div class="card"><div class="card-body">
+            <form onsubmit="return toolSubmit(event, 'http_headers')">
+                <div class="input-group mb-3">
+                    <input type="text" id="headersTarget" class="form-control form-control-lg" placeholder="输入URL (如 https://example.com)" required>
+                    <button type="submit" class="btn btn-success btn-lg">📋 {{ _('common_search') }}</button>
+                </div>
+            </form>
+            <div id="headersOutput" style="display:none;"></div>
+        </div></div>
+    </div>
+
+    <!-- SSL Check -->
+    <div class="tab-pane fade" id="ssl">
+        <div class="card"><div class="card-body">
+            <form onsubmit="return toolSubmit(event, 'ssl')">
+                <div class="input-group mb-3">
+                    <input type="text" id="sslTarget" class="form-control form-control-lg" placeholder="输入域名 (如 example.com)" required>
+                    <button type="submit" class="btn btn-warning btn-lg">🔒 {{ _('common_search') }}</button>
+                </div>
+            </form>
+            <div id="sslOutput" style="display:none;"></div>
+        </div></div>
+    </div>
+
+    <!-- Subnet Calculator -->
+    <div class="tab-pane fade" id="subnet">
+        <div class="card"><div class="card-body">
+            <form onsubmit="return toolSubmit(event, 'subnet')">
+                <div class="input-group mb-3">
+                    <input type="text" id="subnetCidr" class="form-control form-control-lg" placeholder="CIDR 格式 (如 192.168.1.0/24)" required>
+                    <button type="submit" class="btn btn-secondary btn-lg">🧮 计算</button>
+                </div>
+            </form>
+            <div id="subnetOutput" style="display:none;"></div>
+        </div></div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toolSubmit(e, tool) {
+    e.preventDefault();
+    let body = {};
+    const outputDiv = document.getElementById(tool + 'Output');
+    const isPre = outputDiv && outputDiv.tagName === 'PRE';
+
+    if (tool === 'ping') {
+        body.target = document.getElementById('pingTarget').value.trim();
+        body.count = parseInt(document.getElementById('pingCount').value) || 4;
+    } else if (tool === 'traceroute') {
+        body.target = document.getElementById('traceTarget').value.trim();
+    } else if (tool === 'whois') {
+        body.target = document.getElementById('whoisTarget').value.trim();
+    } else if (tool === 'dns') {
+        body.target = document.getElementById('dnsTarget').value.trim();
+        body.type = document.getElementById('dnsType').value;
+    } else if (tool === 'http_headers') {
+        body.target = document.getElementById('headersTarget').value.trim();
+    } else if (tool === 'ssl') {
+        body.target = document.getElementById('sslTarget').value.trim();
+    } else if (tool === 'subnet') {
+        body.cidr = document.getElementById('subnetCidr').value.trim();
+    }
+
+    if (outputDiv) {
+        outputDiv.style.display = 'block';
+        outputDiv.innerHTML = '<div class="text-center text-muted py-3">⏳ ' + '{{ _('common_loading') }}' + '</div>';
+    }
+
+    fetch('/api/network/' + tool, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        credentials: 'include'
+    }).then(r => r.json()).then(d => {
+        if (!outputDiv) return;
+
+        if (d.ok) {
+            if (isPre) {
+                // 纯文本输出
+                outputDiv.textContent = d.output || JSON.stringify(d, null, 2);
+                outputDiv.style.display = 'block';
+            } else {
+                // HTML 渲染
+                outputDiv.style.display = 'block';
+                outputDiv.innerHTML = renderToolResult(tool, d);
+            }
+        } else {
+            if (isPre) {
+                outputDiv.textContent = 'Error: ' + (d.error || 'Unknown');
+                outputDiv.className = 'bg-dark text-danger p-3 rounded';
+            } else {
+                outputDiv.innerHTML = '<div class="alert alert-danger">' + (d.error || 'Error') + '</div>';
+            }
+        }
+    }).catch(err => {
+        if (outputDiv) {
+            outputDiv.style.display = 'block';
+            outputDiv.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';
+        }
+    });
+    return false;
+}
+
+function renderToolResult(tool, d) {
+    if (tool === 'dns') {
+        let h = '<div class="card mt-2"><div class="card-body">';
+        h += '<h6>DNS 记录: <code>' + d.type + '</code></h6>';
+        if (d.results && d.results.length > 0) {
+            h += '<ul class="list-group">';
+            d.results.forEach(r => { h += '<li class="list-group-item"><code>' + r + '</code></li>'; });
+            h += '</ul>';
+        } else {
+            h += '<p class="text-muted">无记录</p>';
+        }
+        h += '</div></div>';
+        return h;
+    }
+    if (tool === 'http_headers') {
+        let h = '<div class="card mt-2"><div class="card-body">';
+        h += '<p><strong>URL:</strong> ' + d.url + '</p>';
+        h += '<p><strong>状态:</strong> <span class="badge bg-' + (d.status_code < 400 ? 'success' : 'danger') + '">' + d.status_code + ' ' + d.reason + '</span></p>';
+        h += '<p><strong>重定向次数:</strong> ' + d.redirect_count + '</p>';
+        h += '<h6>响应头</h6><table class="table table-sm table-bordered">';
+        for (let [k, v] of Object.entries(d.headers)) {
+            h += '<tr><td style="width:200px;"><code>' + k + '</code></td><td style="word-break:break-all;">' + v + '</td></tr>';
+        }
+        h += '</table></div></div>';
+        return h;
+    }
+    if (tool === 'ssl') {
+        let h = '<div class="card mt-2"><div class="card-body">';
+        h += '<h6>证书信息</h6>';
+        h += '<p><strong>主题:</strong> ' + (d.subject ? d.subject.commonName || JSON.stringify(d.subject) : 'N/A') + '</p>';
+        h += '<p><strong>颁发者:</strong> ' + (d.issuer ? d.issuer.commonName || d.issuer.organizationName || JSON.stringify(d.issuer) : 'N/A') + '</p>';
+        h += '<p><strong>有效期:</strong> ' + d.not_before + ' ~ ' + d.not_after + '</p>';
+        let daysClass = d.days_left > 30 ? 'success' : d.days_left > 7 ? 'warning' : 'danger';
+        h += '<p><strong>剩余天数:</strong> <span class="badge bg-' + daysClass + '">' + (d.days_left !== null ? d.days_left + ' 天' : 'N/A') + '</span></p>';
+        if (d.san && d.san.length > 0) {
+            h += '<p><strong>SAN:</strong> ' + d.san.slice(0, 10).join(', ') + (d.san.length > 10 ? '...' : '') + '</p>';
+        }
+        h += '</div></div>';
+        return h;
+    }
+    if (tool === 'subnet') {
+        let h = '<div class="card mt-2"><div class="card-body">';
+        h += '<table class="table table-bordered table-sm">';
+        const rows = [
+            ['网络地址', d.network_address],
+            ['广播地址', d.broadcast_address],
+            ['子网掩码', d.netmask],
+            ['反掩码', d.hostmask],
+            ['总地址数', d.num_addresses],
+            ['可用主机数', d.usable_hosts],
+            ['第一个可用IP', d.first_host],
+            ['最后一个可用IP', d.last_host],
+            ['私有地址', d.is_private ? '✅ 是' : '❌ 否'],
+            ['公网地址', d.is_global ? '✅ 是' : '❌ 否'],
+        ];
+        rows.forEach(([k, v]) => { h += '<tr><td style="width:180px;"><strong>' + k + '</strong></td><td><code>' + v + '</code></td></tr>'; });
+        h += '</table></div></div>';
+        return h;
+    }
+    return '<pre>' + JSON.stringify(d, null, 2) + '</pre>';
+}
+</script>
 {% endblock %}

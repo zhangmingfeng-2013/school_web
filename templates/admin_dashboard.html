@@ -98,6 +98,7 @@
     <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-ip">🌐 IP 请求监控</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-server">💻 服务器状态</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-cybermap">🌍 网络请求地图</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-plugins">🧩 插件管理</a></li>
 </ul>
 
 <!-- Tab: IP 请求监控 -->
@@ -362,6 +363,21 @@
         💡 数据基于本网站 IP 请求统计 · 地理位置由 ip-api.com 提供 · 5分钟缓存
     </div>
 </div>
+</div>
+
+<!-- Tab: 插件管理 -->
+<div class="tab-pane fade" id="tab-plugins">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold">🧩 插件管理</span>
+            <button class="btn btn-sm btn-outline-primary" onclick="reloadAllPlugins()">🔄 重新加载全部</button>
+        </div>
+        <div class="card-body">
+            <div id="pluginList">
+                <div class="text-center text-muted py-3">加载中...</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}
@@ -1062,4 +1078,59 @@ document.head.appendChild(pulseStyle);
         </div>
     </div>
 </div>
+
+<script>
+// ====== 插件管理 ======
+async function loadPlugins() {
+    try {
+        const resp = await fetch('/api/admin/plugins', { credentials: 'include' });
+        const data = await resp.json();
+        const container = document.getElementById('pluginList');
+        if (!data.ok || !data.plugins) {
+            container.innerHTML = '<div class="alert alert-danger">加载失败</div>';
+            return;
+        }
+        if (data.plugins.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-4">暂无插件</div>';
+            return;
+        }
+        container.innerHTML = data.plugins.map(p => `
+            <div class="d-flex align-items-center p-3 border-bottom">
+                <div class="flex-grow-1">
+                    <strong>${p.title}</strong>
+                    <span class="badge bg-secondary ms-2">v${p.version}</span>
+                    ${p.loaded ? '<span class="badge bg-success ms-1">已加载</span>' : '<span class="badge bg-warning ms-1">未加载</span>'}
+                    <div class="text-muted small">${p.description || ''}</div>
+                    <div class="text-muted" style="font-size:11px;">作者: ${p.author || '-'} | 目录: <code>${p.name}</code></div>
+                </div>
+                <div>
+                    ${p.loaded
+                        ? `<button class="btn btn-sm btn-outline-danger" onclick="togglePlugin('${p.name}','unload')">卸载</button>`
+                        : `<button class="btn btn-sm btn-outline-success" onclick="togglePlugin('${p.name}','load')">加载</button>`}
+                </div>
+            </div>
+        `).join('');
+    } catch(e) {
+        document.getElementById('pluginList').innerHTML = '<div class="alert alert-danger">请求失败: ' + e.message + '</div>';
+    }
+}
+
+async function togglePlugin(name, action) {
+    const resp = await fetch(`/api/admin/plugins/${name}/${action}`, { method: 'POST', credentials: 'include' });
+    const data = await resp.json();
+    alert(data.message || (data.ok ? '操作成功' : '操作失败'));
+    loadPlugins();
+}
+
+async function reloadAllPlugins() {
+    if (!confirm('确定要重新加载所有插件吗？')) return;
+    const resp = await fetch('/api/admin/plugins/reload', { method: 'POST', credentials: 'include' });
+    const data = await resp.json();
+    alert('已重新加载 ' + (data.results ? data.results.length : 0) + ' 个插件');
+    loadPlugins();
+}
+
+// 切换插件标签时自动加载
+document.querySelector('a[href="#tab-plugins"]')?.addEventListener('shown.bs.tab', loadPlugins);
+</script>
 {% endblock %}

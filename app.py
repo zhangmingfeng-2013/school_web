@@ -25,6 +25,8 @@ from flask import (
     session, flash, jsonify, send_from_directory, send_file, abort, Response
 )
 from flask_cors import CORS
+from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
+import plugins
 
 app = Flask(__name__)
 
@@ -47,6 +49,62 @@ app.config.update(
     SESSION_COOKIE_SECURE=False,  # 开发环境 HTTP，生产应设为 True
     PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=2),
 )
+
+# ---------- 多语言支持 ----------
+@app.before_request
+def set_language():
+    """检测并设置当前请求的语言"""
+    lang = detect_lang(request, session)
+    session["lang"] = lang
+    # 如果用户已登录，持久化语言偏好到数据库
+    if session.get("username"):
+        _save_user_lang(session["username"], lang)
+
+
+@app.context_processor
+def inject_i18n():
+    """将翻译函数和语言信息注入所有模板"""
+    lang = session.get("lang", "zh-CN")
+    perm = session.get("permission", "guest")
+    return {
+        "_": lambda key, default=None: _(key, lang, default),
+        "lang": lang,
+        "supported_langs": get_supported_langs(),
+        "lang_name": lambda l: _(f"_name", l) if l in SUPPORTED_LANGS else l,
+        "plugin_menu_items": plugins.get_menu_items(perm),
+        "plugin_footer_blocks": plugins.get_template_blocks("footer"),
+        "plugin_head_blocks": plugins.get_template_blocks("head"),
+    }
+
+
+def _save_user_lang(username, lang):
+    """持久化用户语言偏好到数据库"""
+    try:
+        conn = get_db()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE user_profiles SET lang=%s WHERE username=%s",
+                (lang, username)
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+    except Exception:
+        pass
+
+
+@app.route("/api/lang/switch", methods=["POST"])
+def api_lang_switch():
+    """切换语言"""
+    data = request.get_json() or {}
+    lang = data.get("lang", "").strip()
+    if lang in SUPPORTED_LANGS:
+        session["lang"] = lang
+        resp = jsonify({"ok": True, "lang": lang})
+        resp.set_cookie("lang", lang, max_age=365*24*3600, httponly=False)
+        return resp
+    return jsonify({"ok": False, "error": "Unsupported language"}), 400
 
 # ---------- 数据库初始化 ----------
 _db_init_done = False
@@ -82,6 +140,7 @@ def _init_reset_table():
                 phone VARCHAR(20),
                 email VARCHAR(100),
                 birthday DATE,
+                lang VARCHAR(10) DEFAULT 'zh-CN',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         """)
@@ -96,6 +155,12 @@ def _init_reset_table():
                 INDEX idx_activity_time (created_at)
             )
         """)
+        # 确保 lang 列存在（兼容旧表）
+        try:
+            cursor.execute("ALTER TABLE user_profiles ADD COLUMN lang VARCHAR(10) DEFAULT 'zh-CN'")
+            conn.commit()
+        except Exception:
+            pass
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS admin_requests (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -105,6 +170,21 @@ def _init_reset_table():
                 requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 reviewed_by VARCHAR(50),
                 reviewed_at TIMESTAMP NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS calendar_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                description TEXT,
+                event_date DATE NOT NULL,
+                event_time TIME,
+                category VARCHAR(20) DEFAULT 'other',
+                color VARCHAR(7) DEFAULT '#3b82f6',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_cal_user (username),
+                INDEX idx_cal_date (event_date)
             )
         """)
         conn.commit()
@@ -339,8 +419,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/")
 
 @app.before_request
 def check_global_captcha():
@@ -1673,6 +1753,249 @@ def network_tools():
                            result_type=result_type,
                            username=session["username"],
                            permission=session["permission"])
+
+
+# ---------- 网络工具 API ----------
+@app.route("/api/network/ping", methods=["POST"])
+@login_required
+@vip_required
+def api_network_ping():
+    """Ping 检测"""
+    data = request.get_json() or {}
+    target = (data.get("target") or "").strip()
+    count = min(int(data.get("count") or 4), 20)
+    if not target:
+        return jsonify({"ok": False, "error": "Target required"}), 400
+    # 安全过滤：只允许域名和IP
+    if not re.match(r'^[a-zA-Z0-9.\-:]+$', target):
+        return jsonify({"ok": False, "error": "Invalid target"}), 400
+    import subprocess, shlex
+    cmd = ["ping", "-c", str(count), target]
+    if platform.system() == "Windows":
+        cmd = ["ping", "-n", str(count), target]
+    try:
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=15, text=True)
+        return jsonify({"ok": True, "output": output})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "Ping timeout"}), 408
+    except subprocess.CalledProcessError as e:
+        return jsonify({"ok": True, "output": e.output or "Ping failed"})
+    except FileNotFoundError:
+        return jsonify({"ok": False, "error": "ping command not available"}), 500
+
+
+@app.route("/api/network/traceroute", methods=["POST"])
+@login_required
+@vip_required
+def api_network_traceroute():
+    """路由追踪"""
+    data = request.get_json() or {}
+    target = (data.get("target") or "").strip()
+    if not target:
+        return jsonify({"ok": False, "error": "Target required"}), 400
+    if not re.match(r'^[a-zA-Z0-9.\-:]+$', target):
+        return jsonify({"ok": False, "error": "Invalid target"}), 400
+    import subprocess
+    cmd = ["traceroute", "-m", "15", "-w", "3", target]
+    if platform.system() == "Windows":
+        cmd = ["tracert", "-h", "15", "-w", "3000", target]
+    try:
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=30, text=True)
+        return jsonify({"ok": True, "output": output})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "Traceroute timeout"}), 408
+    except subprocess.CalledProcessError as e:
+        return jsonify({"ok": True, "output": e.output or "Traceroute failed"})
+    except FileNotFoundError:
+        return jsonify({"ok": False, "error": "traceroute command not available"}), 500
+
+
+@app.route("/api/network/whois", methods=["POST"])
+@login_required
+@vip_required
+def api_network_whois():
+    """Whois 查询"""
+    data = request.get_json() or {}
+    target = (data.get("target") or "").strip()
+    if not target:
+        return jsonify({"ok": False, "error": "Target required"}), 400
+    if not re.match(r'^[a-zA-Z0-9.\-]+$', target):
+        return jsonify({"ok": False, "error": "Invalid target"}), 400
+    import subprocess
+    try:
+        output = subprocess.check_output(["whois", target], stderr=subprocess.STDOUT, timeout=10, text=True)
+        return jsonify({"ok": True, "output": output})
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "Whois timeout"}), 408
+    except subprocess.CalledProcessError as e:
+        return jsonify({"ok": True, "output": e.output or "Whois query failed"})
+    except FileNotFoundError:
+        return jsonify({"ok": False, "error": "whois command not available"}), 500
+
+
+@app.route("/api/network/dns", methods=["POST"])
+@login_required
+@vip_required
+def api_network_dns():
+    """DNS 记录解析"""
+    data = request.get_json() or {}
+    target = (data.get("target") or "").strip()
+    record_type = (data.get("type") or "A").upper()
+    if not target:
+        return jsonify({"ok": False, "error": "Target required"}), 400
+    if not re.match(r'^[a-zA-Z0-9.\-]+$', target):
+        return jsonify({"ok": False, "error": "Invalid target"}), 400
+    valid_types = {"A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"}
+    if record_type not in valid_types:
+        return jsonify({"ok": False, "error": f"Invalid record type. Valid: {', '.join(sorted(valid_types))}"}), 400
+    results = []
+    try:
+        if record_type == "A":
+            import socket as sock
+            try:
+                results = [sock.gethostbyname(target)]
+            except sock.gaierror as ge:
+                return jsonify({"ok": False, "error": str(ge)}), 400
+        elif record_type == "AAAA":
+            try:
+                info = socket.getaddrinfo(target, None, socket.AF_INET6)
+                results = list(set(addr[4][0] for addr in info))
+            except socket.gaierror:
+                results = []
+        elif record_type in ("MX", "NS", "TXT", "CNAME", "SOA"):
+            # 使用 dig 或 nslookup
+            import subprocess
+            if record_type == "MX":
+                cmd = ["dig", "+short", "MX", target]
+            elif record_type == "NS":
+                cmd = ["dig", "+short", "NS", target]
+            elif record_type == "TXT":
+                cmd = ["dig", "+short", "TXT", target]
+            elif record_type == "CNAME":
+                cmd = ["dig", "+short", "CNAME", target]
+            else:
+                cmd = ["dig", "+short", "SOA", target]
+            try:
+                out = subprocess.check_output(cmd, timeout=5, text=True).strip()
+                results = [line.strip('"') for line in out.split("\n") if line.strip()] if out else []
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+                # 回退到 nslookup
+                try:
+                    nscmd = ["nslookup", "-type=" + record_type.lower(), target]
+                    out = subprocess.check_output(nscmd, timeout=5, text=True)
+                    results = [out]
+                except Exception:
+                    return jsonify({"ok": False, "error": "DNS tools (dig/nslookup) not available"}), 500
+        return jsonify({"ok": True, "results": results, "type": record_type})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/network/http_headers", methods=["POST"])
+@login_required
+@vip_required
+def api_network_http_headers():
+    """HTTP 响应头检查"""
+    data = request.get_json() or {}
+    target = (data.get("target") or "").strip()
+    if not target:
+        return jsonify({"ok": False, "error": "Target required"}), 400
+    if not target.startswith(("http://", "https://")):
+        target = "https://" + target
+    try:
+        resp = requests.get(target, timeout=10, allow_redirects=True, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) SchoolWeb/1.0"
+        })
+        headers = dict(resp.headers)
+        return jsonify({
+            "ok": True,
+            "url": resp.url,
+            "status_code": resp.status_code,
+            "reason": resp.reason,
+            "headers": headers,
+            "redirect_count": len(resp.history),
+        })
+    except requests.RequestException as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/network/ssl", methods=["POST"])
+@login_required
+@vip_required
+def api_network_ssl():
+    """SSL 证书检查"""
+    data = request.get_json() or {}
+    target = (data.get("target") or "").strip()
+    if not target:
+        return jsonify({"ok": False, "error": "Target required"}), 400
+    if not re.match(r'^[a-zA-Z0-9.\-]+$', target):
+        return jsonify({"ok": False, "error": "Invalid target"}), 400
+    import ssl
+    from datetime import datetime
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((target, 443), timeout=10) as sock:
+            with ctx.wrap_socket(sock, server_hostname=target) as ssock:
+                cert = ssock.getpeercert()
+        subject = dict(x[0] for x in cert.get("subject", []))
+        issuer = dict(x[0] for x in cert.get("issuer", []))
+        not_before = cert.get("notBefore", "")
+        not_after = cert.get("notAfter", "")
+        # 解析日期
+        from datetime import datetime
+        try:
+            nb = datetime.strptime(not_before, "%b %d %H:%M:%S %Y %Z")
+        except Exception:
+            nb = None
+        try:
+            na = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+        except Exception:
+            na = None
+        days_left = None
+        if na:
+            days_left = (na - datetime.now()).days
+        return jsonify({
+            "ok": True,
+            "subject": subject,
+            "issuer": issuer,
+            "not_before": not_before,
+            "not_after": not_after,
+            "days_left": days_left,
+            "san": cert.get("subjectAltName", []),
+            "version": cert.get("version"),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/network/subnet", methods=["POST"])
+@login_required
+@vip_required
+def api_network_subnet():
+    """子网计算器"""
+    import ipaddress
+    data = request.get_json() or {}
+    cidr = (data.get("cidr") or "").strip()
+    if not cidr:
+        return jsonify({"ok": False, "error": "CIDR notation required (e.g. 192.168.1.0/24)"}), 400
+    try:
+        net = ipaddress.ip_network(cidr, strict=False)
+        hosts = list(net.hosts())
+        return jsonify({
+            "ok": True,
+            "network_address": str(net.network_address),
+            "broadcast_address": str(net.broadcast_address),
+            "netmask": str(net.netmask),
+            "hostmask": str(net.hostmask),
+            "num_addresses": net.num_addresses,
+            "usable_hosts": max(0, net.num_addresses - 2),
+            "first_host": str(hosts[0]) if hosts else "N/A",
+            "last_host": str(hosts[-1]) if hosts else "N/A",
+            "is_private": net.is_private,
+            "is_global": net.is_global,
+        })
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
 
 
 # ---------- 路由：数据库 ----------
@@ -3817,21 +4140,282 @@ def api_admin_ip_locations():
     return jsonify(result)
 
 
+# ---------- 日历 ----------
+@app.route("/calendar")
+@login_required
+def calendar_view():
+    """日历页面"""
+    return render_template("calendar.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+@app.route("/api/calendar/events")
+@login_required
+def api_calendar_events():
+    """获取日历事件（支持按月查询）"""
+    year = request.args.get("year", "", type=int)
+    month = request.args.get("month", "", type=int)
+    username = session["username"]
+    is_admin = session.get("permission") == "administrator"
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "Database unavailable"}), 500
+
+    try:
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        if year and month:
+            # 查当月的第一天到最后一天
+            import calendar as cal_mod
+            last_day = cal_mod.monthrange(year, month)[1]
+            date_from = f"{year}-{month:02d}-01"
+            date_to = f"{year}-{month:02d}-{last_day:02d}"
+            if is_admin:
+                cursor.execute(
+                    "SELECT * FROM calendar_events WHERE event_date BETWEEN %s AND %s ORDER BY event_date, event_time",
+                    (date_from, date_to)
+                )
+            else:
+                cursor.execute(
+                    "SELECT * FROM calendar_events WHERE event_date BETWEEN %s AND %s AND username=%s ORDER BY event_date, event_time",
+                    (date_from, date_to, username)
+                )
+        else:
+            if is_admin:
+                cursor.execute("SELECT * FROM calendar_events ORDER BY event_date DESC, event_time DESC LIMIT 100")
+            else:
+                cursor.execute("SELECT * FROM calendar_events WHERE username=%s ORDER BY event_date DESC, event_time DESC LIMIT 100", (username,))
+
+        rows = cursor.fetchall()
+        events = []
+        for r in rows:
+            events.append({
+                "id": r["id"],
+                "title": r["title"],
+                "description": r.get("description", ""),
+                "event_date": r["event_date"].isoformat() if hasattr(r["event_date"], "isoformat") else str(r["event_date"]),
+                "event_time": str(r["event_time"]) if r.get("event_time") else None,
+                "category": r.get("category", "other"),
+                "color": r.get("color", "#3b82f6"),
+                "username": r["username"],
+            })
+        return jsonify({"ok": True, "events": events})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.route("/api/calendar/events", methods=["POST"])
+@login_required
+def api_calendar_add_event():
+    """添加日历事件"""
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    event_date = (data.get("event_date") or "").strip()
+    event_time = (data.get("event_time") or "").strip() or None
+    category = (data.get("category") or "other").strip()
+    color = (data.get("color") or "#3b82f6").strip()
+
+    if not title or not event_date:
+        return jsonify({"ok": False, "error": "Title and date are required"}), 400
+
+    # 分类颜色映射
+    cat_colors = {
+        "class": "#3b82f6",
+        "exam": "#ef4444",
+        "activity": "#10b981",
+        "personal": "#f59e0b",
+        "holiday": "#8b5cf6",
+        "other": "#6b7280",
+    }
+    if not data.get("color"):
+        color = cat_colors.get(category, "#3b82f6")
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "Database unavailable"}), 500
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO calendar_events (username, title, description, event_date, event_time, category, color) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            (session["username"], title, description, event_date, event_time, category, color)
+        )
+        conn.commit()
+        eid = cursor.lastrowid
+        record_activity(session["username"], "添加日历事件")
+        return jsonify({"ok": True, "id": eid})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.route("/api/calendar/events/<int:eid>", methods=["PUT"])
+@login_required
+def api_calendar_update_event(eid):
+    """更新日历事件"""
+    data = request.get_json() or {}
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "Database unavailable"}), 500
+
+    try:
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        # 权限检查
+        is_admin = session.get("permission") == "administrator"
+        if is_admin:
+            cursor.execute("SELECT * FROM calendar_events WHERE id=%s", (eid,))
+        else:
+            cursor.execute("SELECT * FROM calendar_events WHERE id=%s AND username=%s", (eid, session["username"]))
+        ev = cursor.fetchone()
+        if not ev:
+            return jsonify({"ok": False, "error": "Event not found or access denied"}), 404
+
+        updates = []
+        params = []
+        for field in ["title", "description", "event_date", "event_time", "category", "color"]:
+            if field in data:
+                updates.append(f"{field}=%s")
+                params.append(data[field])
+        if updates:
+            params.append(eid)
+            cursor.execute(f"UPDATE calendar_events SET {', '.join(updates)} WHERE id=%s", params)
+            conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.route("/api/calendar/events/<int:eid>", methods=["DELETE"])
+@login_required
+def api_calendar_delete_event(eid):
+    """删除日历事件"""
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "Database unavailable"}), 500
+
+    try:
+        cursor = conn.cursor()
+        is_admin = session.get("permission") == "administrator"
+        if is_admin:
+            cursor.execute("DELETE FROM calendar_events WHERE id=%s", (eid,))
+        else:
+            cursor.execute("DELETE FROM calendar_events WHERE id=%s AND username=%s", (eid, session["username"]))
+        conn.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ---------- 插件系统 ----------
+@app.route("/plugin/<plugin_name>")
+@app.route("/plugin/<plugin_name>/<path:subpath>")
+def plugin_route(plugin_name, subpath=None):
+    """插件路由分发"""
+    loaded = plugins.get_loaded_plugins()
+    if plugin_name not in loaded:
+        abort(404)
+    plugin_info = plugins._loaded_plugins.get(plugin_name)
+    if plugin_info and plugin_info.get("module") and hasattr(plugin_info["module"], "route"):
+        return plugin_info["module"].route(subpath or "")
+    return f"<h2>Plugin: {plugin_name}</h2><p>This plugin has no route handler.</p>"
+
+
+# ---------- 插件管理 API（管理员） ----------
+@app.route("/api/admin/plugins")
+@login_required
+@admin_required
+def api_admin_plugins_list():
+    """获取所有插件列表"""
+    all_plugins = plugins.discover_plugins()
+    result = []
+    for p in all_plugins:
+        m = p["manifest"]
+        result.append({
+            "name": p["name"],
+            "title": m.get("name", p["name"]),
+            "version": m.get("version", "0.1"),
+            "description": m.get("description", ""),
+            "author": m.get("author", ""),
+            "loaded": p["loaded"],
+            "has_init": p["has_init"],
+        })
+    return jsonify({"ok": True, "plugins": result})
+
+
+@app.route("/api/admin/plugins/<name>/load", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_plugins_load(name):
+    """加载插件"""
+    success, msg = plugins.load_plugin(name)
+    return jsonify({"ok": success, "message": msg})
+
+
+@app.route("/api/admin/plugins/<name>/unload", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_plugins_unload(name):
+    """卸载插件"""
+    success, msg = plugins.unload_plugin(name)
+    return jsonify({"ok": success, "message": msg})
+
+
+@app.route("/api/admin/plugins/reload", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_plugins_reload_all():
+    """重新加载所有插件"""
+    loaded = list(plugins._loaded_plugins.keys())
+    for name in loaded:
+        plugins.unload_plugin(name)
+    plugins._create_sample_plugin()
+    discovered = plugins.discover_plugins()
+    results = []
+    for p in discovered:
+        ok, msg = plugins.load_plugin(p["name"])
+        results.append({"name": p["name"], "ok": ok, "message": msg})
+    return jsonify({"ok": True, "results": results})
+
+
+def _init_plugins():
+    """启动时自动加载所有插件"""
+    discovered = plugins.discover_plugins()
+    for p in discovered:
+        try:
+            plugins.load_plugin(p["name"])
+        except Exception:
+            pass
+
+
 # ---------- 启动 ----------
 if __name__ == "__main__":
     print("=" * 50)
     print("  多合一工具箱 Web 版启动")
-    print(f"  本地访问: http://127.0.0.1:5800")
+    print(f"  本地访问: http://127.0.0.1:4444")
     # 自动检测本机局域网 IP
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         lan_ip = s.getsockname()[0]
         s.close()
-        print(f"  局域网访问: http://{lan_ip}:5800")
+        print(f"  局域网访问: http://{lan_ip}:4444")
     except Exception:
         print(f"  局域网访问: http://192.168.3.160:5800")
     print(f"  调试模式: {'开启' if os.environ.get('FLASK_DEBUG') else '关闭'}")
     print("=" * 50)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
-    app.run(host="0.0.0.0", port=5800, debug=debug_mode, threaded=True)
+    _init_plugins()
+    app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
