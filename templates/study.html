@@ -7,10 +7,11 @@
 .study-tabs .nav-link.active { color:#04c; border-bottom:3px solid #04c; background:transparent; }
 .pomodoro-ring-bg { stroke:var(--border-light); }
 [data-bs-theme="dark"] .pomodoro-ring-bg { stroke:#3a3a3e; }
-.pomodoro-circle { width:200px; height:200px; border-radius:50%; border:8px solid #d1d5db; display:flex; align-items:center; justify-content:center; position:relative; margin:0 auto; }
-[data-bs-theme="dark"] .pomodoro-circle { border-color:#3a3a3e; }
-.pomodoro-circle.active { border-color:#04c; }
-.pomodoro-circle.break { border-color:#10b981; }
+.pomodoro-circle.active .pomodoro-ring-bg,
+.pomodoro-circle.break .pomodoro-ring-bg { stroke:#cbd5e1; }
+[data-bs-theme="dark"] .pomodoro-circle.active .pomodoro-ring-bg,
+[data-bs-theme="dark"] .pomodoro-circle.break .pomodoro-ring-bg { stroke:#4a4a50; }
+.pomodoro-circle { width:200px; height:200px; display:flex; align-items:center; justify-content:center; position:relative; margin:0 auto; }
 .pomodoro-time { font-size:3rem; font-weight:700; font-variant-numeric:tabular-nums; color:var(--text-body); }
 .pomodoro-label { font-size:.85rem; color:var(--text-muted); margin-top:6px; }
 .todo-done { text-decoration:line-through; opacity:.5; }
