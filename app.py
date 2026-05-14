@@ -69,7 +69,7 @@ def inject_i18n():
     lang = session.get("lang", "zh-CN")
     perm = session.get("permission", "guest")
     return {
-        "_": lambda key, default=None: _(key, lang, default),
+        "_": lambda key, default=None, **kw: _(key, lang, default, **kw),
         "lang": lang,
         "supported_langs": get_supported_langs(),
         "lang_name": lambda l: _(f"_name", l) if l in SUPPORTED_LANGS else l,

@@ -47,17 +47,24 @@ def get_supported_langs():
     return SUPPORTED_LANGS
 
 
-def _(key, lang=None, default=None):
+def _(key, lang=None, default=None, **kwargs):
     """
     Translate a key to the given language.
     Usage: _("nav_dashboard", lang="en") or _("nav_dashboard")
+    With interpolation: _("backup_keep_n", n=5)
     """
     if lang is None:
         lang = DEFAULT_LANG
     if lang not in _translations:
         _load_translations(lang)
     trans = _translations.get(lang, {})
-    return trans.get(key, default if default is not None else key)
+    val = trans.get(key, default if default is not None else key)
+    if kwargs:
+        try:
+            val = val.format(**kwargs)
+        except (KeyError, ValueError):
+            pass
+    return val
 
 
 def detect_lang(request, session):
