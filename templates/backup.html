@@ -48,9 +48,9 @@
     <div class="col-md-3">
         <div class="card backup-card bg-light">
             <div class="card-body text-center py-3">
-                <div class="fs-3 mb-1">📊</div>
-                <small class="text-muted">数据库</small>
-                <div class="fs-3 fw-bold" id="statDB">sample</div>
+                <div class="fs-3 mb-1">📂</div>
+                <small class="text-muted">备份内容</small>
+                <div class="fs-5 fw-bold" id="statContent" style="font-size:.8rem!important;">加载中...</div>
             </div>
         </div>
     </div>
@@ -91,12 +91,11 @@
                     <th style="width:160px;">文件名</th>
                     <th>创建时间</th>
                     <th>文件大小</th>
-                    <th>行数</th>
                     <th style="width:260px;">操作</th>
                 </tr>
             </thead>
             <tbody id="backupTableBody">
-                <tr><td colspan="5" class="text-center text-muted py-5">加载中...</td></tr>
+                <tr><td colspan="4" class="text-center text-muted py-5">加载中...</td></tr>
             </tbody>
         </table>
     </div>
@@ -193,7 +192,7 @@ async function refreshBackups() {
         document.getElementById('statLatest').textContent = backups.length > 0 ? backups[0].created : '暂无';
 
         if (backups.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-5">暂无备份文件</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-5">暂无备份文件</td></tr>';
             return;
         }
 
@@ -202,7 +201,6 @@ async function refreshBackups() {
                 <td><code class="file-size">${b.name}</code></td>
                 <td>${b.created}</td>
                 <td class="file-size">${formatSize(b.size)}</td>
-                <td>${b.lines.toLocaleString()}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-success me-1" onclick="showRestoreModal('${b.name}')" title="恢复">↩️ 恢复</button>
                     <button class="btn btn-sm btn-outline-info me-1" onclick="downloadBackup('${b.name}')" title="下载">⬇️ 下载</button>
@@ -417,6 +415,21 @@ async function showDiff(name) {
     }
 }
 
+// ====== 加载备份配置 ======
+async function loadBackupConfig() {
+    try {
+        const resp = await fetch('/api/backup/config', { credentials: 'include' });
+        const data = await resp.json();
+        if (data.includes) {
+            document.getElementById('statContent').textContent =
+                data.includes.slice(0, 4).join(', ') + (data.includes.length > 4 ? ' ...' : '');
+            document.getElementById('statContent').title = '备份内容: ' + data.includes.join(', ');
+        }
+    } catch(e) {
+        document.getElementById('statContent').textContent = '加载失败';
+    }
+}
+
 // ====== 工具函数 ======
 function formatSize(bytes) {
     if (bytes === 0) return '0 B';
@@ -437,6 +450,7 @@ function showError(msg) {
 }
 
 // ====== 启动 ======
+loadBackupConfig();
 refreshBackups();
 </script>
 {% endblock %}
