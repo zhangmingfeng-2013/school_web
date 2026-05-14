@@ -4390,6 +4390,344 @@ def api_calendar_delete_event(eid):
         conn.close()
 
 
+# ========== 💾 数据备份系统 ==========
+BACKUP_DIR = os.path.join(os.path.dirname(__file__), "backups")
+os.makedirs(BACKUP_DIR, exist_ok=True)
+
+@app.route("/backup")
+@login_required
+@admin_required
+def backup_page():
+    """备份管理页面"""
+    return render_template("backup.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+@app.route("/api/backup/list")
+@login_required
+@admin_required
+def api_backup_list():
+    """列出所有备份文件"""
+    backups = []
+    try:
+        for f in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            fpath = os.path.join(BACKUP_DIR, f)
+            if os.path.isfile(fpath) and f.endswith(".sql"):
+                stat = os.stat(fpath)
+                # 统计行数
+                try:
+                    with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                        line_count = sum(1 for _ in fh)
+                except:
+                    line_count = 0
+                created = datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                backups.append({
+                    "name": f,
+                    "size": stat.st_size,
+                    "created": created,
+                    "lines": line_count,
+                })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"backups": backups})
+
+
+@app.route("/api/backup/create", methods=["POST"])
+@login_required
+@admin_required
+def api_backup_create():
+    """创建新备份（mysqldump）"""
+    import subprocess
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"backup_{timestamp}.sql"
+    filepath = os.path.join(BACKUP_DIR, filename)
+
+    db = DB_CONFIG
+    try:
+        cmd = [
+            "mysqldump",
+            f"--host={db['host']}",
+            f"--user={db['user']}",
+            f"--password={db['password']}",
+            "--default-character-set=utf8mb4",
+            "--routines",
+            "--events",
+            "--triggers",
+            "--single-transaction",
+            "--set-charset",
+            "--skip-lock-tables",
+            db["database"]
+        ]
+        with open(filepath, "wb") as f:
+            result = subprocess.run(
+                cmd,
+                stdout=f,
+                stderr=subprocess.PIPE,
+                timeout=300,
+                check=True
+            )
+        size = os.path.getsize(filepath)
+        write_log("创建数据库备份", f"文件名: {filename}, 大小: {size/1024:.1f}KB, 操作者: {session['username']}")
+        record_activity(session["username"], "创建备份", 10)
+        return jsonify({
+            "ok": True,
+            "filename": filename,
+            "size": size,
+            "created": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+    except subprocess.TimeoutExpired:
+        # 清理超时文件
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        return jsonify({"ok": False, "error": "备份超时（>5分钟）"}), 500
+    except subprocess.CalledProcessError as e:
+        err = e.stderr.decode("utf-8", errors="ignore") if e.stderr else str(e)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        return jsonify({"ok": False, "error": f"mysqldump 失败: {err[:500]}"}), 500
+    except Exception as e:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/backup/download/<path:filename>")
+@login_required
+@admin_required
+def api_backup_download(filename):
+    """下载备份文件"""
+    # 安全校验：防止路径穿越
+    safe_name = os.path.basename(filename)
+    if not safe_name.endswith(".sql"):
+        return jsonify({"error": "无效的文件名"}), 400
+    filepath = os.path.join(BACKUP_DIR, safe_name)
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "备份文件不存在"}), 404
+    write_log("下载备份", f"文件名: {safe_name}, 操作者: {session['username']}")
+    return send_from_directory(BACKUP_DIR, safe_name, as_attachment=True, download_name=safe_name)
+
+
+@app.route("/api/backup/delete/<path:filename>", methods=["DELETE"])
+@login_required
+@admin_required
+def api_backup_delete(filename):
+    """删除单个备份文件"""
+    safe_name = os.path.basename(filename)
+    if not safe_name.endswith(".sql"):
+        return jsonify({"error": "无效的文件名"}), 400
+    filepath = os.path.join(BACKUP_DIR, safe_name)
+    if not os.path.isfile(filepath):
+        return jsonify({"error": "备份文件不存在"}), 404
+    try:
+        os.remove(filepath)
+        write_log("删除备份", f"文件名: {safe_name}, 操作者: {session['username']}")
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/backup/delete-all", methods=["DELETE"])
+@login_required
+@admin_required
+def api_backup_delete_all():
+    """删除所有备份文件"""
+    try:
+        count = 0
+        for f in os.listdir(BACKUP_DIR):
+            if f.endswith(".sql"):
+                os.remove(os.path.join(BACKUP_DIR, f))
+                count += 1
+        write_log("清空所有备份", f"删除 {count} 个文件, 操作者: {session['username']}")
+        return jsonify({"ok": True, "deleted": count})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/backup/prune", methods=["DELETE"])
+@login_required
+@admin_required
+def api_backup_prune():
+    """保留最近 N 个备份，删除旧的"""
+    keep = request.args.get("keep", 10, type=int)
+    if keep < 1:
+        return jsonify({"error": "保留数量至少为 1"}), 400
+    try:
+        files = sorted([
+            f for f in os.listdir(BACKUP_DIR)
+            if f.endswith(".sql") and os.path.isfile(os.path.join(BACKUP_DIR, f))
+        ], reverse=True)
+        to_delete = files[keep:]
+        for f in to_delete:
+            os.remove(os.path.join(BACKUP_DIR, f))
+        write_log("清理旧备份", f"保留 {keep} 个, 删除 {len(to_delete)} 个, 操作者: {session['username']}")
+        return jsonify({"ok": True, "deleted": len(to_delete), "kept": min(len(files), keep)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/backup/restore", methods=["POST"])
+@login_required
+@admin_required
+def api_backup_restore():
+    """从备份文件恢复数据库"""
+    import subprocess
+    data = request.get_json()
+    filename = (data or {}).get("filename", "")
+    safe_name = os.path.basename(filename)
+    if not safe_name.endswith(".sql"):
+        return jsonify({"ok": False, "error": "无效的文件名"}), 400
+    filepath = os.path.join(BACKUP_DIR, safe_name)
+    if not os.path.isfile(filepath):
+        return jsonify({"ok": False, "error": "备份文件不存在"}), 404
+
+    # 大小安全检查（>500MB 警告但不阻止）
+    fsize = os.path.getsize(filepath)
+    if fsize > 500 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "备份文件超过 500MB，请手动恢复"}), 400
+
+    db = DB_CONFIG
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            sql_content = f.read()
+
+        # 统计 SQL 中的表
+        table_pattern = re.compile(r"^-- Table structure for table `(.+?)`$", re.MULTILINE)
+        tables_backed = table_pattern.findall(sql_content)
+        table_restored = 0
+
+        # 使用 mysql 命令恢复
+        cmd = [
+            "mysql",
+            f"--host={db['host']}",
+            f"--user={db['user']}",
+            f"--password={db['password']}",
+            "--default-character-set=utf8mb4",
+            db["database"]
+        ]
+        with open(filepath, "rb") as f:
+            result = subprocess.run(
+                cmd,
+                stdin=f,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=600,
+                check=True
+            )
+
+        write_log("恢复数据库备份",
+                  f"文件名: {safe_name}, 大小: {fsize/1024:.1f}KB, 操作者: {session['username']}" )
+        return jsonify({
+            "ok": True,
+            "tables_restored": len(tables_backed),
+            "tables_list": tables_backed
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({"ok": False, "error": "恢复超时（>10分钟），数据库可能不完整"}), 500
+    except subprocess.CalledProcessError as e:
+        err = e.stderr.decode("utf-8", errors="ignore") if e.stderr else "未知错误"
+        return jsonify({"ok": False, "error": f"mysql 恢复失败: {err[:500]}"}), 500
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/backup/diff/<path:filename>")
+@login_required
+@admin_required
+def api_backup_diff(filename):
+    """对比当前数据库与备份文件的行数差异"""
+    safe_name = os.path.basename(filename)
+    if not safe_name.endswith(".sql"):
+        return jsonify({"ok": False, "error": "无效的文件名"}), 400
+    filepath = os.path.join(BACKUP_DIR, safe_name)
+    if not os.path.isfile(filepath):
+        return jsonify({"ok": False, "error": "备份文件不存在"}), 404
+
+    try:
+        conn = get_db()
+        if not conn:
+            return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+        cursor = conn.cursor()
+
+        # 获取当前数据库中所有表及行数
+        cursor.execute("SHOW TABLES")
+        all_tables = [r[0] for r in cursor.fetchall()]
+
+        current_counts = {}
+        for t in all_tables:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM `{t}`")
+                current_counts[t] = cursor.fetchone()[0]
+            except Exception:
+                current_counts[t] = -1
+
+        cursor.close()
+        conn.close()
+
+        # 解析备份 SQL 中的 INSERT 行数
+        backup_counts = {}
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"无法读取备份文件: {str(e)}"}), 500
+
+        # 解析备份中的 INSERT INTO `table` VALUES ...
+        insert_pattern = re.compile(
+            r"^INSERT\s+INTO\s+`(.+?)`\s+VALUES\s+(.+)$",
+            re.MULTILINE | re.IGNORECASE
+        )
+        backup_raw = {}
+        for match in insert_pattern.finditer(content):
+            tbl = match.group(1)
+            # 统计 VALUES 行中的记录数
+            values_block = match.group(2)
+            # 一行 VALUES 可能包含多条记录: (1,2),(3,4)
+            records = values_block.count("(")
+            backup_raw[tbl] = backup_raw.get(tbl, 0) + records
+
+        # 解析 CREATE TABLE 提取表名
+        create_pattern = re.compile(r"^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`(.+?)`", re.MULTILINE | re.IGNORECASE)
+        backup_tables = set()
+        for m in create_pattern.finditer(content):
+            backup_tables.add(m.group(1))
+        # 对于有 CREATE TABLE 但无 INSERT 的表，行数为 0
+        for t in backup_tables:
+            if t not in backup_raw:
+                backup_raw[t] = 0
+
+        diff_lines = []
+        adds = dels = changes = 0
+        all_keys = sorted(set(list(current_counts.keys()) + list(backup_raw.keys())))
+
+        for t in all_keys:
+            curr = current_counts.get(t, -1)
+            back = backup_raw.get(t, -1)
+            if t not in current_counts:
+                diff_lines.append(f"- 表 `{t}` 不存在于当前数据库（备份中有 {back} 行）")
+                dels += 1
+            elif t not in backup_raw:
+                diff_lines.append(f"+ 表 `{t}` 当前有 {curr} 行（备份中不存在此表）")
+                adds += 1
+            elif curr != back:
+                diff = curr - back
+                sign = "+" if diff > 0 else ""
+                diff_lines.append(f"~ 表 `{t}`: 当前 {curr} 行 vs 备份 {back} 行 ({sign}{diff})")
+                changes += 1
+            else:
+                diff_lines.append(f"  表 `{t}`: {curr} 行 ✓")
+
+        return jsonify({
+            "ok": True,
+            "diff": diff_lines,
+            "adds": adds,
+            "dels": dels,
+            "changes": changes,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ---------- 插件系统 ----------
 @app.route("/plugin/<plugin_name>")
 @app.route("/plugin/<plugin_name>/<path:subpath>")

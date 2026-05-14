@@ -213,6 +213,21 @@
     </div>
     {% endif %}
 
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('backup_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(0,123,255,.3)"><div class="card-body text-center">
+                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span style="font-size:2rem;">💾</span></div>
+                <h5>数据备份</h5>
+                <p class="text-muted small">创建和恢复 MySQL 数据库备份</p>
+            </div></div>
+        </a>
+    </div>
+    {% endif %}
+
+    {% if permission == 'administrator' %}
+    {% endif %}
+
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('profile') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
