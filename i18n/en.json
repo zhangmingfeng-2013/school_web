@@ -352,5 +352,7 @@
   "backup_load_failed": "Load failed",
   "backup_errors": "errors",
   "dashboard_feature_backup": "Data Backup",
-  "dashboard_feature_backup_desc": "Create and restore local project file backups"
+  "dashboard_feature_backup_desc": "Create and restore local project file backups",
+  "dashboard_feature_study": "📚 Study Tools",
+  "dashboard_feature_study_desc": "Pomodoro · Todo List · Flashcards"
 }

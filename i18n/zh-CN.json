@@ -352,5 +352,7 @@
   "backup_load_failed": "加载失败",
   "backup_errors": "个错误",
   "dashboard_feature_backup": "数据备份",
-  "dashboard_feature_backup_desc": "创建和恢复本地项目文件备份"
+  "dashboard_feature_backup_desc": "创建和恢复本地项目文件备份",
+  "dashboard_feature_study": "📚 学习工具",
+  "dashboard_feature_study_desc": "番茄钟 · 待办清单 · 抽认卡"
 }

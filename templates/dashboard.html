@@ -152,6 +152,16 @@
     {% endif %}
 
     <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('study_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(139,92,246,.3)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(139,92,246,.1)!important;"><span style="font-size:2rem;">📚</span></div>
+                <h5>{{ _('dashboard_feature_study') }}</h5>
+                <p class="text-muted small">{{ _('dashboard_feature_study_desc') }}</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('calculator') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
                 <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span style="font-size:2rem;">🧮</span></div>

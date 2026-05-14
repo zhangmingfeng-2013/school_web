@@ -1,0 +1,430 @@
+{% extends "base.html" %}
+{% block title %}📚 学习工具 - {{ _('app_title') }}{% endblock %}
+{% block content %}
+<style>
+.study-tabs .nav-link { font-weight:600; padding:12px 20px; border:none; color:var(--text-muted); background:transparent; }
+.study-tabs .nav-link.active { color:#04c; border-bottom:3px solid #04c; background:transparent; }
+.pomodoro-circle { width:200px; height:200px; border-radius:50%; border:8px solid #e8e8e8; display:flex; align-items:center; justify-content:center; position:relative; margin:0 auto; }
+.pomodoro-circle.active { border-color:#04c; }
+.pomodoro-circle.break { border-color:#10b981; }
+.pomodoro-time { font-size:3rem; font-weight:700; font-variant-numeric:tabular-nums; color:var(--text-body); }
+.pomodoro-label { font-size:.85rem; color:var(--text-muted); margin-top:6px; }
+.pomodoro-progress { position:absolute; top:-8px; left:-8px; width:calc(100% + 16px); height:calc(100% + 16px); border-radius:50%; }
+.todo-done { text-decoration:line-through; opacity:.5; }
+.flashcard { perspective:1000px; height:260px; cursor:pointer; }
+.flashcard-inner { position:relative; width:100%; height:100%; transition:transform .5s; transform-style:preserve-3d; }
+.flashcard.flipped .flashcard-inner { transform:rotateY(180deg); }
+.flashcard-front, .flashcard-back { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:12px; display:flex; align-items:center; justify-content:center; padding:20px; font-size:1.05rem; }
+.flashcard-front { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; text-align:center; }
+.flashcard-back { background:linear-gradient(135deg,#10b981,#059669); color:#fff; transform:rotateY(180deg); text-align:center; }
+.level-bar { height:4px; border-radius:2px; background:#e8e8e8; overflow:hidden; }
+.level-fill { height:100%; border-radius:2px; transition:width .3s; }
+.stat-badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:.75rem; font-weight:600; }
+</style>
+
+<h2 class="mb-1">📚 学习工具</h2>
+<p class="text-muted mb-3">番茄钟 · 待办清单 · 抽认卡</p>
+
+<ul class="nav study-tabs mb-3" id="studyTabs">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-pomodoro">🍅 番茄钟</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-todo">✅ 待办清单</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-flashcard">🃏 抽认卡</a></li>
+</ul>
+
+<!-- ====== Tab: 番茄钟 ====== -->
+<div class="tab-content">
+<div class="tab-pane fade show active" id="tab-pomodoro">
+    <div class="row">
+        <div class="col-md-5 text-center">
+            <div class="pomodoro-circle" id="pomoCircle">
+                <svg class="pomodoro-progress" viewBox="0 0 216 216">
+                    <circle cx="108" cy="108" r="100" fill="none" stroke="#e8e8e8" stroke-width="8"/>
+                    <circle cx="108" cy="108" r="100" fill="none" stroke="#04c" stroke-width="8"
+                            stroke-linecap="round" stroke-dasharray="628" stroke-dashoffset="0"
+                            id="pomoRing" style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1s linear;"/>
+                </svg>
+                <div>
+                    <div class="pomodoro-time" id="pomoTime">25:00</div>
+                    <div class="pomodoro-label" id="pomoLabel">准备开始</div>
+                </div>
+            </div>
+            <div class="mt-3 d-flex justify-content-center gap-2">
+                <button class="btn btn-primary" id="pomoStart" onclick="startPomodoro()">▶ 开始</button>
+                <button class="btn btn-outline-secondary" id="pomoPause" onclick="pausePomodoro()" disabled>⏸ 暂停</button>
+                <button class="btn btn-outline-danger" id="pomoReset" onclick="resetPomodoro()" disabled>↺ 重置</button>
+            </div>
+            <div class="mt-3 d-flex justify-content-center gap-3" role="group">
+                <button class="btn btn-sm btn-outline-info active" onclick="setPomoMode('work',25)">🍅 学习 25'</button>
+                <button class="btn btn-sm btn-outline-info" onclick="setPomoMode('work',45)">🔥 学习 45'</button>
+                <button class="btn btn-sm btn-outline-success" onclick="setPomoMode('break',5)">☕ 休息 5'</button>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card p-3">
+                <h6>📊 今日统计</h6>
+                <div class="row g-2 mt-1">
+                    <div class="col-6"><div class="stat-badge bg-primary bg-opacity-10 text-primary">🍅 <span id="pomoCount">0</span> 次学习</div></div>
+                    <div class="col-6"><div class="stat-badge bg-success bg-opacity-10 text-success">⏱️ <span id="pomoTotal">0</span> 分钟</div></div>
+                </div>
+                <hr>
+                <h6>💡 番茄工作法</h6>
+                <p class="small text-muted">选择一个任务 → 专注 25 分钟 → 休息 5 分钟。每完成 4 个番茄钟，休息 15-30 分钟。保持专注，消除干扰！</p>
+                <h6>📝 当前任务</h6>
+                <div class="input-group input-group-sm">
+                    <input class="form-control" id="pomoTask" placeholder="输入当前专注的任务...">
+                </div>
+                <div class="mt-2" id="pomoTaskDisplay" style="display:none;">
+                    <span class="badge bg-info">🎯 </span> <span id="pomoTaskText"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== Tab: 待办清单 ====== -->
+<div class="tab-pane fade" id="tab-todo">
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card p-3 mb-3">
+                <h6>➕ 添加任务</h6>
+                <div class="input-group input-group-sm mb-2">
+                    <input class="form-control" id="todoTitle" placeholder="任务标题..." maxlength="200">
+                    <button class="btn btn-primary" onclick="addTodo()">添加</button>
+                </div>
+                <div class="row g-1">
+                    <div class="col-7">
+                        <input type="date" class="form-control form-control-sm" id="todoDue">
+                    </div>
+                    <div class="col-5">
+                        <select class="form-select form-select-sm" id="todoPriority">
+                            <option value="0">普通</option>
+                            <option value="1">⭐ 重要</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card p-3">
+                <h6>📊 任务统计</h6>
+                <div class="row g-2 mt-1">
+                    <div class="col-4"><div class="stat-badge bg-warning bg-opacity-10 text-warning">待办 <span id="statActive">0</span></div></div>
+                    <div class="col-4"><div class="stat-badge bg-success bg-opacity-10 text-success">完成 <span id="statDone">0</span></div></div>
+                    <div class="col-4"><div class="stat-badge bg-info bg-opacity-10 text-info">总计 <span id="statAll">0</span></div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <div class="card" style="max-height:55vh;overflow-y:auto;">
+                <div class="list-group list-group-flush" id="todoList">
+                    <div class="list-group-item text-center text-muted py-4">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== Tab: 抽认卡 ====== -->
+<div class="tab-pane fade" id="tab-flashcard">
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card p-3 mb-3">
+                <h6>➕ 新建卡片</h6>
+                <div class="mb-2">
+                    <textarea class="form-control form-control-sm" id="fcQuestion" rows="2" placeholder="问题..."></textarea>
+                </div>
+                <div class="mb-2">
+                    <textarea class="form-control form-control-sm" id="fcAnswer" rows="2" placeholder="答案..."></textarea>
+                </div>
+                <div class="input-group input-group-sm mb-2">
+                    <input class="form-control" id="fcTags" placeholder="标签 (逗号分隔)">
+                    <button class="btn btn-primary" onclick="addFlashcard()">添加</button>
+                </div>
+            </div>
+            <div class="card p-3">
+                <h6>📊 卡片统计</h6>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between small"><span>😊 已掌握</span><span id="statMastered">0</span></div>
+                    <div class="level-bar mt-1"><div class="level-fill bg-success" id="barMastered" style="width:0%"></div></div>
+                </div>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between small"><span>📖 学习中</span><span id="statLearning">0</span></div>
+                    <div class="level-bar mt-1"><div class="level-fill bg-warning" id="barLearning" style="width:0%"></div></div>
+                </div>
+                <div>
+                    <div class="d-flex justify-content-between small"><span>🆕 未掌握</span><span id="statNew">0</span></div>
+                    <div class="level-bar mt-1"><div class="level-fill bg-secondary" id="barNew" style="width:0%"></div></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-7">
+            <!-- 复习模式 -->
+            <div class="card p-3 mb-3" id="fcReviewPanel">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">🔄 复习模式</h6>
+                    <button class="btn btn-sm btn-outline-info" onclick="loadReviewCard()">下一张</button>
+                </div>
+                <div class="flashcard" id="fcReviewCard" onclick="flipFlashcard()">
+                    <div class="flashcard-inner">
+                        <div class="flashcard-front" id="fcReviewFront">点击「下一张」开始复习</div>
+                        <div class="flashcard-back" id="fcReviewBack"></div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-3" id="fcReviewBtns" style="display:none;">
+                    <button class="btn btn-sm btn-outline-danger" onclick="reviewFlashcard(-1)">😰 忘记</button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="reviewFlashcard(0)">🤔 困难</button>
+                    <button class="btn btn-sm btn-outline-success" onclick="reviewFlashcard(1)">😊 简单</button>
+                </div>
+            </div>
+            <!-- 卡片列表 -->
+            <details>
+                <summary class="mb-2" style="cursor:pointer;color:var(--text-muted);">📋 我的卡片 (<span id="fcCount">0</span>)</summary>
+                <div style="max-height:300px;overflow-y:auto;" id="fcList">
+                    <div class="text-center text-muted py-3 small">加载中...</div>
+                </div>
+            </details>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// ====== 番茄钟 ======
+let pomoTimer = null, pomoSeconds = 25*60, pomoRunning = false, pomoMode = 'work';
+let pomoCount = 0, pomoTotalMin = 0;
+const CIRC = 2 * Math.PI * 100; // 628
+
+function updatePomoDisplay() {
+    const m = Math.floor(pomoSeconds/60), s = pomoSeconds%60;
+    document.getElementById('pomoTime').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    const pct = 1 - pomoSeconds / (pomoMode==='work'?1500:300);
+    document.getElementById('pomoRing').setAttribute('stroke-dashoffset', CIRC * pct);
+    document.getElementById('pomoRing').setAttribute('stroke', pomoMode==='break'?'#10b981':'#04c');
+    const circle = document.getElementById('pomoCircle');
+    circle.className = 'pomodoro-circle' + (pomoRunning ? (pomoMode==='break'?' break':' active') : '');
+    const label = document.getElementById('pomoLabel');
+    if (!pomoRunning && pomoSeconds===25*60) label.textContent = '准备开始';
+    else if (pomoMode==='break') label.textContent = '☕ 休息中...';
+    else label.textContent = '🍅 专注中...';
+
+    document.getElementById('pomoCount').textContent = pomoCount;
+    document.getElementById('pomoTotal').textContent = pomoTotalMin;
+}
+
+function startPomodoro() {
+    if (pomoRunning) return;
+    const task = document.getElementById('pomoTask').value.trim();
+    if (task) { document.getElementById('pomoTaskDisplay').style.display='block'; document.getElementById('pomoTaskText').textContent=task; }
+    pomoRunning = true;
+    document.getElementById('pomoStart').disabled = true;
+    document.getElementById('pomoPause').disabled = false;
+    document.getElementById('pomoReset').disabled = false;
+    updatePomoDisplay();
+    pomoTimer = setInterval(() => {
+        pomoSeconds--;
+        updatePomoDisplay();
+        if (pomoSeconds <= 0) {
+            clearInterval(pomoTimer);
+            if (pomoMode === 'work') {
+                pomoCount++;
+                pomoTotalMin += 25;
+                recordStudySession(25);
+                if (pomoCount % 4 === 0) pomoSeconds = 15*60;
+                else pomoSeconds = 5*60;
+                pomoMode = 'break';
+                alert('✅ 番茄钟完成！休息一下吧 ☕');
+            } else {
+                pomoSeconds = 25*60;
+                pomoMode = 'work';
+                alert('🔔 休息结束，继续下一个番茄钟！');
+            }
+            updatePomoDisplay();
+            pomoRunning = false;
+            document.getElementById('pomoStart').disabled = false;
+            document.getElementById('pomoPause').disabled = true;
+            document.getElementById('pomoReset').disabled = true;
+        }
+    }, 1000);
+}
+
+function pausePomodoro() {
+    clearInterval(pomoTimer); pomoRunning = false;
+    document.getElementById('pomoStart').disabled = false;
+    document.getElementById('pomoPause').disabled = true;
+    updatePomoDisplay();
+}
+
+function resetPomodoro() {
+    clearInterval(pomoTimer); pomoRunning = false;
+    pomoSeconds = 25*60; pomoMode = 'work';
+    document.getElementById('pomoStart').disabled = false;
+    document.getElementById('pomoPause').disabled = true;
+    document.getElementById('pomoReset').disabled = true;
+    document.getElementById('pomoRing').setAttribute('stroke-dashoffset', 0);
+    updatePomoDisplay();
+}
+
+function setPomoMode(mode, min) {
+    document.querySelectorAll('#tab-pomodoro [role=group] .btn-outline-info, #tab-pomodoro [role=group] .btn-outline-success').forEach(b=>b.classList.remove('active'));
+    event.target.classList.add('active');
+    clearInterval(pomoTimer); pomoRunning = false;
+    pomoSeconds = min*60; pomoMode = mode;
+    document.getElementById('pomoStart').disabled = false;
+    document.getElementById('pomoPause').disabled = true;
+    document.getElementById('pomoReset').disabled = true;
+    document.getElementById('pomoRing').setAttribute('stroke-dashoffset', 0);
+    updatePomoDisplay();
+}
+
+// 加载今天的统计
+(function initPomo() {
+    const today = new Date().toISOString().slice(0,10);
+    const saved = JSON.parse(localStorage.getItem('pomo_'+today)||'{"count":0,"min":0}');
+    pomoCount = saved.count; pomoTotalMin = saved.min;
+    updatePomoDisplay();
+})();
+
+function recordStudySession(min) {
+    const today = new Date().toISOString().slice(0,10);
+    const saved = JSON.parse(localStorage.getItem('pomo_'+today)||'{"count":0,"min":0}');
+    saved.count++; saved.min += min;
+    localStorage.setItem('pomo_'+today, JSON.stringify(saved));
+    pomoCount = saved.count; pomoTotalMin = saved.min;
+    updatePomoDisplay();
+}
+
+// ====== 待办清单 ======
+async function loadTodos() {
+    try {
+        const r = await fetch('/api/study/todos',{credentials:'include'});
+        const todos = await r.json();
+        const list = document.getElementById('todoList');
+        if (!todos.length) { list.innerHTML = '<div class="list-group-item text-center text-muted py-4">暂无待办，添加一个吧 ✍️</div>'; }
+        else {
+            list.innerHTML = todos.map(t => `
+                <div class="list-group-item d-flex justify-content-between align-items-start ${t.completed?'todo-done':''}">
+                    <div class="flex-grow-1">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" ${t.completed?'checked':''} onchange="toggleTodo(${t.id})">
+                            <span>${t.priority?'⭐ ':''}${t.title}</span>
+                        </div>
+                        ${t.due_date?`<small class="text-muted ms-4">📅 ${t.due_date}</small>`:''}
+                    </div>
+                    <button class="btn btn-sm text-danger" onclick="deleteTodo(${t.id})" style="font-size:1rem;">✕</button>
+                </div>
+            `).join('');
+        }
+        const act = todos.filter(t=>!t.completed).length;
+        const done = todos.filter(t=>t.completed).length;
+        document.getElementById('statActive').textContent = act;
+        document.getElementById('statDone').textContent = done;
+        document.getElementById('statAll').textContent = todos.length;
+    } catch(e) {}
+}
+
+async function addTodo() {
+    const title = document.getElementById('todoTitle').value.trim();
+    if (!title) return alert('请输入任务标题');
+    await fetch('/api/study/todos',{
+        method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify({
+            title,
+            priority: parseInt(document.getElementById('todoPriority').value),
+            due_date: document.getElementById('todoDue').value || null
+        })
+    });
+    document.getElementById('todoTitle').value='';
+    document.getElementById('todoDue').value='';
+    loadTodos();
+}
+
+async function toggleTodo(id) { await fetch(`/api/study/todos/${id}/toggle`,{method:'POST',credentials:'include'}); loadTodos(); }
+async function deleteTodo(id) { if(!confirm('删除此待办？'))return; await fetch(`/api/study/todos/${id}`,{method:'DELETE',credentials:'include'}); loadTodos(); }
+
+// ====== 抽认卡 ======
+let reviewCard = null;
+
+async function loadFlashcards() {
+    try {
+        const r = await fetch('/api/study/flashcards',{credentials:'include'});
+        const cards = await r.json();
+        document.getElementById('fcCount').textContent = cards.length;
+        const mastered = cards.filter(c=>c.level>=2).length;
+        const learning = cards.filter(c=>c.level===1).length;
+        const newCards = cards.filter(c=>c.level===0).length;
+        document.getElementById('statMastered').textContent = mastered;
+        document.getElementById('statLearning').textContent = learning;
+        document.getElementById('statNew').textContent = newCards;
+        document.getElementById('barMastered').style.width = cards.length?(mastered/cards.length*100)+'%':'0%';
+        document.getElementById('barLearning').style.width = cards.length?(learning/cards.length*100)+'%':'0%';
+        document.getElementById('barNew').style.width = cards.length?(newCards/cards.length*100)+'%':'0%';
+
+        const list = document.getElementById('fcList');
+        if (!cards.length) { list.innerHTML = '<div class="text-center text-muted py-3 small">暂无卡片</div>'; }
+        else {
+            list.innerHTML = cards.map(c => `
+                <div class="d-flex justify-content-between align-items-start py-2 border-bottom">
+                    <div class="flex-grow-1" style="cursor:pointer" onclick="this.querySelector('.fc-answer').style.display=this.querySelector('.fc-answer').style.display==='none'?'block':'none'">
+                        <span class="badge bg-${c.level>=2?'success':c.level>=1?'warning':'secondary'} me-1" style="font-size:.6rem;">${c.level>=2?'✓':c.level>=1?'·':'?'}</span>
+                        <strong style="font-size:.85rem;">${c.question.length>30?c.question.slice(0,30)+'...':c.question}</strong>
+                        <div class="fc-answer text-muted mt-1" style="font-size:.8rem;display:none;color:var(--text-muted)!important;">${c.answer}</div>
+                    </div>
+                    <button class="btn btn-sm text-danger" onclick="deleteFlashcard(${c.id})" style="font-size:.8rem;">✕</button>
+                </div>
+            `).join('');
+        }
+    } catch(e) {}
+}
+
+async function addFlashcard() {
+    const q = document.getElementById('fcQuestion').value.trim();
+    const a = document.getElementById('fcAnswer').value.trim();
+    if (!q||!a) return alert('问题和答案不能为空');
+    await fetch('/api/study/flashcards',{
+        method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify({question:q,answer:a,tags:document.getElementById('fcTags').value.trim()})
+    });
+    document.getElementById('fcQuestion').value='';
+    document.getElementById('fcAnswer').value='';
+    document.getElementById('fcTags').value='';
+    loadFlashcards();
+}
+
+async function deleteFlashcard(id) { if(!confirm('删除此卡片？'))return; await fetch(`/api/study/flashcards/${id}`,{method:'DELETE',credentials:'include'}); loadFlashcards(); }
+
+async function loadReviewCard() {
+    const r = await fetch('/api/study/flashcards/review',{credentials:'include'});
+    const d = await r.json();
+    reviewCard = d.card;
+    if (reviewCard) {
+        document.getElementById('fcReviewFront').textContent = reviewCard.question;
+        document.getElementById('fcReviewBack').textContent = reviewCard.answer;
+        const card = document.getElementById('fcReviewCard');
+        card.classList.remove('flipped');
+        document.getElementById('fcReviewBtns').style.display = 'flex';
+    } else {
+        document.getElementById('fcReviewFront').textContent = '🎉 全部复习完毕！';
+        document.getElementById('fcReviewBack').textContent = '';
+        document.getElementById('fcReviewBtns').style.display = 'none';
+    }
+}
+
+function flipFlashcard() { if(reviewCard) document.getElementById('fcReviewCard').classList.toggle('flipped'); }
+
+async function reviewFlashcard(level) {
+    if (!reviewCard) return;
+    await fetch(`/api/study/flashcards/${reviewCard.id}/review`,{
+        method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify({level})
+    });
+    await loadFlashcards();
+    loadReviewCard();
+}
+
+// ====== 初始化 ======
+document.addEventListener('DOMContentLoaded',() => {
+    document.querySelector('a[href="#tab-todo"]').addEventListener('shown.bs.tab', loadTodos);
+    document.querySelector('a[href="#tab-flashcard"]').addEventListener('shown.bs.tab', loadFlashcards);
+});
+loadTodos();
+</script>
+{% endblock %}

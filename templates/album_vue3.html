@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-bs-theme="light">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -116,7 +116,7 @@ textarea { resize:none; }
           <div class="img-wrap"><img :src="'/static/albums/'+img.filename"></div>
           <div style="padding:8px 10px">
             <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ img.name }}</div>
-            <div class="flex" style="justify-content:space-between;font-size:11px;color:#999;margin-top:2px">
+            <div class="flex" style="justify-content:space-between;font-size:11px;color:var(--aempty);margin-top:2px">
               <span>{{ img.commentCount||0 }} 💬</span>
               <span>{{ img.uploadTime }}</span>
             </div>
@@ -140,7 +140,7 @@ textarea { resize:none; }
         <div style="flex:1">
           <div class="fw-600" style="font-size:13px">{{ msg.authorName||msg.author }}</div>
           <div class="text-sm" style="margin:2px 0 4px">{{ msg.time }}</div>
-          <div style="font-size:14px;color:#555;line-height:1.7;white-space:pre-wrap;word-break:break-word">{{ msg.text }}</div>
+          <div style="font-size:14px;color:var(--acolor);line-height:1.7;white-space:pre-wrap;word-break:break-word">{{ msg.text }}</div>
         </div>
       </div>
     </template>
@@ -157,7 +157,7 @@ textarea { resize:none; }
       </div>
       <div class="text-sm mb-10">{{ detailImage.uploadTime }} · {{ detailImage.uploaderName }}</div>
       <div class="fw-600" style="font-size:14px;margin-bottom:6px">评论 ({{ imageComments.length }})</div>
-      <div style="max-height:240px;overflow-y:auto;border:1px solid #eee;border-radius:6px;padding:2px 10px">
+      <div style="max-height:240px;overflow-y:auto;border:1px solid var(--acomment-border);border-radius:6px;padding:2px 10px">
         <div v-if="imageComments.length===0" class="text-center text-sm" style="padding:16px">暂无评论，写第一条吧 ✍️</div>
         <div v-for="c in imageComments" :key="c.id" class="comment-item">
           <span class="author">{{ c.authorName||c.author }}</span><span class="time">{{ c.time }}</span>
@@ -187,7 +187,7 @@ textarea { resize:none; }
       <div class="form-group">
         <label>图片</label>
         <div class="upload-zone" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="onUploadDrop">
-          <div v-if="!uploadPreview" style="color:#999">
+          <div v-if="!uploadPreview" style="color:var(--aempty)">
             <div style="font-size:32px">📁</div>
             <div>点击或拖拽上传</div>
             <div class="text-sm mt-10">jpg/png/gif/webp · ≤ 5MB</div>
@@ -241,14 +241,23 @@ createApp({
     function applyAlbumTheme(t) {
       document.documentElement.setAttribute('data-theme', t);
       document.documentElement.setAttribute('data-bs-theme', t);
-      var btn = document.getElementById('albumThemeToggle');
-      if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
       localStorage.setItem('theme', t);
     }
-    function toggleAlbumTheme() {
-      applyAlbumTheme(getAlbumTheme() === 'dark' ? 'light' : 'dark');
+    function updateThemeIcon(t) {
+      var btn = document.getElementById('albumThemeToggle');
+      if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
     }
+    function toggleAlbumTheme() {
+      var t = getAlbumTheme() === 'dark' ? 'light' : 'dark';
+      applyAlbumTheme(t);
+      updateThemeIcon(t);
+    }
+    // 页面加载时先更新 data-theme（按钮还未渲染，先不更新图标）
     applyAlbumTheme(getAlbumTheme());
+    // Vue mount 后更新图标
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() { updateThemeIcon(getAlbumTheme()); }, 100);
+    });
 
     function goDashboard() { window.location.href = '/dashboard'; }
 

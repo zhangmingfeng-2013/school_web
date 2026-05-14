@@ -643,6 +643,42 @@ def _init_album_tables(conn):
     conn.commit()
     cursor.close()
 
+    # 学习工具表
+    conn2 = get_db()
+    if conn2:
+        try:
+            cur = conn2.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS study_todos (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL,
+                    title VARCHAR(200) NOT NULL,
+                    completed TINYINT DEFAULT 0,
+                    priority TINYINT DEFAULT 0,
+                    due_date DATE NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP NULL
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS study_flashcards (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    tags VARCHAR(100) DEFAULT '',
+                    level TINYINT DEFAULT 0,
+                    reviewed_count INT DEFAULT 0,
+                    last_reviewed TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn2.commit()
+            cur.close()
+            conn2.close()
+        except pymysql.MySQLError:
+            pass
+
 
 # ---------- 输入清洗 ----------
 _SCRIPT_TAG = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
@@ -4732,6 +4768,203 @@ def _fmt_size(bytes):
         return f"{bytes/1024:.1f}KB"
     else:
         return f"{bytes/1024/1024:.1f}MB"
+
+
+# ========== 📚 学习工具 ==========
+@app.route("/study")
+@login_required
+def study_page():
+    """学习工具页面"""
+    return render_template("study.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+# ── 待办清单 API ──
+@app.route("/api/study/todos")
+@login_required
+def api_study_todos():
+    """获取待办列表"""
+    conn = get_db()
+    if not conn: return jsonify([]), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, title, completed, priority, due_date, created_at
+            FROM study_todos WHERE username=%s
+            ORDER BY completed ASC, priority DESC, due_date ASC, created_at DESC
+        """, [session["username"]])
+        rows = [{"id":r[0],"title":r[1],"completed":r[2],"priority":r[3],
+                 "due_date":str(r[4]) if r[4] else None,"created_at":str(r[5])[:16]}
+                for r in cursor.fetchall()]
+        return jsonify(rows)
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/api/study/todos", methods=["POST"])
+@login_required
+def api_study_todos_add():
+    """添加待办"""
+    data = request.get_json() or {}
+    title = sanitize_input(data.get("title",""),200)
+    if not title: return jsonify({"error":"标题不能为空"}),400
+    conn = get_db()
+    if not conn: return jsonify({"error":"DB"}),500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO study_todos (username,title,priority,due_date) VALUES (%s,%s,%s,%s)",
+            [session["username"],title,data.get("priority",0),data.get("due_date")]
+        )
+        conn.commit()
+        tid = cursor.lastrowid
+        record_activity(session["username"],"添加待办",1)
+        return jsonify({"ok":True,"id":tid})
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/api/study/todos/<int:tid>", methods=["DELETE"])
+@login_required
+def api_study_todos_delete(tid):
+    """删除待办"""
+    conn = get_db()
+    if not conn: return jsonify({"error":"DB"}),500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM study_todos WHERE id=%s AND username=%s",[tid,session["username"]])
+        conn.commit()
+        return jsonify({"ok":True})
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/api/study/todos/<int:tid>/toggle", methods=["POST"])
+@login_required
+def api_study_todos_toggle(tid):
+    """切换完成状态"""
+    conn = get_db()
+    if not conn: return jsonify({"error":"DB"}),500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE study_todos SET completed=1-completed,
+            completed_at=IF(completed=1,NULL,NOW())
+            WHERE id=%s AND username=%s
+        """,[tid,session["username"]])
+        conn.commit()
+        return jsonify({"ok":True})
+    finally:
+        cursor.close(); conn.close()
+
+
+# ── 抽认卡 API ──
+@app.route("/api/study/flashcards")
+@login_required
+def api_study_flashcards():
+    """获取抽认卡列表"""
+    conn = get_db()
+    if not conn: return jsonify([]),500
+    try:
+        cursor = conn.cursor()
+        tag = request.args.get("tag","").strip()
+        if tag:
+            cursor.execute(
+                "SELECT id,question,answer,tags,level,reviewed_count,last_reviewed FROM study_flashcards WHERE username=%s AND tags LIKE %s ORDER BY created_at DESC",
+                [session["username"],f"%{tag}%"])
+        else:
+            cursor.execute(
+                "SELECT id,question,answer,tags,level,reviewed_count,last_reviewed FROM study_flashcards WHERE username=%s ORDER BY created_at DESC",
+                [session["username"]])
+        rows = [{"id":r[0],"question":r[1],"answer":r[2],"tags":r[3],"level":r[4],
+                 "reviewed_count":r[5],"last_reviewed":str(r[6])[:16] if r[6] else None}
+                for r in cursor.fetchall()]
+        return jsonify(rows)
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/api/study/flashcards", methods=["POST"])
+@login_required
+def api_study_flashcards_add():
+    """添加抽认卡"""
+    data = request.get_json() or {}
+    q = sanitize_input(data.get("question",""),500)
+    a = sanitize_input(data.get("answer",""),2000)
+    if not q or not a: return jsonify({"error":"问题和答案不能为空"}),400
+    conn = get_db()
+    if not conn: return jsonify({"error":"DB"}),500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO study_flashcards (username,question,answer,tags) VALUES (%s,%s,%s,%s)",
+            [session["username"],q,a,data.get("tags","")]
+        )
+        conn.commit()
+        record_activity(session["username"],"添加抽认卡",2)
+        return jsonify({"ok":True,"id":cursor.lastrowid})
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/api/study/flashcards/<int:fid>", methods=["DELETE"])
+@login_required
+def api_study_flashcards_delete(fid):
+    """删除抽认卡"""
+    conn = get_db()
+    if not conn: return jsonify({"error":"DB"}),500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM study_flashcards WHERE id=%s AND username=%s",[fid,session["username"]])
+        conn.commit()
+        return jsonify({"ok":True})
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/api/study/flashcards/<int:fid>/review", methods=["POST"])
+@login_required
+def api_study_flashcards_review(fid):
+    """记录复习结果"""
+    data = request.get_json() or {}
+    level = data.get("level",0)  # -1=忘记, 0=困难, 1=简单
+    conn = get_db()
+    if not conn: return jsonify({"error":"DB"}),500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE study_flashcards
+            SET level=GREATEST(0,level+%s), reviewed_count=reviewed_count+1, last_reviewed=NOW()
+            WHERE id=%s AND username=%s
+        """,[level+1 if level>=0 else -1, fid, session["username"]])
+        conn.commit()
+        record_activity(session["username"],"复习抽认卡",2)
+        return jsonify({"ok":True})
+    finally:
+        cursor.close(); conn.close()
+
+
+@app.route("/api/study/flashcards/review")
+@login_required
+def api_study_flashcards_next():
+    """获取下一个需要复习的抽认卡"""
+    conn = get_db()
+    if not conn: return jsonify({"card":None}),500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id,question,answer,tags,level,reviewed_count
+            FROM study_flashcards WHERE username=%s
+            ORDER BY level ASC, last_reviewed ASC LIMIT 1
+        """,[session["username"]])
+        r = cursor.fetchone()
+        if r:
+            return jsonify({"card":{"id":r[0],"question":r[1],"answer":r[2],
+                                     "tags":r[3],"level":r[4],"reviewed_count":r[5]}})
+        return jsonify({"card":None})
+    finally:
+        cursor.close(); conn.close()
 
 
 # ---------- 插件系统 ----------
