@@ -6,7 +6,7 @@ import os
 
 I18N_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "i18n")
 DEFAULT_LANG = "zh-CN"
-SUPPORTED_LANGS = ["zh-CN", "en"]
+SUPPORTED_LANGS = ["zh-CN", "en", "ja", "ko"]
 
 _translations = {}
 _lang_names = {}

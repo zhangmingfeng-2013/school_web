@@ -1,0 +1,9 @@
+{
+    "name": "한국어 (Korean Language Pack)",
+    "version": "1.0.0",
+    "description": "한국어 언어팩을 추가합니다. 번역 파일을 제공하고 UI 언어 전환기에 한국어를 등록합니다.",
+    "description_en": "Adds Korean language support. Provides translation files and registers Korean in the language switcher.",
+    "author": "School_Web",
+    "license": "MIT",
+    "type": "language"
+}

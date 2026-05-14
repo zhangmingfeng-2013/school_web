@@ -1,0 +1,17 @@
+{
+  "_lang": "ja",
+  "_name": "日本語",
+  "app_title": "オールインワンツールボックス Web版",
+  "app_brand": "🛠 オールインワンツールボックス",
+  "nav_dashboard": "ダッシュボード",
+  "nav_admin": "管理",
+  "nav_profile": "プロフィール",
+  "nav_logout": "ログアウト",
+  "login_title": "ログイン",
+  "login_username": "ユーザー名",
+  "login_password": "パスワード",
+  "login_submit": "ログイン",
+  "register_title": "登録",
+  "dashboard_title": "ダッシュボード",
+  "dashboard_hello": "こんにちは"
+}

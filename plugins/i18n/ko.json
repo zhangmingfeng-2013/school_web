@@ -1,0 +1,17 @@
+{
+  "_lang": "ko",
+  "_name": "한국어",
+  "app_title": "올인원 도구상자 웹 버전",
+  "app_brand": "🛠 올인원 도구상자",
+  "nav_dashboard": "대시보드",
+  "nav_admin": "관리",
+  "nav_profile": "프로필",
+  "nav_logout": "로그아웃",
+  "login_title": "로그인",
+  "login_username": "사용자 이름",
+  "login_password": "비밀번호",
+  "login_submit": "로그인",
+  "register_title": "회원가입",
+  "dashboard_title": "대시보드",
+  "dashboard_hello": "안녕하세요"
+}
