@@ -1,15 +1,18 @@
 {% extends "base.html" %}
-{% block title %}📚 学习工具 - {{ _('app_title') }}{% endblock %}
+{% block title %}📚 {{ _('study_title') }} - {{ _('app_title') }}{% endblock %}
 {% block content %}
 <style>
-.study-tabs .nav-link { font-weight:600; padding:12px 20px; border:none; color:var(--text-muted); background:transparent; }
+.study-tabs { flex-wrap:nowrap; }
+.study-tabs .nav-link { font-weight:600; padding:10px 14px; border:none; color:var(--text-muted); background:transparent; white-space:nowrap; font-size:.9rem; }
 .study-tabs .nav-link.active { color:#04c; border-bottom:3px solid #04c; background:transparent; }
-.pomodoro-circle { width:200px; height:200px; border-radius:50%; border:8px solid #e8e8e8; display:flex; align-items:center; justify-content:center; position:relative; margin:0 auto; }
+.pomodoro-ring-bg { stroke:var(--border-light); }
+[data-bs-theme="dark"] .pomodoro-ring-bg { stroke:#3a3a3e; }
+.pomodoro-circle { width:200px; height:200px; border-radius:50%; border:8px solid #d1d5db; display:flex; align-items:center; justify-content:center; position:relative; margin:0 auto; }
+[data-bs-theme="dark"] .pomodoro-circle { border-color:#3a3a3e; }
 .pomodoro-circle.active { border-color:#04c; }
 .pomodoro-circle.break { border-color:#10b981; }
 .pomodoro-time { font-size:3rem; font-weight:700; font-variant-numeric:tabular-nums; color:var(--text-body); }
 .pomodoro-label { font-size:.85rem; color:var(--text-muted); margin-top:6px; }
-.pomodoro-progress { position:absolute; top:-8px; left:-8px; width:calc(100% + 16px); height:calc(100% + 16px); border-radius:50%; }
 .todo-done { text-decoration:line-through; opacity:.5; }
 .flashcard { perspective:1000px; height:260px; cursor:pointer; }
 .flashcard-inner { position:relative; width:100%; height:100%; transition:transform .5s; transform-style:preserve-3d; }
@@ -17,61 +20,67 @@
 .flashcard-front, .flashcard-back { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:12px; display:flex; align-items:center; justify-content:center; padding:20px; font-size:1.05rem; }
 .flashcard-front { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; text-align:center; }
 .flashcard-back { background:linear-gradient(135deg,#10b981,#059669); color:#fff; transform:rotateY(180deg); text-align:center; }
-.level-bar { height:4px; border-radius:2px; background:#e8e8e8; overflow:hidden; }
+.level-bar { height:4px; border-radius:2px; background:var(--border-light); overflow:hidden; }
 .level-fill { height:100%; border-radius:2px; transition:width .3s; }
 .stat-badge { display:inline-block; padding:4px 12px; border-radius:20px; font-size:.75rem; font-weight:600; }
+.mode-btns { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+@media (max-width:576px) {
+  .pomodoro-circle { width:160px; height:160px; }
+  .pomodoro-time { font-size:2.2rem; }
+  .flashcard { height:220px; }
+}
 </style>
 
-<h2 class="mb-1">📚 学习工具</h2>
-<p class="text-muted mb-3">番茄钟 · 待办清单 · 抽认卡</p>
+<h2 class="mb-1">📚 {{ _('study_title') }}</h2>
+<p class="text-muted mb-3">{{ _('study_subtitle') }}</p>
 
 <ul class="nav study-tabs mb-3" id="studyTabs">
-    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-pomodoro">🍅 番茄钟</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-todo">✅ 待办清单</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-flashcard">🃏 抽认卡</a></li>
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-pomodoro">🍅 {{ _('study_pomodoro') }}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-todo">✅ {{ _('study_todo') }}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-flashcard">🃏 {{ _('study_flashcard') }}</a></li>
 </ul>
 
-<!-- ====== Tab: 番茄钟 ====== -->
 <div class="tab-content">
+<!-- ====== 番茄钟 ====== -->
 <div class="tab-pane fade show active" id="tab-pomodoro">
     <div class="row">
         <div class="col-md-5 text-center">
             <div class="pomodoro-circle" id="pomoCircle">
                 <svg class="pomodoro-progress" viewBox="0 0 216 216">
-                    <circle cx="108" cy="108" r="100" fill="none" stroke="#e8e8e8" stroke-width="8"/>
+                    <circle cx="108" cy="108" r="100" fill="none" stroke-width="8" class="pomodoro-ring-bg"/>
                     <circle cx="108" cy="108" r="100" fill="none" stroke="#04c" stroke-width="8"
                             stroke-linecap="round" stroke-dasharray="628" stroke-dashoffset="0"
                             id="pomoRing" style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1s linear;"/>
                 </svg>
                 <div>
                     <div class="pomodoro-time" id="pomoTime">25:00</div>
-                    <div class="pomodoro-label" id="pomoLabel">准备开始</div>
+                    <div class="pomodoro-label" id="pomoLabel">{{ _('study_pomo_ready') }}</div>
                 </div>
             </div>
             <div class="mt-3 d-flex justify-content-center gap-2">
-                <button class="btn btn-primary" id="pomoStart" onclick="startPomodoro()">▶ 开始</button>
-                <button class="btn btn-outline-secondary" id="pomoPause" onclick="pausePomodoro()" disabled>⏸ 暂停</button>
-                <button class="btn btn-outline-danger" id="pomoReset" onclick="resetPomodoro()" disabled>↺ 重置</button>
+                <button class="btn btn-primary" id="pomoStart" onclick="startPomodoro()">▶ {{ _('study_pomo_start') }}</button>
+                <button class="btn btn-outline-secondary" id="pomoPause" onclick="pausePomodoro()" disabled>⏸ {{ _('study_pomo_pause') }}</button>
+                <button class="btn btn-outline-danger" id="pomoReset" onclick="resetPomodoro()" disabled>↺ {{ _('study_pomo_reset') }}</button>
             </div>
-            <div class="mt-3 d-flex justify-content-center gap-3" role="group">
-                <button class="btn btn-sm btn-outline-info active" onclick="setPomoMode('work',25)">🍅 学习 25'</button>
-                <button class="btn btn-sm btn-outline-info" onclick="setPomoMode('work',45)">🔥 学习 45'</button>
-                <button class="btn btn-sm btn-outline-success" onclick="setPomoMode('break',5)">☕ 休息 5'</button>
+            <div class="mt-3 mode-btns">
+                <button class="btn btn-sm btn-outline-info active" onclick="setPomoMode('work',25)">🍅 {{ _('study_pomo_25') }}</button>
+                <button class="btn btn-sm btn-outline-info" onclick="setPomoMode('work',45)">🔥 {{ _('study_pomo_45') }}</button>
+                <button class="btn btn-sm btn-outline-success" onclick="setPomoMode('break',5)">☕ {{ _('study_pomo_break5') }}</button>
             </div>
         </div>
         <div class="col-md-7">
             <div class="card p-3">
-                <h6>📊 今日统计</h6>
+                <h6>📊 {{ _('study_pomo_today') }}</h6>
                 <div class="row g-2 mt-1">
-                    <div class="col-6"><div class="stat-badge bg-primary bg-opacity-10 text-primary">🍅 <span id="pomoCount">0</span> 次学习</div></div>
-                    <div class="col-6"><div class="stat-badge bg-success bg-opacity-10 text-success">⏱️ <span id="pomoTotal">0</span> 分钟</div></div>
+                    <div class="col-6"><div class="stat-badge bg-primary bg-opacity-10 text-primary">🍅 <span id="pomoCount">0</span> {{ _('study_pomo_sessions') }}</div></div>
+                    <div class="col-6"><div class="stat-badge bg-success bg-opacity-10 text-success">⏱️ <span id="pomoTotal">0</span> {{ _('study_pomo_minutes') }}</div></div>
                 </div>
                 <hr>
-                <h6>💡 番茄工作法</h6>
-                <p class="small text-muted">选择一个任务 → 专注 25 分钟 → 休息 5 分钟。每完成 4 个番茄钟，休息 15-30 分钟。保持专注，消除干扰！</p>
-                <h6>📝 当前任务</h6>
+                <h6>💡 {{ _('study_pomo_method') }}</h6>
+                <p class="small text-muted">{{ _('study_pomo_desc') }}</p>
+                <h6>📝 {{ _('study_pomo_task') }}</h6>
                 <div class="input-group input-group-sm">
-                    <input class="form-control" id="pomoTask" placeholder="输入当前专注的任务...">
+                    <input class="form-control" id="pomoTask" placeholder="{{ _('study_pomo_task_ph') }}">
                 </div>
                 <div class="mt-2" id="pomoTaskDisplay" style="display:none;">
                     <span class="badge bg-info">🎯 </span> <span id="pomoTaskText"></span>
@@ -81,104 +90,100 @@
     </div>
 </div>
 
-<!-- ====== Tab: 待办清单 ====== -->
+<!-- ====== 待办清单 ====== -->
 <div class="tab-pane fade" id="tab-todo">
     <div class="row">
         <div class="col-md-5">
             <div class="card p-3 mb-3">
-                <h6>➕ 添加任务</h6>
+                <h6>➕ {{ _('study_todo_add') }}</h6>
                 <div class="input-group input-group-sm mb-2">
-                    <input class="form-control" id="todoTitle" placeholder="任务标题..." maxlength="200">
-                    <button class="btn btn-primary" onclick="addTodo()">添加</button>
+                    <input class="form-control" id="todoTitle" placeholder="{{ _('study_todo_title_ph') }}" maxlength="200">
+                    <button class="btn btn-primary" onclick="addTodo()">{{ _('study_todo_add') }}</button>
                 </div>
                 <div class="row g-1">
-                    <div class="col-7">
-                        <input type="date" class="form-control form-control-sm" id="todoDue">
-                    </div>
+                    <div class="col-7"><input type="date" class="form-control form-control-sm" id="todoDue"></div>
                     <div class="col-5">
                         <select class="form-select form-select-sm" id="todoPriority">
-                            <option value="0">普通</option>
-                            <option value="1">⭐ 重要</option>
+                            <option value="0">{{ _('study_todo_normal') }}</option>
+                            <option value="1">⭐ {{ _('study_todo_important') }}</option>
                         </select>
                     </div>
                 </div>
             </div>
             <div class="card p-3">
-                <h6>📊 任务统计</h6>
+                <h6>📊 {{ _('study_todo_stats') }}</h6>
                 <div class="row g-2 mt-1">
-                    <div class="col-4"><div class="stat-badge bg-warning bg-opacity-10 text-warning">待办 <span id="statActive">0</span></div></div>
-                    <div class="col-4"><div class="stat-badge bg-success bg-opacity-10 text-success">完成 <span id="statDone">0</span></div></div>
-                    <div class="col-4"><div class="stat-badge bg-info bg-opacity-10 text-info">总计 <span id="statAll">0</span></div></div>
+                    <div class="col-4"><div class="stat-badge bg-warning bg-opacity-10 text-warning">{{ _('study_todo_active') }} <span id="statActive">0</span></div></div>
+                    <div class="col-4"><div class="stat-badge bg-success bg-opacity-10 text-success">{{ _('study_todo_done') }} <span id="statDone">0</span></div></div>
+                    <div class="col-4"><div class="stat-badge bg-info bg-opacity-10 text-info">{{ _('study_todo_all') }} <span id="statAll">0</span></div></div>
                 </div>
             </div>
         </div>
         <div class="col-md-7">
             <div class="card" style="max-height:55vh;overflow-y:auto;">
                 <div class="list-group list-group-flush" id="todoList">
-                    <div class="list-group-item text-center text-muted py-4">加载中...</div>
+                    <div class="list-group-item text-center text-muted py-4">{{ _('study_loading') }}</div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ====== Tab: 抽认卡 ====== -->
+<!-- ====== 抽认卡 ====== -->
 <div class="tab-pane fade" id="tab-flashcard">
     <div class="row">
         <div class="col-md-5">
             <div class="card p-3 mb-3">
-                <h6>➕ 新建卡片</h6>
+                <h6>➕ {{ _('study_fc_new') }}</h6>
                 <div class="mb-2">
-                    <textarea class="form-control form-control-sm" id="fcQuestion" rows="2" placeholder="问题..."></textarea>
+                    <textarea class="form-control form-control-sm" id="fcQuestion" rows="2" placeholder="{{ _('study_fc_question_ph') }}"></textarea>
                 </div>
                 <div class="mb-2">
-                    <textarea class="form-control form-control-sm" id="fcAnswer" rows="2" placeholder="答案..."></textarea>
+                    <textarea class="form-control form-control-sm" id="fcAnswer" rows="2" placeholder="{{ _('study_fc_answer_ph') }}"></textarea>
                 </div>
                 <div class="input-group input-group-sm mb-2">
-                    <input class="form-control" id="fcTags" placeholder="标签 (逗号分隔)">
-                    <button class="btn btn-primary" onclick="addFlashcard()">添加</button>
+                    <input class="form-control" id="fcTags" placeholder="{{ _('study_fc_tags_ph') }}">
+                    <button class="btn btn-primary" onclick="addFlashcard()">{{ _('study_todo_add') }}</button>
                 </div>
             </div>
             <div class="card p-3">
-                <h6>📊 卡片统计</h6>
+                <h6>📊 {{ _('study_fc_stats') }}</h6>
                 <div class="mb-2">
-                    <div class="d-flex justify-content-between small"><span>😊 已掌握</span><span id="statMastered">0</span></div>
+                    <div class="d-flex justify-content-between small"><span>😊 {{ _('study_fc_mastered') }}</span><span id="statMastered">0</span></div>
                     <div class="level-bar mt-1"><div class="level-fill bg-success" id="barMastered" style="width:0%"></div></div>
                 </div>
                 <div class="mb-2">
-                    <div class="d-flex justify-content-between small"><span>📖 学习中</span><span id="statLearning">0</span></div>
+                    <div class="d-flex justify-content-between small"><span>📖 {{ _('study_fc_learning') }}</span><span id="statLearning">0</span></div>
                     <div class="level-bar mt-1"><div class="level-fill bg-warning" id="barLearning" style="width:0%"></div></div>
                 </div>
                 <div>
-                    <div class="d-flex justify-content-between small"><span>🆕 未掌握</span><span id="statNew">0</span></div>
+                    <div class="d-flex justify-content-between small"><span>🆕 {{ _('study_fc_new_cards') }}</span><span id="statNew">0</span></div>
                     <div class="level-bar mt-1"><div class="level-fill bg-secondary" id="barNew" style="width:0%"></div></div>
                 </div>
             </div>
         </div>
         <div class="col-md-7">
-            <!-- 复习模式 -->
             <div class="card p-3 mb-3" id="fcReviewPanel">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0">🔄 复习模式</h6>
-                    <button class="btn btn-sm btn-outline-info" onclick="loadReviewCard()">下一张</button>
+                    <h6 class="mb-0">🔄 {{ _('study_fc_review') }}</h6>
+                    <button class="btn btn-sm btn-outline-info" onclick="loadReviewCard()">{{ _('study_fc_next') }}</button>
                 </div>
                 <div class="flashcard" id="fcReviewCard" onclick="flipFlashcard()">
                     <div class="flashcard-inner">
-                        <div class="flashcard-front" id="fcReviewFront">点击「下一张」开始复习</div>
+                        <div class="flashcard-front" id="fcReviewFront">{{ _('study_fc_tap_next') }}</div>
                         <div class="flashcard-back" id="fcReviewBack"></div>
                     </div>
                 </div>
                 <div class="d-flex justify-content-center gap-2 mt-3" id="fcReviewBtns" style="display:none;">
-                    <button class="btn btn-sm btn-outline-danger" onclick="reviewFlashcard(-1)">😰 忘记</button>
-                    <button class="btn btn-sm btn-outline-warning" onclick="reviewFlashcard(0)">🤔 困难</button>
-                    <button class="btn btn-sm btn-outline-success" onclick="reviewFlashcard(1)">😊 简单</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="reviewFlashcard(-1)">😰 {{ _('study_fc_forgot') }}</button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="reviewFlashcard(0)">🤔 {{ _('study_fc_hard') }}</button>
+                    <button class="btn btn-sm btn-outline-success" onclick="reviewFlashcard(1)">😊 {{ _('study_fc_easy') }}</button>
                 </div>
             </div>
-            <!-- 卡片列表 -->
             <details>
-                <summary class="mb-2" style="cursor:pointer;color:var(--text-muted);">📋 我的卡片 (<span id="fcCount">0</span>)</summary>
+                <summary class="mb-2" style="cursor:pointer;color:var(--text-muted);">📋 {{ _('study_fc_cards') }} (<span id="fcCount">0</span>)</summary>
                 <div style="max-height:300px;overflow-y:auto;" id="fcList">
-                    <div class="text-center text-muted py-3 small">加载中...</div>
+                    <div class="text-center text-muted py-3 small">{{ _('study_loading') }}</div>
                 </div>
             </details>
         </div>
@@ -188,24 +193,48 @@
 {% endblock %}
 {% block scripts %}
 <script>
+const L = {
+    ready: '{{ _("study_pomo_ready") }}',
+    focusing: '{{ _("study_pomo_focusing") }}',
+    breaking: '{{ _("study_pomo_breaking") }}',
+    longbreak: '{{ _("study_pomo_longbreak") }}',
+    pomoDone: '{{ _("study_pomo_done_alert") }}',
+    breakDone: '{{ _("study_pomo_break_alert") }}',
+    noTodos: '{{ _("study_todo_empty") }}',
+    noCards: '{{ _("study_fc_empty") }}',
+    allReviewed: '{{ _("study_fc_all_done") }}',
+    enterTitle: '{{ _("study_todo_enter_title") }}',
+    enterQnA: '{{ _("study_fc_enter_qna") }}',
+    confirmDelete: '{{ _("study_confirm_delete") }}',
+    loading: '{{ _("study_loading") }}',
+};
+
 // ====== 番茄钟 ======
+const POMO_KEY = 'pomo_state', CIRC = 2 * Math.PI * 100;
 let pomoTimer = null, pomoSeconds = 25*60, pomoRunning = false, pomoMode = 'work';
-let pomoCount = 0, pomoTotalMin = 0;
-const CIRC = 2 * Math.PI * 100; // 628
+let pomoCount = 0, pomoTotalMin = 0, pomoTaskName = '';
+let workDuration = 25; // 当前工作模式时长（分钟），影响进度环总时长
+
+function savePomoState() {
+    localStorage.setItem(POMO_KEY, JSON.stringify({
+        seconds: pomoSeconds, running: pomoRunning, mode: pomoMode,
+        count: pomoCount, totalMin: pomoTotalMin, task: pomoTaskName,
+        workDur: workDuration, savedAt: Date.now()
+    }));
+}
+function clearPomoState() { localStorage.removeItem(POMO_KEY); }
 
 function updatePomoDisplay() {
     const m = Math.floor(pomoSeconds/60), s = pomoSeconds%60;
     document.getElementById('pomoTime').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    const pct = 1 - pomoSeconds / (pomoMode==='work'?1500:300);
+    // 用实际总时长算进度
+    const total = pomoMode==='work' ? workDuration*60 : (pomoMode==='longbreak'?900:300);
+    const pct = total > 0 ? Math.max(0, Math.min(1, 1 - pomoSeconds/total)) : 0;
     document.getElementById('pomoRing').setAttribute('stroke-dashoffset', CIRC * pct);
-    document.getElementById('pomoRing').setAttribute('stroke', pomoMode==='break'?'#10b981':'#04c');
-    const circle = document.getElementById('pomoCircle');
-    circle.className = 'pomodoro-circle' + (pomoRunning ? (pomoMode==='break'?' break':' active') : '');
-    const label = document.getElementById('pomoLabel');
-    if (!pomoRunning && pomoSeconds===25*60) label.textContent = '准备开始';
-    else if (pomoMode==='break') label.textContent = '☕ 休息中...';
-    else label.textContent = '🍅 专注中...';
-
+    document.getElementById('pomoRing').setAttribute('stroke', pomoMode==='work'?'#04c':'#10b981');
+    document.getElementById('pomoCircle').className = 'pomodoro-circle' + (pomoRunning ? (pomoMode==='work'?' active':' break') : '');
+    document.getElementById('pomoLabel').textContent = !pomoRunning && pomoSeconds===workDuration*60 ? L.ready :
+        (pomoMode==='work'?L.focusing:pomoMode==='longbreak'?L.longbreak:L.breaking);
     document.getElementById('pomoCount').textContent = pomoCount;
     document.getElementById('pomoTotal').textContent = pomoTotalMin;
 }
@@ -213,32 +242,27 @@ function updatePomoDisplay() {
 function startPomodoro() {
     if (pomoRunning) return;
     const task = document.getElementById('pomoTask').value.trim();
-    if (task) { document.getElementById('pomoTaskDisplay').style.display='block'; document.getElementById('pomoTaskText').textContent=task; }
+    if (task) { pomoTaskName = task; document.getElementById('pomoTaskDisplay').style.display='block'; document.getElementById('pomoTaskText').textContent=task; }
     pomoRunning = true;
     document.getElementById('pomoStart').disabled = true;
     document.getElementById('pomoPause').disabled = false;
     document.getElementById('pomoReset').disabled = false;
-    updatePomoDisplay();
+    updatePomoDisplay(); savePomoState();
     pomoTimer = setInterval(() => {
-        pomoSeconds--;
-        updatePomoDisplay();
+        pomoSeconds--; updatePomoDisplay();
+        if (pomoSeconds % 5 === 0) savePomoState();
         if (pomoSeconds <= 0) {
-            clearInterval(pomoTimer);
+            clearInterval(pomoTimer); clearPomoState();
             if (pomoMode === 'work') {
-                pomoCount++;
-                pomoTotalMin += 25;
-                recordStudySession(25);
-                if (pomoCount % 4 === 0) pomoSeconds = 15*60;
-                else pomoSeconds = 5*60;
-                pomoMode = 'break';
-                alert('✅ 番茄钟完成！休息一下吧 ☕');
+                pomoCount++; const dur = workDuration; pomoTotalMin += dur; recordStudySession(dur);
+                pomoSeconds = (pomoCount%4===0?15:5)*60;
+                pomoMode = pomoCount%4===0?'longbreak':'break';
+                alert(L.pomoDone);
             } else {
-                pomoSeconds = 25*60;
-                pomoMode = 'work';
-                alert('🔔 休息结束，继续下一个番茄钟！');
+                pomoSeconds = workDuration*60; pomoMode = 'work';
+                alert(L.breakDone);
             }
-            updatePomoDisplay();
-            pomoRunning = false;
+            updatePomoDisplay(); pomoRunning = false;
             document.getElementById('pomoStart').disabled = false;
             document.getElementById('pomoPause').disabled = true;
             document.getElementById('pomoReset').disabled = true;
@@ -246,50 +270,58 @@ function startPomodoro() {
     }, 1000);
 }
 
-function pausePomodoro() {
-    clearInterval(pomoTimer); pomoRunning = false;
-    document.getElementById('pomoStart').disabled = false;
-    document.getElementById('pomoPause').disabled = true;
-    updatePomoDisplay();
-}
-
-function resetPomodoro() {
-    clearInterval(pomoTimer); pomoRunning = false;
-    pomoSeconds = 25*60; pomoMode = 'work';
-    document.getElementById('pomoStart').disabled = false;
-    document.getElementById('pomoPause').disabled = true;
-    document.getElementById('pomoReset').disabled = true;
-    document.getElementById('pomoRing').setAttribute('stroke-dashoffset', 0);
-    updatePomoDisplay();
-}
-
+function pausePomodoro() { clearInterval(pomoTimer); pomoRunning = false; document.getElementById('pomoStart').disabled=false; document.getElementById('pomoPause').disabled=true; updatePomoDisplay(); savePomoState(); }
+function resetPomodoro() { clearInterval(pomoTimer); pomoRunning = false; pomoSeconds=workDuration*60; pomoMode='work'; pomoTaskName=''; document.getElementById('pomoStart').disabled=false; document.getElementById('pomoPause').disabled=true; document.getElementById('pomoReset').disabled=true; document.getElementById('pomoRing').setAttribute('stroke-dashoffset',0); document.getElementById('pomoTaskDisplay').style.display='none'; updatePomoDisplay(); clearPomoState(); }
 function setPomoMode(mode, min) {
-    document.querySelectorAll('#tab-pomodoro [role=group] .btn-outline-info, #tab-pomodoro [role=group] .btn-outline-success').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('#tab-pomodoro .mode-btns .btn-outline-info, #tab-pomodoro .mode-btns .btn-outline-success').forEach(b=>b.classList.remove('active'));
     event.target.classList.add('active');
     clearInterval(pomoTimer); pomoRunning = false;
     pomoSeconds = min*60; pomoMode = mode;
-    document.getElementById('pomoStart').disabled = false;
-    document.getElementById('pomoPause').disabled = true;
-    document.getElementById('pomoReset').disabled = true;
-    document.getElementById('pomoRing').setAttribute('stroke-dashoffset', 0);
-    updatePomoDisplay();
+    if (mode==='work') workDuration = min;
+    document.getElementById('pomoStart').disabled=false; document.getElementById('pomoPause').disabled=true; document.getElementById('pomoReset').disabled=true;
+    document.getElementById('pomoRing').setAttribute('stroke-dashoffset',0); updatePomoDisplay(); clearPomoState();
 }
 
-// 加载今天的统计
-(function initPomo() {
+// init
+(function(){
     const today = new Date().toISOString().slice(0,10);
     const saved = JSON.parse(localStorage.getItem('pomo_'+today)||'{"count":0,"min":0}');
-    pomoCount = saved.count; pomoTotalMin = saved.min;
-    updatePomoDisplay();
+    pomoCount=saved.count; pomoTotalMin=saved.min;
+    const state = JSON.parse(localStorage.getItem(POMO_KEY)||'null');
+    if (state && state.running) {
+        const rem = Math.max(0, state.seconds-Math.floor((Date.now()-state.savedAt)/1000));
+        if (rem>0) {
+            pomoSeconds=rem; pomoMode=state.mode; pomoTaskName=state.task||'';
+            pomoCount=state.count; pomoTotalMin=state.totalMin;
+            workDuration=state.workDur||25;
+            updatePomoDisplay();
+            if(pomoTaskName){document.getElementById('pomoTaskDisplay').style.display='block';document.getElementById('pomoTaskText').textContent=pomoTaskName;}
+            pomoRunning=true; document.getElementById('pomoStart').disabled=true; document.getElementById('pomoPause').disabled=false; document.getElementById('pomoReset').disabled=false;
+            pomoTimer=setInterval(()=>{
+                pomoSeconds--;updatePomoDisplay();
+                if(pomoSeconds%10===0)savePomoState();
+                if(pomoSeconds<=0){
+                    clearInterval(pomoTimer);clearPomoState();
+                    if(pomoMode==='work'){
+                        pomoCount++; const dur=workDuration; pomoTotalMin+=dur; recordStudySession(dur);
+                        pomoSeconds=(pomoCount%4===0?15:5)*60;
+                        pomoMode=pomoCount%4===0?'longbreak':'break';
+                        alert(L.pomoDone);
+                    }else{pomoSeconds=workDuration*60;pomoMode='work';alert(L.breakDone);}
+                    updatePomoDisplay();pomoRunning=false;
+                    document.getElementById('pomoStart').disabled=false; document.getElementById('pomoPause').disabled=true; document.getElementById('pomoReset').disabled=true;
+                }
+            },1000);
+        } else { clearPomoState(); updatePomoDisplay(); }
+    } else { updatePomoDisplay(); }
 })();
 
 function recordStudySession(min) {
     const today = new Date().toISOString().slice(0,10);
     const saved = JSON.parse(localStorage.getItem('pomo_'+today)||'{"count":0,"min":0}');
-    saved.count++; saved.min += min;
-    localStorage.setItem('pomo_'+today, JSON.stringify(saved));
-    pomoCount = saved.count; pomoTotalMin = saved.min;
-    updatePomoDisplay();
+    saved.count++; saved.min+=min;
+    localStorage.setItem('pomo_'+today,JSON.stringify(saved));
+    pomoCount=saved.count; pomoTotalMin=saved.min; updatePomoDisplay();
 }
 
 // ====== 待办清单 ======
@@ -298,7 +330,7 @@ async function loadTodos() {
         const r = await fetch('/api/study/todos',{credentials:'include'});
         const todos = await r.json();
         const list = document.getElementById('todoList');
-        if (!todos.length) { list.innerHTML = '<div class="list-group-item text-center text-muted py-4">暂无待办，添加一个吧 ✍️</div>'; }
+        if (!todos.length) { list.innerHTML = `<div class="list-group-item text-center text-muted py-4">${L.noTodos}</div>`; }
         else {
             list.innerHTML = todos.map(t => `
                 <div class="list-group-item d-flex justify-content-between align-items-start ${t.completed?'todo-done':''}">
@@ -313,112 +345,53 @@ async function loadTodos() {
                 </div>
             `).join('');
         }
-        const act = todos.filter(t=>!t.completed).length;
-        const done = todos.filter(t=>t.completed).length;
-        document.getElementById('statActive').textContent = act;
-        document.getElementById('statDone').textContent = done;
+        document.getElementById('statActive').textContent = todos.filter(t=>!t.completed).length;
+        document.getElementById('statDone').textContent = todos.filter(t=>t.completed).length;
         document.getElementById('statAll').textContent = todos.length;
     } catch(e) {}
 }
 
 async function addTodo() {
     const title = document.getElementById('todoTitle').value.trim();
-    if (!title) return alert('请输入任务标题');
-    await fetch('/api/study/todos',{
-        method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
-        body:JSON.stringify({
-            title,
-            priority: parseInt(document.getElementById('todoPriority').value),
-            due_date: document.getElementById('todoDue').value || null
-        })
-    });
-    document.getElementById('todoTitle').value='';
-    document.getElementById('todoDue').value='';
-    loadTodos();
+    if (!title) return alert(L.enterTitle);
+    await fetch('/api/study/todos',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title,priority:parseInt(document.getElementById('todoPriority').value),due_date:document.getElementById('todoDue').value||null})});
+    document.getElementById('todoTitle').value=''; document.getElementById('todoDue').value=''; loadTodos();
 }
-
 async function toggleTodo(id) { await fetch(`/api/study/todos/${id}/toggle`,{method:'POST',credentials:'include'}); loadTodos(); }
-async function deleteTodo(id) { if(!confirm('删除此待办？'))return; await fetch(`/api/study/todos/${id}`,{method:'DELETE',credentials:'include'}); loadTodos(); }
+async function deleteTodo(id) { if(!confirm(L.confirmDelete))return; await fetch(`/api/study/todos/${id}`,{method:'DELETE',credentials:'include'}); loadTodos(); }
 
 // ====== 抽认卡 ======
 let reviewCard = null;
-
 async function loadFlashcards() {
     try {
         const r = await fetch('/api/study/flashcards',{credentials:'include'});
         const cards = await r.json();
         document.getElementById('fcCount').textContent = cards.length;
-        const mastered = cards.filter(c=>c.level>=2).length;
-        const learning = cards.filter(c=>c.level===1).length;
-        const newCards = cards.filter(c=>c.level===0).length;
-        document.getElementById('statMastered').textContent = mastered;
-        document.getElementById('statLearning').textContent = learning;
-        document.getElementById('statNew').textContent = newCards;
-        document.getElementById('barMastered').style.width = cards.length?(mastered/cards.length*100)+'%':'0%';
-        document.getElementById('barLearning').style.width = cards.length?(learning/cards.length*100)+'%':'0%';
-        document.getElementById('barNew').style.width = cards.length?(newCards/cards.length*100)+'%':'0%';
-
+        const mastered=cards.filter(c=>c.level>=2).length, learning=cards.filter(c=>c.level===1).length, newC=cards.filter(c=>c.level===0).length;
+        document.getElementById('statMastered').textContent=mastered; document.getElementById('statLearning').textContent=learning; document.getElementById('statNew').textContent=newC;
+        document.getElementById('barMastered').style.width=cards.length?(mastered/cards.length*100)+'%':'0%';
+        document.getElementById('barLearning').style.width=cards.length?(learning/cards.length*100)+'%':'0%';
+        document.getElementById('barNew').style.width=cards.length?(newC/cards.length*100)+'%':'0%';
         const list = document.getElementById('fcList');
-        if (!cards.length) { list.innerHTML = '<div class="text-center text-muted py-3 small">暂无卡片</div>'; }
-        else {
-            list.innerHTML = cards.map(c => `
-                <div class="d-flex justify-content-between align-items-start py-2 border-bottom">
-                    <div class="flex-grow-1" style="cursor:pointer" onclick="this.querySelector('.fc-answer').style.display=this.querySelector('.fc-answer').style.display==='none'?'block':'none'">
-                        <span class="badge bg-${c.level>=2?'success':c.level>=1?'warning':'secondary'} me-1" style="font-size:.6rem;">${c.level>=2?'✓':c.level>=1?'·':'?'}</span>
-                        <strong style="font-size:.85rem;">${c.question.length>30?c.question.slice(0,30)+'...':c.question}</strong>
-                        <div class="fc-answer text-muted mt-1" style="font-size:.8rem;display:none;color:var(--text-muted)!important;">${c.answer}</div>
-                    </div>
-                    <button class="btn btn-sm text-danger" onclick="deleteFlashcard(${c.id})" style="font-size:.8rem;">✕</button>
-                </div>
-            `).join('');
-        }
+        if (!cards.length) { list.innerHTML = `<div class="text-center text-muted py-3 small">${L.noCards}</div>`; }
+        else { list.innerHTML = cards.map(c => `<div class="d-flex justify-content-between align-items-start py-2 border-bottom"><div class="flex-grow-1" style="cursor:pointer" onclick="const a=this.querySelector('.fc-answer');a.style.display=a.style.display==='none'?'block':'none'"><span class="badge bg-${c.level>=2?'success':c.level>=1?'warning':'secondary'} me-1" style="font-size:.6rem;">${c.level>=2?'✓':c.level>=1?'·':'?'}</span><strong style="font-size:.85rem;">${c.question.length>30?c.question.slice(0,30)+'...':c.question}</strong><div class="fc-answer text-muted mt-1" style="font-size:.8rem;display:none;color:var(--text-muted)!important;">${c.answer}</div></div><button class="btn btn-sm text-danger" onclick="deleteFlashcard(${c.id})" style="font-size:.8rem;">✕</button></div>`).join(''); }
     } catch(e) {}
 }
-
 async function addFlashcard() {
-    const q = document.getElementById('fcQuestion').value.trim();
-    const a = document.getElementById('fcAnswer').value.trim();
-    if (!q||!a) return alert('问题和答案不能为空');
-    await fetch('/api/study/flashcards',{
-        method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
-        body:JSON.stringify({question:q,answer:a,tags:document.getElementById('fcTags').value.trim()})
-    });
-    document.getElementById('fcQuestion').value='';
-    document.getElementById('fcAnswer').value='';
-    document.getElementById('fcTags').value='';
-    loadFlashcards();
+    const q = document.getElementById('fcQuestion').value.trim(), a = document.getElementById('fcAnswer').value.trim();
+    if (!q||!a) return alert(L.enterQnA);
+    await fetch('/api/study/flashcards',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({question:q,answer:a,tags:document.getElementById('fcTags').value.trim()})});
+    document.getElementById('fcQuestion').value=''; document.getElementById('fcAnswer').value=''; document.getElementById('fcTags').value=''; loadFlashcards();
 }
-
-async function deleteFlashcard(id) { if(!confirm('删除此卡片？'))return; await fetch(`/api/study/flashcards/${id}`,{method:'DELETE',credentials:'include'}); loadFlashcards(); }
-
+async function deleteFlashcard(id) { if(!confirm(L.confirmDelete))return; await fetch(`/api/study/flashcards/${id}`,{method:'DELETE',credentials:'include'}); loadFlashcards(); }
 async function loadReviewCard() {
     const r = await fetch('/api/study/flashcards/review',{credentials:'include'});
-    const d = await r.json();
-    reviewCard = d.card;
-    if (reviewCard) {
-        document.getElementById('fcReviewFront').textContent = reviewCard.question;
-        document.getElementById('fcReviewBack').textContent = reviewCard.answer;
-        const card = document.getElementById('fcReviewCard');
-        card.classList.remove('flipped');
-        document.getElementById('fcReviewBtns').style.display = 'flex';
-    } else {
-        document.getElementById('fcReviewFront').textContent = '🎉 全部复习完毕！';
-        document.getElementById('fcReviewBack').textContent = '';
-        document.getElementById('fcReviewBtns').style.display = 'none';
-    }
+    const d = await r.json(); reviewCard = d.card;
+    if (reviewCard) { document.getElementById('fcReviewFront').textContent=reviewCard.question; document.getElementById('fcReviewBack').textContent=reviewCard.answer; document.getElementById('fcReviewCard').classList.remove('flipped'); document.getElementById('fcReviewBtns').style.display='flex'; }
+    else { document.getElementById('fcReviewFront').textContent=L.allReviewed; document.getElementById('fcReviewBack').textContent=''; document.getElementById('fcReviewBtns').style.display='none'; }
 }
-
 function flipFlashcard() { if(reviewCard) document.getElementById('fcReviewCard').classList.toggle('flipped'); }
-
-async function reviewFlashcard(level) {
-    if (!reviewCard) return;
-    await fetch(`/api/study/flashcards/${reviewCard.id}/review`,{
-        method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
-        body:JSON.stringify({level})
-    });
-    await loadFlashcards();
-    loadReviewCard();
-}
+async function reviewFlashcard(level) { if(!reviewCard)return; await fetch(`/api/study/flashcards/${reviewCard.id}/review`,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({level})}); loadFlashcards(); loadReviewCard(); }
 
 // ====== 初始化 ======
 document.addEventListener('DOMContentLoaded',() => {
