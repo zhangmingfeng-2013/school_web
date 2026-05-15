@@ -384,16 +384,10 @@ def _save_whitelist():
 ip_whitelist = _load_whitelist()
 
 def _verify_captcha(user_input):
-    """验证图形验证码（含过期检查，5分钟失效）"""
+    """验证图形验证码"""
     if not user_input:
         return False
     stored = session.get("captcha_code", "")
-    captcha_time = session.get("captcha_time", 0)
-    # 5 分钟过期
-    if time.time() - captcha_time > 300:
-        session.pop("captcha_code", None)
-        session.pop("captcha_time", None)
-        return False
     if user_input.strip().lower() != stored:
         session.pop("captcha_code", None)
         session.pop("captcha_time", None)
@@ -1015,7 +1009,7 @@ def login():
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
         if not _verify_captcha(captcha_input):
-            flash("验证码错误或已过期", "danger")
+            flash("验证码错误", "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
 
         # 登录防爆破检查
@@ -1105,7 +1099,7 @@ def register():
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
         if not _verify_captcha(captcha_input):
-            flash("验证码错误或已过期", "danger")
+            flash("验证码错误", "danger")
             return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
         username = sanitize_input(request.form.get("username", ""), 50)
