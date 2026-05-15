@@ -537,8 +537,9 @@ def add_security_headers(response):
     nonce_directive = f" 'nonce-{nonce}'" if nonce else ""
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        f"script-src 'self'{nonce_directive} https://connect.qq.com https://cdn.bootcdn.net; "
-        f"style-src 'self' 'unsafe-inline'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
+        # script-src 保留 unsafe-inline（全站 130+ 内联 onclick/onchange 等事件 handler，暂无法迁到 JS 事件监听）
+        "script-src 'self' 'unsafe-inline' https://connect.qq.com https://cdn.bootcdn.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
         "font-src 'self' https://cdn.bootcdn.net; "
         "img-src 'self' data: blob: *; "
         "connect-src 'self' https://api.dictionaryapi.dev https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
