@@ -383,6 +383,26 @@ def _save_whitelist():
 
 ip_whitelist = _load_whitelist()
 
+def _verify_captcha(user_input):
+    """验证图形验证码（含过期检查，5分钟失效）"""
+    if not user_input:
+        return False
+    stored = session.get("captcha_code", "")
+    captcha_time = session.get("captcha_time", 0)
+    # 5 分钟过期
+    if time.time() - captcha_time > 300:
+        session.pop("captcha_code", None)
+        session.pop("captcha_time", None)
+        return False
+    if user_input.strip().lower() != stored:
+        session.pop("captcha_code", None)
+        session.pop("captcha_time", None)
+        return False
+    session.pop("captcha_code", None)
+    session.pop("captcha_time", None)
+    return True
+
+
 # ---------- 图形验证码 ----------
 @app.route("/api/captcha")
 def api_captcha():
@@ -404,28 +424,27 @@ def api_captcha():
     img = Image.new("RGB", (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
 
-    # 背景噪点
+    # 轻量背景噪点
     for x in range(width):
         for y in range(height):
-            if _random.random() < 0.3:
-                draw.point((x, y), fill=(_random.randint(200, 250), _random.randint(200, 250), _random.randint(200, 250)))
+            if _random.random() < 0.15:
+                draw.point((x, y), fill=(_random.randint(220, 255), _random.randint(220, 255), _random.randint(220, 255)))
 
-    # 随机曲线干扰
+    # 1 条曲线干扰
+    points = [(_random.randint(0, width), _random.randint(0, height)) for _ in range(4)]
+    for j in range(len(points) - 1):
+        draw.line([points[j], points[j+1]], fill=(_random.randint(180, 230), _random.randint(180, 230), _random.randint(180, 230)), width=1)
+
+    # 3 条短直线
     for _ in range(3):
-        points = [(_random.randint(0, width), _random.randint(0, height)) for _ in range(4)]
-        for j in range(len(points) - 1):
-            draw.line([points[j], points[j+1]], fill=(_random.randint(50, 180), _random.randint(50, 180), _random.randint(50, 180)), width=2)
+        x1, y1 = _random.randint(10, width - 10), _random.randint(5, height - 5)
+        x2, y2 = x1 + _random.randint(-30, 30), y1 + _random.randint(-15, 15)
+        draw.line([(x1, y1), (x2, y2)], fill=(_random.randint(180, 230), _random.randint(180, 230), _random.randint(180, 230)), width=1)
 
-    # 随机直线干扰
-    for _ in range(8):
-        x1, y1 = _random.randint(0, width), _random.randint(0, height)
-        x2, y2 = _random.randint(0, width), _random.randint(0, height)
-        draw.line([(x1, y1), (x2, y2)], fill=(_random.randint(100, 200), _random.randint(100, 200), _random.randint(100, 200)), width=1)
-
-    # 随机点
-    for _ in range(200):
+    # 少量随机点
+    for _ in range(60):
         x, y = _random.randint(0, width), _random.randint(0, height)
-        draw.point((x, y), fill=(_random.randint(0, 150), _random.randint(0, 150), _random.randint(0, 150)))
+        draw.point((x, y), fill=(_random.randint(100, 200), _random.randint(100, 200), _random.randint(100, 200)))
 
     # 绘制文字（扭曲）
     try:
@@ -437,17 +456,17 @@ def api_captcha():
         # 每个字符单独创建并旋转
         char_img = Image.new("RGBA", (40, 48), (0, 0, 0, 0))
         char_draw = ImageDraw.Draw(char_img)
-        color = (_random.randint(0, 80), _random.randint(0, 100), _random.randint(120, 240))
+        color = (_random.randint(0, 60), _random.randint(0, 80), _random.randint(160, 255))
         char_draw.text((4, 2), ch, font=font, fill=color)
-        # 随机旋转
-        angle = _random.randint(-25, 25)
+        # 轻度旋转
+        angle = _random.randint(-15, 15)
         char_img = char_img.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
         x = 10 + i * 30 + _random.randint(-4, 4)
         y = _random.randint(2, 8)
         img.paste(char_img, (x, y), char_img)
 
     # 轻微模糊
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.8))
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.4))
 
     buf = io.BytesIO()
     img.save(buf, "PNG")
@@ -991,12 +1010,9 @@ def login():
 
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
-        stored_captcha = session.get("captcha_code", "")
-        if captcha_input != stored_captcha:
-            session.pop("captcha_code", None)
-            flash("验证码错误", "danger")
+        if not _verify_captcha(captcha_input):
+            flash("验证码错误或已过期", "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
-        session.pop("captcha_code", None)
 
         # 登录防爆破检查
         now = time.time()
@@ -1084,12 +1100,9 @@ def register():
 
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
-        stored_captcha = session.get("captcha_code", "")
-        if captcha_input != stored_captcha:
-            session.pop("captcha_code", None)
-            flash("验证码错误", "danger")
+        if not _verify_captcha(captcha_input):
+            flash("验证码错误或已过期", "danger")
             return render_template("register.html", csrf_token=session.get("csrf_token", ""))
-        session.pop("captcha_code", None)
 
         username = sanitize_input(request.form.get("username", ""), 50)
         password = request.form.get("password", "").strip()
