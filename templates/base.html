@@ -230,7 +230,7 @@
     </div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // ====== 主题切换 ======
     function getTheme() {
         return localStorage.getItem('theme') || 'light';
@@ -266,7 +266,7 @@
     });
     </script>
     {% if session.username %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // 通知轮询
     (function() {
         var bell = document.getElementById('notifBell'), badge = document.getElementById('notifBadge'),

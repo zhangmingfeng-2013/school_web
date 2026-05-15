@@ -34,7 +34,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // ====== 服务器系统信息 ======
 async function fetchSysInfo() {
     try {

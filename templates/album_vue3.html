@@ -204,7 +204,7 @@ textarea { resize:none; }
   </div>
 </div>
 {% endraw %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const { createApp, ref, onMounted } = Vue;
 const ud = JSON.parse(document.getElementById('ud').textContent);
 

@@ -44,7 +44,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
     let expr = '0', reset = false;
     const display = document.getElementById('calcDisplay');

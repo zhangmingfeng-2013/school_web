@@ -57,7 +57,7 @@
 .btn-xs.danger { background:#dc3545;color:#fff;border-color:#dc3545 }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 var channel='world', dmUser='', currentUser='', friends=[], recallId=null, polling=null;
 var myUsername = '{{ username }}';
 

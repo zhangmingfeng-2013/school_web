@@ -383,7 +383,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const CIRCUMFERENCE = 2 * Math.PI * 52; // ~326.7
 let ipRefreshTimer = null, serverRefreshTimer = null, countdown = 0;
 let serverTabActive = false, ipTabActive = true;
@@ -780,7 +780,7 @@ async function saveRateConfig() {
 
 <!-- Leaflet + 网络请求地图 Kaspersky 风格 -->
 <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 let cyberMap = null;
 let cyberMarkers = [];
 let cyberCanvas = null;
@@ -1080,7 +1080,7 @@ document.head.appendChild(pulseStyle);
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // ====== 插件管理 ======
 async function loadPlugins() {
     try {

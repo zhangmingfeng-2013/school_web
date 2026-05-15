@@ -292,7 +292,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function openWebDialog() { new bootstrap.Modal(document.getElementById('webDialog')).show(); }
 function goWeb() {
     var url = document.getElementById('webUrl').value.trim();

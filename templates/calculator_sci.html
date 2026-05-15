@@ -71,7 +71,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
     let expr = '0', reset = false, angleMode = 'deg'; // deg or rad
     const display = document.getElementById('calcDisplay');

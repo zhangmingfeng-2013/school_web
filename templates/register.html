@@ -44,7 +44,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function checkStrength() {
     const pwd = document.getElementById('regPwd').value;
     const bar = document.getElementById('strengthInner');

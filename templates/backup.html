@@ -172,7 +172,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const LANG = {
     loading: '{{ _("backup_loading") }}',
     noBackups: '{{ _("backup_no_backups") }}',

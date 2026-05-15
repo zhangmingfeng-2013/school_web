@@ -68,7 +68,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 function ipToInt(ip){
     const parts = ip.split('.').map(Number);
     if (parts.length !== 4 || parts.some(p => isNaN(p) || p<0 || p>255)) return NaN;

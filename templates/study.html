@@ -323,7 +323,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const L = {
     ready: '{{ _("study_pomo_ready") }}',
     focusing: '{{ _("study_pomo_focusing") }}',

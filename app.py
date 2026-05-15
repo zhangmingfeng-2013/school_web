@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import io
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, jsonify, send_from_directory, send_file, abort, Response
+    session, flash, jsonify, send_from_directory, send_file, abort, Response, g
 )
 from flask_cors import CORS
 from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
@@ -95,6 +95,12 @@ def block_security_scanners():
             return Response("", status=403)
 
 
+@app.before_request
+def set_csp_nonce():
+    """为每个请求生成 CSP nonce"""
+    g.csp_nonce = os.urandom(16).hex()
+
+
 # ---------- 多语言支持 ----------
 @app.before_request
 def set_language():
@@ -104,6 +110,12 @@ def set_language():
     # 如果用户已登录，持久化语言偏好到数据库
     if session.get("username"):
         _save_user_lang(session["username"], lang)
+
+
+@app.context_processor
+def inject_csp_nonce():
+    """注入 CSP nonce 到所有模板上下文"""
+    return {"csp_nonce": getattr(g, "csp_nonce", "")}
 
 
 @app.context_processor
@@ -520,11 +532,13 @@ def add_security_headers(response):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    # CSP: 防 XSS + 点击劫持 + 资源来源限制
+    # CSP: 防 XSS + 点击劫持 + 资源来源限制（使用 nonce 替代 unsafe-inline）
+    nonce = getattr(g, "csp_nonce", "")
+    nonce_directive = f" 'nonce-{nonce}'" if nonce else ""
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self' 'unsafe-inline'; "
-        "script-src 'self' 'unsafe-inline' https://connect.qq.com https://cdn.bootcdn.net; "
-        "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
+        "default-src 'self'; "
+        f"script-src 'self'{nonce_directive} https://connect.qq.com https://cdn.bootcdn.net; "
+        f"style-src 'self' 'unsafe-inline'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
         "font-src 'self' https://cdn.bootcdn.net; "
         "img-src 'self' data: blob: *; "
         "connect-src 'self' https://api.dictionaryapi.dev https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
@@ -890,11 +904,10 @@ def login():
         session["csrf_token"] = os.urandom(32).hex()
 
     if request.method == "POST":
-        # 登录速率限制: 每 IP 每 60 秒最多 10 次 POST
+        # 登录速率限制: 每 IP 每 60 秒最多 5 次 POST
         client_ip = request.remote_addr or "unknown"
-        if not rate_limiter.check((client_ip, "login"), max_requests=10, window=60):
-            flash("请求过于频繁，请 60 秒后再试", "danger")
-            return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+        if not rate_limiter.check((client_ip, "login"), max_requests=5, window=60):
+            return Response("请求过于频繁", status=429)
 
         username = sanitize_input(request.form.get("username", ""), 50)
         password = request.form.get("password", "").strip()
@@ -994,8 +1007,7 @@ def register():
         # 注册速率限制: 每 IP 每 60 秒最多 5 次
         client_ip = request.remote_addr or "unknown"
         if not rate_limiter.check((client_ip, "register"), max_requests=5, window=60):
-            flash("请求过于频繁，请 60 秒后再试", "danger")
-            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
+            return Response("请求过于频繁", status=429)
 
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
