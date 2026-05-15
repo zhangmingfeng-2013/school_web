@@ -78,6 +78,23 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=2),
 )
 
+# ---------- 安全工具 User-Agent 过滤 ----------
+_BLOCKED_UAS = [
+    "sqlmap", "nikto", "nessus", "nmap", "acunetix", "burpsuite",
+    "dirbuster", "openvas", "hydra", "amass", "gobuster", "wpscan",
+    "zgrab", "masscan", "whatweb", "httprint", "jaeles"
+]
+
+
+@app.before_request
+def block_security_scanners():
+    """拦截常见安全扫描工具的 UA"""
+    ua = request.headers.get("User-Agent", "").lower()
+    for blocked in _BLOCKED_UAS:
+        if blocked in ua:
+            return Response("", status=403)
+
+
 # ---------- 多语言支持 ----------
 @app.before_request
 def set_language():
@@ -291,6 +308,11 @@ ip_whitelist = _load_whitelist()
 @app.route("/api/captcha")
 def api_captcha():
     """生成图形验证码"""
+    # 验证码接口速率限制: 每 IP 每 60 秒最多 10 次
+    client_ip = request.remote_addr or "unknown"
+    if not rate_limiter.check((client_ip, "captcha"), max_requests=10, window=60):
+        return jsonify({"error": "请求过于频繁"}), 429
+
     import random as _random
     # 生成4位随机码（数字+字母，排除易混淆字符）
     chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -975,6 +997,15 @@ def register():
             flash("请求过于频繁，请 60 秒后再试", "danger")
             return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
+        # 验证码校验
+        captcha_input = request.form.get("captcha", "").strip().lower()
+        stored_captcha = session.get("captcha_code", "")
+        if captcha_input != stored_captcha:
+            session.pop("captcha_code", None)
+            flash("验证码错误", "danger")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
+        session.pop("captcha_code", None)
+
         username = sanitize_input(request.form.get("username", ""), 50)
         password = request.form.get("password", "").strip()
         confirm = request.form.get("confirm", "").strip()
@@ -1050,6 +1081,9 @@ _reset_rate = {}  # {ip: (count, last_time)} 防滥用
 @app.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
     _init_db_once()
+    # 生成 CSRF token
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
     if request.method == "POST":
         username = sanitize_input(request.form.get("username", ""), 50)
         captcha_input = request.form.get("captcha", "").strip().lower()
@@ -1099,6 +1133,9 @@ def forgot_password():
 @app.route("/reset_password", methods=["GET", "POST"])
 def reset_password():
     _init_db_once()
+    # 生成 CSRF token
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
     if request.method == "POST":
         username = sanitize_input(request.form.get("username", ""), 50)
         token = sanitize_input(request.form.get("token", ""), 32)
