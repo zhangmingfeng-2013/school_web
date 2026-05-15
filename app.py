@@ -5167,13 +5167,5 @@ if __name__ == "__main__":
     print("=" * 50)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     _init_plugins()
-    # 隐藏 Server 版本信息（但 Werkzeug 开发服务器底层会强制加 Server 头）
-    # 真正解决方式是使用 Nginx + Gunicorn/uWSGI 生产部署
-    # 这里尽量弱化版本暴露
-    import werkzeug.serving
-    werkzeug.serving.WSGIRequestHandler.sys_version = ''
-    # 覆盖 server_version 属性（它是 property）
-    orig_server_version = werkzeug.serving.WSGIRequestHandler.server_version
-    werkzeug.serving.WSGIRequestHandler.server_version = property(lambda self: '')  # type: ignore[assignment]
-    werkzeug.serving.WSGIRequestHandler.version_string = lambda self: ''
+    # 隐藏 Werkzeug 版本信息（此时可能已被 HTTP server 层覆盖）
     app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
