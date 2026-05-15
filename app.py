@@ -15,7 +15,6 @@ import socket
 import requests
 import datetime
 import fnmatch
-import tarfile
 import pymysql
 from collections import deque
 from functools import wraps
@@ -137,7 +136,7 @@ CORS(app, supports_credentials=True, origins=['http://localhost:3000', 'http://1
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_SECURE=not os.environ.get("FLASK_DEBUG"),  # 生产环境启用 HTTPS cookie
+    SESSION_COOKIE_SECURE=False,  # HTTP 环境必须为 False，HTTPS 反向代理后改为 True
     PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=2),
 )
 
@@ -412,7 +411,6 @@ def api_captcha():
     code = "".join(_random.choice(chars) for _ in range(4))
     session["captcha_code"] = code.lower()
     session["captcha_time"] = time.time()
-    print(f"[DEBUG captcha] generated code='{code}' stored='{code.lower()}'", flush=True)
 
     # 创建验证码图片
     width, height = 140, 50
@@ -466,7 +464,8 @@ def api_captcha():
     buf = io.BytesIO()
     img.save(buf, "PNG")
     buf.seek(0)
-    resp = send_file(buf, mimetype="image/png")
+    from flask import make_response
+    resp = make_response(send_file(buf, mimetype="image/png"))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
@@ -1009,8 +1008,6 @@ def login():
 
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
-        stored_captcha = session.get("captcha_code", "")
-        print(f"[DEBUG captcha] user_input='{captcha_input}' stored='{stored_captcha}' match={captcha_input == stored_captcha}", flush=True)
         if not _verify_captcha(captcha_input):
             flash("验证码错误", "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
