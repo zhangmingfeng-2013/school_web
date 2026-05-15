@@ -75,22 +75,22 @@ class RateLimiter:
                 with open(self._persist_file, "r") as f:
                     raw = json.load(f)
                 now = time.time()
+                # 只保留 65 秒内的记录（最大窗口 60s + 5s 缓冲）
+                max_age = 65
                 loaded = 0
                 with self._lock:
                     for k, timestamps in raw.items():
-                        # 解析 key（存储时为 "ip|route" 字符串）
                         parts = k.split("|", 1)
                         if len(parts) == 2:
                             key = tuple(parts)
                         else:
                             key = (k, "")
-                        # 过滤过期记录
-                        fresh = [t for t in timestamps if now - t < 3600]
+                        fresh = [t for t in timestamps if now - t < max_age]
                         if fresh:
                             self._buckets[key] = fresh
                             loaded += 1
                 if loaded:
-                    print(f"  速率限制状态已加载: {loaded} 条记录")
+                    print(f"  速率限制: 从文件加载了 {loaded} 条记录")
         except Exception as e:
             print(f"  加载速率限制状态失败: {e}")
 
@@ -217,8 +217,12 @@ def _save_user_lang(username, lang):
 @app.route("/api/lang/switch", methods=["POST"])
 def api_lang_switch():
     """切换语言"""
-    data = request.get_json() or {}
-    lang = data.get("lang", "").strip()
+    data = request.get_json(silent=True) or {}
+    lang = data.get("lang")
+    # 类型校验：必须是字符串
+    if not isinstance(lang, str):
+        return jsonify({"ok": False, "error": "lang must be a string"}), 400
+    lang = lang.strip()
     if lang in SUPPORTED_LANGS:
         session["lang"] = lang
         resp = jsonify({"ok": True, "lang": lang})
@@ -611,6 +615,11 @@ def add_security_headers(response):
     )
         # 隐藏 Werkzeug 版本信息
     response.headers.pop("Server", None)
+    # 敏感页面禁用缓存
+    if "text/html" in response.content_type:
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     # HSTS: 仅在生产环境下使用
     if not os.environ.get("FLASK_DEBUG"):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"

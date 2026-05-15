@@ -13,7 +13,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">密码 <small class="text-muted">(至少8位)</small></label>
-                    <input type="password" name="password" id="regPwd" class="form-control form-control-lg" placeholder="请输入密码" required onkeyup="checkStrength()">
+                    <input type="password" name="password" id="regPwd" autocomplete="new-password" class="form-control form-control-lg" placeholder="请输入密码" required onkeyup="checkStrength()">
                     <div id="strengthBar" class="mt-1" style="height:4px;border-radius:2px;background:#eee;overflow:hidden">
                         <div id="strengthInner" style="height:100%;width:0;transition:all .3s"></div>
                     </div>
@@ -21,11 +21,11 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">确认密码</label>
-                    <input type="password" name="confirm" class="form-control form-control-lg" placeholder="再次输入密码" required>
+                    <input type="password" name="confirm" autocomplete="new-password" class="form-control form-control-lg" placeholder="再次输入密码" required>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">管理密码 <small class="text-muted">(选填，填对则为管理员)</small></label>
-                    <input type="password" name="admin_pwd" class="form-control form-control-lg" placeholder="管理员权限密码">
+                    <input type="password" name="admin_pwd" autocomplete="off" class="form-control form-control-lg" placeholder="管理员权限密码">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">验证码</label>
