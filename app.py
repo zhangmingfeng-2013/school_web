@@ -28,6 +28,32 @@ from flask import (
 )
 from flask_cors import CORS
 from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
+
+
+# ---------- 简易内存速率限制 ----------
+class RateLimiter:
+    """简易内存速率限制（进程内有效，重启重置）"""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._buckets = {}  # {(ip, route): [ts, ...]}
+
+    def check(self, key, max_requests=10, window=60):
+        """检查 key 是否超过限制，返回 True=允许, False=拒绝"""
+        now = time.time()
+        cutoff = now - window
+        with self._lock:
+            hits = self._buckets.get(key, [])
+            # 清理过期记录
+            hits = [t for t in hits if t > cutoff]
+            if len(hits) >= max_requests:
+                self._buckets[key] = hits
+                return False
+            hits.append(now)
+            self._buckets[key] = hits
+            return True
+
+
+rate_limiter = RateLimiter()
 import plugins
 
 app = Flask(__name__)
@@ -48,7 +74,7 @@ CORS(app, supports_credentials=True, origins=['http://localhost:3000', 'http://1
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_SECURE=False,  # 开发环境 HTTP，生产应设为 True
+    SESSION_COOKIE_SECURE=not os.environ.get("FLASK_DEBUG"),  # 生产环境启用 HTTPS cookie
     PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=2),
 )
 
@@ -474,15 +500,17 @@ def add_security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     # CSP: 防 XSS + 点击劫持 + 资源来源限制
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.qq.com https://cdn.bootcdn.net; "
+        "default-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline' https://connect.qq.com https://cdn.bootcdn.net; "
         "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
         "font-src 'self' https://cdn.bootcdn.net; "
         "img-src 'self' data: blob: *; "
-        "connect-src 'self' *; "
+        "connect-src 'self' https://api.dictionaryapi.dev https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
         "frame-ancestors 'self'; "
         "form-action 'self'"
     )
+        # 隐藏 Werkzeug 版本信息
+    response.headers.pop("Server", None)
     # HSTS: 仅在生产环境下使用
     if not os.environ.get("FLASK_DEBUG"):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -840,6 +868,12 @@ def login():
         session["csrf_token"] = os.urandom(32).hex()
 
     if request.method == "POST":
+        # 登录速率限制: 每 IP 每 60 秒最多 10 次 POST
+        client_ip = request.remote_addr or "unknown"
+        if not rate_limiter.check((client_ip, "login"), max_requests=10, window=60):
+            flash("请求过于频繁，请 60 秒后再试", "danger")
+            return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+
         username = sanitize_input(request.form.get("username", ""), 50)
         password = request.form.get("password", "").strip()
 
@@ -931,7 +965,16 @@ def login():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     _init_db_once()
+    # 生成 CSRF token
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
     if request.method == "POST":
+        # 注册速率限制: 每 IP 每 60 秒最多 5 次
+        client_ip = request.remote_addr or "unknown"
+        if not rate_limiter.check((client_ip, "register"), max_requests=5, window=60):
+            flash("请求过于频繁，请 60 秒后再试", "danger")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
+
         username = sanitize_input(request.form.get("username", ""), 50)
         password = request.form.get("password", "").strip()
         confirm = request.form.get("confirm", "").strip()
@@ -939,30 +982,30 @@ def register():
 
         if not username or not password or not confirm:
             flash("所有字段不能为空", "danger")
-            return render_template("register.html")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
         if password != confirm:
             flash("两次密码不一致", "danger")
-            return render_template("register.html")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
         if len(password) < 8:
             flash("密码长度不能少于8位", "danger")
-            return render_template("register.html")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
         # 密码复杂度检查
         if not re.search(r"[A-Za-z]", password):
             flash("密码必须包含至少一个字母", "danger")
-            return render_template("register.html")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
         if not re.search(r"[0-9]", password):
             flash("密码必须包含至少一个数字", "danger")
-            return render_template("register.html")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
         permission = "administrator" if hmac.compare_digest(admin_pwd, ADMIN_SECRET) else "guest"
 
         conn = get_db()
         if not conn:
             flash("数据库连接失败", "danger")
-            return render_template("register.html")
+            return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
         try:
             cursor = conn.cursor()
@@ -983,7 +1026,7 @@ def register():
         except pymysql.MySQLError as e:
             flash(f"注册失败: {str(e)}", "danger")
 
-    return render_template("register.html")
+    return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
 
 @app.route("/logout", methods=["GET", "POST"])
@@ -4951,13 +4994,21 @@ def api_study_flashcards_next():
     """获取下一个需要复习的抽认卡"""
     conn = get_db()
     if not conn: return jsonify({"card":None}),500
+    random_mode = request.args.get("random","0") == "1"
     try:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id,question,answer,tags,level,reviewed_count
-            FROM study_flashcards WHERE username=%s
-            ORDER BY level ASC, last_reviewed ASC LIMIT 1
-        """,[session["username"]])
+        if random_mode:
+            cursor.execute("""
+                SELECT id,question,answer,tags,level,reviewed_count
+                FROM study_flashcards WHERE username=%s
+                ORDER BY RAND() LIMIT 1
+            """,[session["username"]])
+        else:
+            cursor.execute("""
+                SELECT id,question,answer,tags,level,reviewed_count
+                FROM study_flashcards WHERE username=%s
+                ORDER BY level ASC, last_reviewed ASC LIMIT 1
+            """,[session["username"]])
         r = cursor.fetchone()
         if r:
             return jsonify({"card":{"id":r[0],"question":r[1],"answer":r[2],
@@ -5066,4 +5117,13 @@ if __name__ == "__main__":
     print("=" * 50)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     _init_plugins()
+    # 隐藏 Server 版本信息（但 Werkzeug 开发服务器底层会强制加 Server 头）
+    # 真正解决方式是使用 Nginx + Gunicorn/uWSGI 生产部署
+    # 这里尽量弱化版本暴露
+    import werkzeug.serving
+    werkzeug.serving.WSGIRequestHandler.sys_version = ''
+    # 覆盖 server_version 属性（它是 property）
+    orig_server_version = werkzeug.serving.WSGIRequestHandler.server_version
+    werkzeug.serving.WSGIRequestHandler.server_version = property(lambda self: '')  # type: ignore[assignment]
+    werkzeug.serving.WSGIRequestHandler.version_string = lambda self: ''
     app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)

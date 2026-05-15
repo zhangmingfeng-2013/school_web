@@ -39,6 +39,9 @@
     <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-pomodoro">🍅 {{ _('study_pomodoro') }}</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-todo">✅ {{ _('study_todo') }}</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-flashcard">🃏 {{ _('study_flashcard') }}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-dict">📖 {{ _('study_dict') }}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-convert">📐 {{ _('study_convert') }}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-random">🎲 {{ _('study_random') }}</a></li>
 </ul>
 
 <div class="tab-content">
@@ -167,7 +170,13 @@
             <div class="card p-3 mb-3" id="fcReviewPanel">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0">🔄 {{ _('study_fc_review') }}</h6>
-                    <button class="btn btn-sm btn-outline-info" onclick="loadReviewCard()">{{ _('study_fc_next') }}</button>
+                    <div class="d-flex gap-2 align-items-center">
+                        <label class="form-check form-switch mb-0" style="font-size:.8rem;" title="{{ _('study_fc_random_tip') }}">
+                            <input class="form-check-input" type="checkbox" id="fcRandomMode" onchange="loadReviewCard()" style="cursor:pointer;">
+                            🎲 {{ _('study_fc_random') }}
+                        </label>
+                        <button class="btn btn-sm btn-outline-info" onclick="loadReviewCard()">{{ _('study_fc_next') }}</button>
+                    </div>
                 </div>
                 <div class="flashcard" id="fcReviewCard" onclick="flipFlashcard()">
                     <div class="flashcard-inner">
@@ -191,6 +200,127 @@
     </div>
 </div>
 </div>
+
+<!-- ====== 英汉词典 ====== -->
+<div class="tab-pane fade" id="tab-dict">
+    <div class="row">
+        <div class="col-md-5">
+            <div class="input-group mb-3">
+                <input class="form-control" id="dictWord" placeholder="{{ _('study_dict_ph') }}" onkeydown="if(event.key==='Enter')lookupWord()">
+                <button class="btn btn-primary" onclick="lookupWord()">🔍 {{ _('study_dict_search') }}</button>
+            </div>
+            <div class="card p-3" id="dictResult" style="display:none;">
+                <h4 id="dictTitle" class="mb-1"></h4>
+                <small id="dictPhonetic" class="text-muted"></small>
+                <hr>
+                <div id="dictMeanings"></div>
+            </div>
+            <div id="dictError" class="alert alert-warning" style="display:none;"></div>
+        </div>
+        <div class="col-md-7">
+            <div class="card p-3">
+                <h6>💡 {{ _('study_dict_tip') }}</h6>
+                <p class="small text-muted" id="dictTip">{{ _('study_dict_tip_text') }}</p>
+                <div class="mt-2">
+                    <span class="text-muted small">{{ _('study_dict_try') }}:</span>
+                    <span class="badge bg-secondary me-1" style="cursor:pointer" onclick="quickLookup('serendipity')">serendipity</span>
+                    <span class="badge bg-secondary me-1" style="cursor:pointer" onclick="quickLookup('algorithm')">algorithm</span>
+                    <span class="badge bg-secondary me-1" style="cursor:pointer" onclick="quickLookup('harmony')">harmony</span>
+                    <span class="badge bg-secondary" style="cursor:pointer" onclick="quickLookup('resilient')">resilient</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== 单位换算 ====== -->
+<div class="tab-pane fade" id="tab-convert">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card p-3 mb-3">
+                <label class="form-label fw-bold">{{ _('study_conv_category') }}</label>
+                <select class="form-select" id="convCategory" onchange="switchConvCategory()">
+                    <option value="length">{{ _('study_conv_length') }}</option>
+                    <option value="weight">{{ _('study_conv_weight') }}</option>
+                    <option value="temp">{{ _('study_conv_temp') }}</option>
+                    <option value="area">{{ _('study_conv_area') }}</option>
+                    <option value="volume">{{ _('study_conv_volume') }}</option>
+                    <option value="speed">{{ _('study_conv_speed') }}</option>
+                </select>
+            </div>
+            <div class="card p-3">
+                <div class="mb-2">
+                    <label class="form-label small">{{ _('study_conv_from') }}</label>
+                    <input type="number" class="form-control" id="convInput" value="1" oninput="doConvert()" step="any">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">{{ _('study_conv_to') }}</label>
+                    <select class="form-select form-select-sm" id="convFrom" onchange="doConvert()"></select>
+                </div>
+                <div class="text-center my-2">⬇️</div>
+                <div class="mb-2">
+                    <select class="form-select form-select-sm" id="convTo" onchange="doConvert()"></select>
+                </div>
+                <div class="alert alert-info text-center mb-0">
+                    <span id="convResult" style="font-size:1.3rem;font-weight:700;">—</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card p-3">
+                <h6>📊 {{ _('study_conv_table') }}</h6>
+                <div class="table-responsive" style="max-height:50vh;overflow-y:auto;">
+                    <table class="table table-sm table-hover" id="convTable">
+                        <thead><tr><th>{{ _('study_conv_from') }}</th><th>{{ _('study_conv_to') }}</th><th>{{ _('study_conv_value') }}</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== 随机选择 ====== -->
+<div class="tab-pane fade" id="tab-random">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card p-3 mb-3">
+                <h6>🎲 {{ _('study_rand_picker') }}</h6>
+                <textarea class="form-control form-control-sm mb-2" id="randItems" rows="6" placeholder="{{ _('study_rand_ph') }}"></textarea>
+                <button class="btn btn-primary" onclick="randomPick()">🎲 {{ _('study_rand_go') }}</button>
+                <div id="randResult" class="mt-3 text-center" style="display:none;">
+                    <div style="font-size:3rem;" id="randEmoji">🎉</div>
+                    <div style="font-size:1.5rem;font-weight:700;" id="randText"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card p-3 mb-3">
+                <h6>🔢 {{ _('study_rand_number') }}</h6>
+                <div class="row g-2 mb-2">
+                    <div class="col-6"><input type="number" class="form-control form-control-sm" id="randMin" value="1" placeholder="Min"></div>
+                    <div class="col-6"><input type="number" class="form-control form-control-sm" id="randMax" value="100" placeholder="Max"></div>
+                </div>
+                <button class="btn btn-outline-info btn-sm w-100" onclick="randomNumber()">🎲 {{ _('study_rand_go') }}</button>
+                <div id="randNumResult" class="text-center mt-3" style="font-size:2.5rem;font-weight:700;" hidden>0</div>
+            </div>
+            <div class="card p-3">
+                <h6>⏱️ {{ _('study_rand_stopwatch') }}</h6>
+                <div class="text-center">
+                    <div style="font-size:2.5rem;font-weight:700;font-variant-numeric:tabular-nums;" id="swDisplay">00:00.00</div>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-success" id="swStart" onclick="toggleStopwatch()">▶ {{ _('study_pomo_start') }}</button>
+                        <button class="btn btn-sm btn-outline-info" id="swLap" onclick="lapStopwatch()" disabled>🏁 {{ _('study_rand_lap') }}</button>
+                        <button class="btn btn-sm btn-outline-danger" id="swReset" onclick="resetStopwatch()">↺</button>
+                    </div>
+                    <div id="swLaps" class="mt-2 text-start small text-muted" style="max-height:120px;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -208,6 +338,10 @@ const L = {
     enterQnA: '{{ _("study_fc_enter_qna") }}',
     confirmDelete: '{{ _("study_confirm_delete") }}',
     loading: '{{ _("study_loading") }}',
+    dictNotFound: '{{ _("study_dict_notfound") }}',
+    requestFailed: '{{ _("backup_request_failed", error="") }}',
+    swStart: '{{ _("study_pomo_start") }}',
+    swPause: '{{ _("study_pomo_pause") }}',
 };
 
 // ====== 番茄钟 ======
@@ -386,7 +520,8 @@ async function addFlashcard() {
 }
 async function deleteFlashcard(id) { if(!confirm(L.confirmDelete))return; await fetch(`/api/study/flashcards/${id}`,{method:'DELETE',credentials:'include'}); loadFlashcards(); }
 async function loadReviewCard() {
-    const r = await fetch('/api/study/flashcards/review',{credentials:'include'});
+    const random = document.getElementById('fcRandomMode').checked ? '1' : '0';
+    const r = await fetch(`/api/study/flashcards/review?random=${random}`,{credentials:'include'});
     const d = await r.json(); reviewCard = d.card;
     if (reviewCard) { document.getElementById('fcReviewFront').textContent=reviewCard.question; document.getElementById('fcReviewBack').textContent=reviewCard.answer; document.getElementById('fcReviewCard').classList.remove('flipped'); document.getElementById('fcReviewBtns').style.display='flex'; }
     else { document.getElementById('fcReviewFront').textContent=L.allReviewed; document.getElementById('fcReviewBack').textContent=''; document.getElementById('fcReviewBtns').style.display='none'; }
@@ -398,7 +533,136 @@ async function reviewFlashcard(level) { if(!reviewCard)return; await fetch(`/api
 document.addEventListener('DOMContentLoaded',() => {
     document.querySelector('a[href="#tab-todo"]').addEventListener('shown.bs.tab', loadTodos);
     document.querySelector('a[href="#tab-flashcard"]').addEventListener('shown.bs.tab', loadFlashcards);
+    document.querySelector('a[href="#tab-convert"]').addEventListener('shown.bs.tab', switchConvCategory);
 });
 loadTodos();
+
+// ====== 英汉词典 ======
+async function lookupWord() {
+    const w = document.getElementById('dictWord').value.trim();
+    if(!w) return;
+    document.getElementById('dictResult').style.display='none';
+    document.getElementById('dictError').style.display='none';
+    try {
+        const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`);
+        if(!r.ok) { document.getElementById('dictError').style.display='block'; document.getElementById('dictError').textContent=`❌ ${L.dictNotFound||'Word not found'}`; return; }
+        const data = await r.json();
+        const entry = data[0];
+        document.getElementById('dictTitle').textContent = entry.word;
+        const phon = entry.phonetic || (entry.phonetics&&entry.phonetics[0]&&entry.phonetics[0].text) || '';
+        document.getElementById('dictPhonetic').textContent = phon;
+        let html = '';
+        entry.meanings.forEach(m => {
+            html += `<div class="mb-2"><span class="badge bg-info me-1">${m.partOfSpeech}</span>`;
+            m.definitions.slice(0,4).forEach((d,i) => {
+                html += `<div class="ms-2 small">${i+1}. ${d.definition}`;
+                if(d.example) html += `<br><span class="text-muted" style="font-size:.75rem;">"${d.example}"</span>`;
+                html += '</div>';
+            });
+            html += '</div>';
+        });
+        document.getElementById('dictMeanings').innerHTML = html;
+        document.getElementById('dictResult').style.display='block';
+    } catch(e) {
+        document.getElementById('dictError').style.display='block';
+        document.getElementById('dictError').textContent = L.requestFailed.replace('{error}', e.message);
+    }
+}
+function quickLookup(w) { document.getElementById('dictWord').value=w; lookupWord(); }
+
+// ====== 单位换算 ======
+const CONV = {
+    length: { units:['m','km','cm','mm','ft','in','yd','mi'], toBase:v=>v, fromBase:v=>v,
+        labels:{m:'meter',km:'kilometer',cm:'centimeter',mm:'millimeter',ft:'foot',in:'inch',yd:'yard',mi:'mile'},
+        factors:{m:1,km:1000,cm:0.01,mm:0.001,ft:0.3048,in:0.0254,yd:0.9144,mi:1609.344}},
+    weight: { units:['kg','g','mg','lb','oz','t'],
+        factors:{kg:1,g:0.001,mg:1e-6,lb:0.453592,oz:0.0283495,t:1000},
+        labels:{kg:'kilogram',g:'gram',mg:'milligram',lb:'pound',oz:'ounce',t:'ton'}},
+    temp: { units:['°C','°F','K'],
+        toBase:(v,u)=>u==='°C'?v:u==='°F'?(v-32)*5/9:v-273.15,
+        fromBase:(v,u)=>u==='°C'?v:u==='°F'?v*9/5+32:v+273.15,
+        labels:{'°C':'Celsius','°F':'Fahrenheit','K':'Kelvin'}},
+    area: { units:['m²','km²','ha','ft²','ac'],
+        factors:{'m²':1,'km²':1e6,ha:10000,'ft²':0.092903,ac:4046.86},
+        labels:{'m²':'sq meter','km²':'sq km',ha:'hectare','ft²':'sq foot',ac:'acre'}},
+    volume: { units:['L','mL','m³','gal','floz'],
+        factors:{L:1,mL:0.001,'m³':1000,gal:3.78541,floz:0.0295735},
+        labels:{L:'liter',mL:'milliliter','m³':'cubic meter',gal:'gallon',floz:'fl oz'}},
+    speed: { units:['km/h','m/s','mph','knot'],
+        factors:{'km/h':1,'m/s':3.6,mph:1.60934,knot:1.852},
+        labels:{'km/h':'km per hour','m/s':'m per second',mph:'miles per hour',knot:'knot'}},
+};
+function switchConvCategory() {
+    const cat = document.getElementById('convCategory').value;
+    const cfg = CONV[cat];
+    const opts = cfg.units.map(u => `<option value="${u}">${u} (${cfg.labels[u]})</option>`).join('');
+    document.getElementById('convFrom').innerHTML = opts;
+    document.getElementById('convTo').innerHTML = opts;
+    document.getElementById('convTo').selectedIndex = 1;
+    doConvert();
+    updateConvTable();
+}
+function doConvert() {
+    const cat = document.getElementById('convCategory').value;
+    const cfg = CONV[cat];
+    const val = parseFloat(document.getElementById('convInput').value)||0;
+    const from = document.getElementById('convFrom').value;
+    const to = document.getElementById('convTo').value;
+    let result;
+    if(cat==='temp') { result = cfg.fromBase(cfg.toBase(val,from),to); }
+    else { result = (val * cfg.factors[from]) / cfg.factors[to]; }
+    document.getElementById('convResult').textContent = `${Number(result.toFixed(6))} ${to}`;
+}
+function updateConvTable() {
+    const cat = document.getElementById('convCategory').value;
+    const cfg = CONV[cat];
+    const val = parseFloat(document.getElementById('convInput').value)||1;
+    const from = document.getElementById('convFrom').value;
+    let rows = '';
+    cfg.units.forEach(to => {
+        if(to===from) return;
+        let result;
+        if(cat==='temp') result=cfg.fromBase(cfg.toBase(val,from),to);
+        else result=(val*cfg.factors[from])/cfg.factors[to];
+        rows += `<tr><td>${from}</td><td>${to}</td><td>${Number(result.toFixed(6))}</td></tr>`;
+    });
+    document.querySelector('#convTable tbody').innerHTML = rows;
+}
+
+// ====== 随机选择 ======
+function randomPick() {
+    const text = document.getElementById('randItems').value.trim();
+    if(!text) return;
+    const items = text.split(/[\n,，]+/).map(s=>s.trim()).filter(Boolean);
+    if(!items.length) return;
+    const pick = items[Math.floor(Math.random()*items.length)];
+    document.getElementById('randResult').style.display='block';
+    document.getElementById('randEmoji').textContent = ['🎉','✨','🎯','🌟','💡','🔥'][Math.floor(Math.random()*6)];
+    document.getElementById('randText').textContent = pick;
+}
+function randomNumber() {
+    const minVal = document.getElementById('randMin').value;
+    const maxVal = document.getElementById('randMax').value;
+    let min = parseInt(minVal); if(isNaN(min)) min = 1;
+    let max = parseInt(maxVal); if(isNaN(max)) max = 100;
+    if(min > max) [min, max] = [max, min];
+    const n = Math.floor(Math.random()*(max-min+1))+min;
+    document.getElementById('randNumResult').textContent = n;
+    document.getElementById('randNumResult').hidden = false;
+}
+
+// ====== 秒表 ======
+let swTimer=null, swMs=0, swRunning=false;
+function fmtSW(ms) { const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),cs=Math.floor((ms%1000)/10); return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`; }
+function toggleStopwatch() {
+    if(swRunning) { clearInterval(swTimer); swRunning=false; document.getElementById('swStart').textContent='▶ '+L.swStart; document.getElementById('swLap').disabled=true; }
+    else { swRunning=true; document.getElementById('swStart').textContent='⏸ '+L.swPause; document.getElementById('swLap').disabled=false; swTimer=setInterval(()=>{ swMs+=10; updateSWDisplay(); },10); }
+}
+function updateSWDisplay() { document.getElementById('swDisplay').textContent=fmtSW(swMs); }
+function lapStopwatch() {
+    const laps = document.getElementById('swLaps');
+    laps.innerHTML = `<div>🏁 ${fmtSW(swMs)}</div>` + laps.innerHTML;
+}
+function resetStopwatch() { clearInterval(swTimer); swMs=0; swRunning=false; document.getElementById('swDisplay').textContent='00:00.00'; document.getElementById('swStart').textContent='▶ '+L.swStart; document.getElementById('swLap').disabled=true; document.getElementById('swLaps').innerHTML=''; }
 </script>
 {% endblock %}
