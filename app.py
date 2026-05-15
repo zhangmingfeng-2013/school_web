@@ -471,7 +471,11 @@ def api_captcha():
     buf = io.BytesIO()
     img.save(buf, "PNG")
     buf.seek(0)
-    return send_file(buf, mimetype="image/png")
+    resp = send_file(buf, mimetype="image/png")
+    resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 # ---------- 登录防爆破 ----------
 login_lockout = {}  # {username: (attempts, lockout_until)}
