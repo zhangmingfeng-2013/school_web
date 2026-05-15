@@ -32,10 +32,16 @@ from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
 
 # ---------- 简易内存速率限制 ----------
 class RateLimiter:
-    """简易内存速率限制（进程内有效，重启重置）"""
-    def __init__(self):
+    """简易内存速率限制（文件持久化，重启不丢失）"""
+
+    def __init__(self, persist_file=None):
         self._lock = threading.Lock()
         self._buckets = {}  # {(ip, route): [ts, ...]}
+        self._persist_file = persist_file
+        self._save_timer = None
+        # 加载历史数据
+        if persist_file:
+            self._load()
 
     def check(self, key, max_requests=10, window=60):
         """检查 key 是否超过限制，返回 True=允许, False=拒绝"""
@@ -50,10 +56,67 @@ class RateLimiter:
                 return False
             hits.append(now)
             self._buckets[key] = hits
+            self._schedule_save()
             return True
 
+    def _schedule_save(self):
+        """去抖保存：延迟 2 秒保存，多次 rapid 调用合并"""
+        if not self._persist_file:
+            return
+        if self._save_timer:
+            self._save_timer.cancel()
+        self._save_timer = threading.Timer(2.0, self._save)
+        self._save_timer.start()
 
-rate_limiter = RateLimiter()
+    def _load(self):
+        """从文件加载持久化状态"""
+        try:
+            if os.path.exists(self._persist_file):
+                with open(self._persist_file, "r") as f:
+                    raw = json.load(f)
+                now = time.time()
+                loaded = 0
+                with self._lock:
+                    for k, timestamps in raw.items():
+                        # 解析 key（存储时为 "ip|route" 字符串）
+                        parts = k.split("|", 1)
+                        if len(parts) == 2:
+                            key = tuple(parts)
+                        else:
+                            key = (k, "")
+                        # 过滤过期记录
+                        fresh = [t for t in timestamps if now - t < 3600]
+                        if fresh:
+                            self._buckets[key] = fresh
+                            loaded += 1
+                if loaded:
+                    print(f"  速率限制状态已加载: {loaded} 条记录")
+        except Exception as e:
+            print(f"  加载速率限制状态失败: {e}")
+
+    def _save(self):
+        """将当前状态保存到文件"""
+        if not self._persist_file:
+            return
+        try:
+            with self._lock:
+                out = {}
+                for k, timestamps in list(self._buckets.items()):
+                    key_str = "|".join(k)
+                    out[key_str] = timestamps
+            with open(self._persist_file, "w") as f:
+                json.dump(out, f)
+        except Exception:
+            pass
+
+    def shutdown(self):
+        """优雅关闭，强制保存"""
+        if self._save_timer:
+            self._save_timer.cancel()
+        self._save()
+
+
+rate_limiter = RateLimiter(persist_file=os.path.join(os.path.dirname(__file__), "rate_limiter.json"))
 import plugins
 
 app = Flask(__name__)
@@ -5151,6 +5214,9 @@ def _init_plugins():
 
 # ---------- 启动 ----------
 if __name__ == "__main__":
+    import atexit
+    atexit.register(rate_limiter.shutdown)
+
     print("=" * 50)
     print("  多合一工具箱 Web 版启动")
     print(f"  本地访问: http://127.0.0.1:4444")
@@ -5167,5 +5233,8 @@ if __name__ == "__main__":
     print("=" * 50)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     _init_plugins()
-    # 隐藏 Werkzeug 版本信息（此时可能已被 HTTP server 层覆盖）
+    # 隐藏 Werkzeug 版本信息（HTTP server 层强制加 Server 头，用 patch 覆盖）
+    import werkzeug.serving
+    werkzeug.serving.WSGIRequestHandler.version_string = lambda self: "SchoolWeb"
+    werkzeug.serving.WSGIRequestHandler.sys_version = ''
     app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
