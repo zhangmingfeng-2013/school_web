@@ -412,6 +412,7 @@ def api_captcha():
     code = "".join(_random.choice(chars) for _ in range(4))
     session["captcha_code"] = code.lower()
     session["captcha_time"] = time.time()
+    print(f"[DEBUG captcha] generated code='{code}' stored='{code.lower()}'", flush=True)
 
     # 创建验证码图片
     width, height = 140, 50
@@ -1008,6 +1009,8 @@ def login():
 
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
+        stored_captcha = session.get("captcha_code", "")
+        print(f"[DEBUG captcha] user_input='{captcha_input}' stored='{stored_captcha}' match={captcha_input == stored_captcha}", flush=True)
         if not _verify_captcha(captcha_input):
             flash("验证码错误", "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
