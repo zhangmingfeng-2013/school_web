@@ -246,6 +246,16 @@
     </div>
 
     <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('utils_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(59,130,246,.2)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(59,130,246,.08)!important;"><span style="font-size:2rem;">🧰</span></div>
+                <h5>{{ _('dashboard_feature_utils') }}</h5>
+                <p class="text-muted small">{{ _('dashboard_feature_utils_desc') }}</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('profile') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
                 <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">👤</span></div>

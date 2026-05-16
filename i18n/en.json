@@ -502,5 +502,7 @@
   "utils_tab_json": "📋 JSON",
   "utils_tab_uuid": "🆔 UUID",
   "utils_tab_timestamp": "⏱ Timestamp",
-  "utils_tab_count": "📊 Counter"
+  "utils_tab_count": "📊 Counter",
+  "dashboard_feature_utils": "🧰 Utility Tools",
+  "dashboard_feature_utils_desc": "Password gen · Hash · Base64 · JSON format & more"
 }

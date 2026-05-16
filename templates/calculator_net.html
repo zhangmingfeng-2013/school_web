@@ -1,17 +1,26 @@
 {% extends "base.html" %}
-{% block title %}网络计算器 - 多合一工具箱 Web 版{% endblock %}
+{% block title %}网络计算器 - 多合一工具箱{% endblock %}
 {% block content %}
+<style nonce="{{ csp_nonce }}">
+.net-card { height:100% }
+.net-result { background:var(--code-bg,#f8f9fa);border-radius:8px;padding:12px;margin-top:12px;display:none }
+.net-result table { margin-bottom:0;font-size:.85rem }
+.net-result td:first-child { color:var(--text-muted,#6c757d);width:40% }
+[data-bs-theme="dark"] .net-result { background:#1e1e2e }
+[data-bs-theme="dark"] .net-result table { color:#e5e7eb }
+</style>
+
 <div class="d-flex gap-2 mb-3 flex-wrap">
-    <a href="{{ url_for('calculator') }}" class="btn btn-outline-primary btn-sm">🧮 普通</a>
+    <a href="{{ url_for('calculator') }}"     class="btn btn-outline-primary btn-sm">🧮 普通</a>
     <a href="{{ url_for('calculator_sci') }}" class="btn btn-outline-primary btn-sm">📐 科学</a>
     <a href="{{ url_for('calculator_net') }}" class="btn btn-primary btn-sm">🌐 网络</a>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm ms-auto">← 返回</a>
+    <a href="{{ url_for('dashboard') }}"      class="btn btn-outline-secondary btn-sm ms-auto">← 返回</a>
 </div>
 
 <div class="row g-3">
-    <!-- 子网计算 -->
+    <!-- 子网掩码计算 -->
     <div class="col-12 col-lg-6">
-        <div class="card h-100">
+        <div class="card net-card">
             <div class="card-body">
                 <h5 class="mb-3">📐 子网掩码计算</h5>
                 <div class="mb-3">
@@ -19,22 +28,22 @@
                     <input id="subnetIp" class="form-control" placeholder="192.168.1.1" value="192.168.1.1">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">子网掩码或 CIDR</label>
+                    <label class="form-label">子网掩码 / CIDR</label>
                     <div class="input-group">
                         <input id="subnetMask" class="form-control" placeholder="255.255.255.0" value="255.255.255.0">
-                        <span class="input-group-text">或 /</span>
-                        <input id="subnetCidr" class="form-control" placeholder="24" style="max-width:70px;" value="24">
+                        <span class="input-group-text">/</span>
+                        <input id="subnetCidr" class="form-control" placeholder="24" style="max-width:70px" value="24">
                     </div>
                 </div>
                 <button id="subnetCalcBtn" class="btn btn-primary w-100">计算</button>
-                <div id="subnetResult" class="mt-3" style="display:none;"></div>
+                <div class="net-result" id="subnetResult"></div>
             </div>
         </div>
     </div>
 
     <!-- IP 范围计算 -->
     <div class="col-12 col-lg-6">
-        <div class="card h-100">
+        <div class="card net-card">
             <div class="card-body">
                 <h5 class="mb-3">🔢 IP 范围计算</h5>
                 <div class="mb-3">
@@ -46,12 +55,12 @@
                     <input id="rangeEnd" class="form-control" placeholder="192.168.1.255">
                 </div>
                 <button id="rangeCalcBtn" class="btn btn-primary w-100">计算</button>
-                <div id="rangeResult" class="mt-3" style="display:none;"></div>
+                <div class="net-result" id="rangeResult"></div>
             </div>
         </div>
     </div>
 
-    <!-- IP 转整数 / 二进制 -->
+    <!-- IP 进制转换 -->
     <div class="col-12 col-lg-6">
         <div class="card">
             <div class="card-body">
@@ -61,7 +70,7 @@
                     <input id="convIp" class="form-control" placeholder="192.168.1.1" value="192.168.1.1">
                 </div>
                 <button id="convBtn" class="btn btn-primary w-100">转换</button>
-                <div id="convResult" class="mt-3" style="display:none;"></div>
+                <div class="net-result" id="convResult"></div>
             </div>
         </div>
     </div>
@@ -70,118 +79,81 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
 function ipToInt(ip){
-    const parts = ip.split('.').map(Number);
-    if (parts.length !== 4 || parts.some(p => isNaN(p) || p<0 || p>255)) return NaN;
-    return ((parts[0]<<24)|(parts[1]<<16)|(parts[2]<<8)|parts[3])>>>0;
+    var p=ip.split('.').map(Number);
+    if(p.length!==4||p.some(function(x){return isNaN(x)||x<0||x>255}))return NaN;
+    return ((p[0]<<24)|(p[1]<<16)|(p[2]<<8)|p[3])>>>0;
 }
 function intToIp(n){
     return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255].join('.');
 }
-function maskFromCidr(cidr){
-    const c = parseInt(cidr);
-    if (isNaN(c) || c<0 || c>32) return null;
-    return c===0 ? 0 : (~0 << (32-c))>>>0;
+function maskFromCidr(c){
+    var n=parseInt(c);
+    if(isNaN(n)||n<0||n>32)return null;
+    return n===0?0:(~0<<(32-n))>>>0;
 }
-function cidrFromMask(mask){
-    let n = ipToInt(mask);
-    if (isNaN(n) || n===0) return 0;
-    let c=0; while(n&1){c++; n>>>=1;}
-    return 32-c;
+function cidrFromMask(m){
+    var n=ipToInt(m);if(isNaN(n)||n===0)return 0;
+    var c=0;while(n&1){c++;n>>>=1}return 32-c;
 }
 function binStr(n){
-    let s = (n>>>0).toString(2).padStart(32,'0');
+    var s=(n>>>0).toString(2).padStart(32,'0');
     return s.slice(0,8)+'.'+s.slice(8,16)+'.'+s.slice(16,24)+'.'+s.slice(24,32);
 }
 function renderTable(data){
-    let html = '<table class="table table-sm table-bordered small mb-0"><tbody>';
-    for (const [k,v] of Object.entries(data)){
-        html += '<tr><td class="text-muted" style="width:35%;">'+k+'</td><td>'+v+'</td></tr>';
-    }
-    return html+'</tbody></table>';
+    var h='<table class="table table-sm table-bordered small mb-0"><tbody>';
+    for(var k in data)h+='<tr><td>'+k+'</td><td>'+data[k]+'</td></tr>';
+    return h+'</tbody></table>';
 }
+function showResult(el,html){el.innerHTML=html;el.style.display='block'}
 
-// 子网计算
 document.getElementById('subnetCalcBtn').addEventListener('click',function(){
-    const ip = document.getElementById('subnetIp').value.trim();
-    const maskInput = document.getElementById('subnetMask').value.trim();
-    const cidrInput = document.getElementById('subnetCidr').value.trim();
-    const result = document.getElementById('subnetResult');
-
-    let maskInt;
-    if (cidrInput) maskInt = maskFromCidr(cidrInput);
-    else if (maskInput) maskInt = ipToInt(maskInput);
-    else { result.innerHTML='<div class="alert alert-danger py-2">请输入子网掩码或CIDR</div>'; result.style.display='block'; return; }
-
-    if (maskInt === null || isNaN(maskInt)){ result.innerHTML='<div class="alert alert-danger py-2">无效的子网掩码/CIDR</div>'; result.style.display='block'; return; }
-
-    const ipInt = ipToInt(ip);
-    if (isNaN(ipInt)){ result.innerHTML='<div class="alert alert-danger py-2">无效的IP地址</div>'; result.style.display='block'; return; }
-
-    const cidr = cidrInput ? parseInt(cidrInput) : cidrFromMask(intToIp(maskInt));
-    const networkInt = ipInt & maskInt;
-    const broadcastInt = networkInt | (~maskInt>>>0);
-    const hosts = cidr>=31 ? (cidr===32?1:0) : (broadcastInt-networkInt-1);
-
-    document.getElementById('subnetMask').value = intToIp(maskInt);
-    document.getElementById('subnetCidr').value = cidr;
-
-    result.innerHTML = '<h6 class="mt-2 mb-2">📊 计算结果</h6>' + renderTable({
-        '网络地址': intToIp(networkInt),
-        '广播地址': intToIp(broadcastInt),
-        '子网掩码': intToIp(maskInt) + ' /'+cidr,
-        '可用主机数': hosts.toLocaleString(),
-        '主机范围': hosts>0 ? intToIp(networkInt+1)+' — '+intToIp(broadcastInt-1) : '无可用主机',
-        '总地址数': Math.pow(2,32-cidr),
-        'IP类型': cidr<32 ? (networkInt===ipInt?'网络地址':(broadcastInt===ipInt?'广播地址':'主机地址')) : '主机地址',
-        '子网掩码二进制': binStr(maskInt),
-        '网络地址二进制': binStr(networkInt),
-    });
-    result.style.display = 'block';
+    var ip=document.getElementById('subnetIp').value.trim();
+    var mi=document.getElementById('subnetMask').value.trim();
+    var ci=document.getElementById('subnetCidr').value.trim();
+    var r=document.getElementById('subnetResult');
+    var maskInt; if(ci)maskInt=maskFromCidr(ci);else maskInt=ipToInt(mi);
+    if(maskInt===null||isNaN(maskInt)){showResult(r,'<div class="alert alert-danger py-2 small mb-0">无效的子网掩码/CIDR</div>');return}
+    var ipInt=ipToInt(ip);if(isNaN(ipInt)){showResult(r,'<div class="alert alert-danger py-2 small mb-0">无效的IP地址</div>');return}
+    var cidr=ci?parseInt(ci):cidrFromMask(intToIp(maskInt));
+    var netInt=ipInt&maskInt,bcastInt=netInt|(~maskInt>>>0);
+    var hosts=cidr>=31?(cidr===32?1:0):(bcastInt-netInt-1);
+    document.getElementById('subnetMask').value=intToIp(maskInt);
+    document.getElementById('subnetCidr').value=cidr;
+    showResult(r,'<h6 class="mb-2">📊 计算结果</h6>'+renderTable({
+        '网络地址':intToIp(netInt),'广播地址':intToIp(bcastInt),
+        '子网掩码':intToIp(maskInt)+' /'+cidr,'可用主机数':hosts.toLocaleString(),
+        '主机范围':hosts>0?intToIp(netInt+1)+' — '+intToIp(bcastInt-1):'无',
+        '总地址数':Math.pow(2,32-cidr),'IP类型':cidr<32?(netInt===ipInt?'网络地址':(bcastInt===ipInt?'广播地址':'主机地址')):'主机地址',
+        '掩码二进制':binStr(maskInt),'网络二进制':binStr(netInt)
+    }));
 });
 
-// IP获取范围
 document.getElementById('rangeCalcBtn').addEventListener('click',function(){
-    const s = document.getElementById('rangeStart').value.trim();
-    const e = document.getElementById('rangeEnd').value.trim();
-    const result = document.getElementById('rangeResult');
-    const sInt = ipToInt(s), eInt = ipToInt(e);
-    if (isNaN(sInt)||isNaN(eInt)){ result.innerHTML='<div class="alert alert-danger py-2">IP地址无效</div>'; result.style.display='block'; return; }
-    if (sInt > eInt){ result.innerHTML='<div class="alert alert-danger py-2">起始IP不能大于结束IP</div>'; result.style.display='block'; return; }
-    const count = eInt - sInt + 1;
-    // 计算可容纳的CIDR
-    let cidr = 32;
-    while (cidr>0 && ((sInt >>> (32-cidr)) === (eInt >>> (32-cidr)))) cidr--;
-    cidr++;
-
-    result.innerHTML = '<h6 class="mt-2 mb-2">📊 计算结果</h6>' + renderTable({
-        'IP数量': count.toLocaleString(),
-        '最小CIDR覆盖': intToIp(sInt & maskFromCidr(cidr))+'/'+cidr,
-        '起始IP': intToIp(sInt),
-        '结束IP': intToIp(eInt),
-        '起始(整数)': sInt,
-        '结束(整数)': eInt,
-        '起始(二进制)': binStr(sInt),
-        '结束(二进制)': binStr(eInt),
-    });
-    result.style.display = 'block';
+    var s=document.getElementById('rangeStart').value.trim();
+    var e=document.getElementById('rangeEnd').value.trim();
+    var r=document.getElementById('rangeResult');
+    var si=ipToInt(s),ei=ipToInt(e);
+    if(isNaN(si)||isNaN(ei)){showResult(r,'<div class="alert alert-danger py-2 small mb-0">IP地址无效</div>');return}
+    if(si>ei){showResult(r,'<div class="alert alert-danger py-2 small mb-0">起始IP不能大于结束IP</div>');return}
+    var cnt=ei-si+1,cidr=32;
+    while(cidr>0&&((si>>>(32-cidr))===(ei>>>(32-cidr))))cidr--;cidr++;
+    showResult(r,'<h6 class="mb-2">📊 计算结果</h6>'+renderTable({
+        'IP数量':cnt.toLocaleString(),'最小CIDR覆盖':intToIp(si&maskFromCidr(cidr))+'/'+cidr,
+        '起始IP':intToIp(si),'结束IP':intToIp(ei),'起始整数':si,'结束整数':ei,
+        '起始二进制':binStr(si),'结束二进制':binStr(ei)
+    }));
 });
 
-// IP 进制转换
 document.getElementById('convBtn').addEventListener('click',function(){
-    const ip = document.getElementById('convIp').value.trim();
-    const result = document.getElementById('convResult');
-    const ipInt = ipToInt(ip);
-    if (isNaN(ipInt)){ result.innerHTML='<div class="alert alert-danger py-2">无效的IP地址</div>'; result.style.display='block'; return; }
-
-    result.innerHTML = '<h6 class="mt-2 mb-2">📊 转换结果</h6>' + renderTable({
-        '十进制整数': ipInt,
-        '十六进制': '0x'+ipInt.toString(16).toUpperCase(),
-        '八进制': '0'+ipInt.toString(8),
-        '二进制': binStr(ipInt),
-        '标准IP': intToIp(ipInt),
-        '反向DNS': ip.split('.').reverse().join('.')+'.in-addr.arpa',
-    });
-    result.style.display = 'block';
+    var ip=document.getElementById('convIp').value.trim();
+    var r=document.getElementById('convResult');
+    var ipInt=ipToInt(ip);
+    if(isNaN(ipInt)){showResult(r,'<div class="alert alert-danger py-2 small mb-0">无效的IP地址</div>');return}
+    showResult(r,'<h6 class="mb-2">📊 转换结果</h6>'+renderTable({
+        '十进制整数':ipInt,'十六进制':'0x'+ipInt.toString(16).toUpperCase(),
+        '八进制':'0'+ipInt.toString(8),'二进制':binStr(ipInt),
+        '标准IP':intToIp(ipInt),'反向DNS':ip.split('.').reverse().join('.')+'.in-addr.arpa'
+    }));
 });
 </script>
 {% endblock %}
