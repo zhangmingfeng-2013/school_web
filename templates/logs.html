@@ -4,7 +4,7 @@
 <h2 class="mb-4">📋 操作日志</h2>
 <div class="d-flex gap-2 mb-3">
     <a href="{{ url_for('logs') }}" class="btn btn-outline-primary">🔄 刷新</a>
-    <a href="{{ url_for('logs_clear') }}" class="btn btn-outline-danger" onclick="return confirm('确定清空所有日志？')">🗑 清空日志</a>
+    <a href="{{ url_for('logs_clear') }}" class="btn btn-outline-danger" id="clearLogsLink">🗑 清空日志</a>
 </div>
 <div class="card">
     <div class="card-body p-0">
@@ -15,4 +15,14 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    var link = document.getElementById('clearLogsLink');
+    if (link) link.addEventListener('click', function(e) {
+        if (!confirm('确定清空所有日志？')) e.preventDefault();
+    });
+});
+</script>
 {% endblock %}

@@ -346,4 +346,10 @@ function reviewAdminReq(id, action) {
         <div class="modal-body" id="adminReqBody"></div>
     </div></div>
 </div>
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.dash-review-btn');
+    if (btn) reviewAdminReq(parseInt(btn.getAttribute('data-id')), btn.getAttribute('data-action'));
+});
+</script>
 {% endblock %}

@@ -476,7 +476,7 @@ async function loadTodos() {
                         </div>
                         ${t.due_date?`<small class="text-muted ms-4">📅 ${t.due_date}</small>`:''}
                     </div>
-                    <button class="btn btn-sm text-danger" onclick="deleteTodo(${t.id})" style="font-size:1rem;">✕</button>
+                    <button class="btn btn-sm text-danger study-del-todo" data-id="${t.id}" style="font-size:1rem;">✕</button>
                 </div>
             `).join('');
         }
@@ -509,7 +509,7 @@ async function loadFlashcards() {
         document.getElementById('barNew').style.width=cards.length?(newC/cards.length*100)+'%':'0%';
         const list = document.getElementById('fcList');
         if (!cards.length) { list.innerHTML = `<div class="text-center text-muted py-3 small">${L.noCards}</div>`; }
-        else { list.innerHTML = cards.map(c => `<div class="d-flex justify-content-between align-items-start py-2 border-bottom"><div class="flex-grow-1" style="cursor:pointer" onclick="const a=this.querySelector('.fc-answer');a.style.display=a.style.display==='none'?'block':'none'"><span class="badge bg-${c.level>=2?'success':c.level>=1?'warning':'secondary'} me-1" style="font-size:.6rem;">${c.level>=2?'✓':c.level>=1?'·':'?'}</span><strong style="font-size:.85rem;">${c.question.length>30?c.question.slice(0,30)+'...':c.question}</strong><div class="fc-answer text-muted mt-1" style="font-size:.8rem;display:none;color:var(--text-muted)!important;">${c.answer}</div></div><button class="btn btn-sm text-danger" onclick="deleteFlashcard(${c.id})" style="font-size:.8rem;">✕</button></div>`).join(''); }
+        else { list.innerHTML = cards.map(c => `<div class="d-flex justify-content-between align-items-start py-2 border-bottom"><div class="flex-grow-1 study-fc-flip" style="cursor:pointer"><span class="badge bg-${c.level>=2?'success':c.level>=1?'warning':'secondary'} me-1" style="font-size:.6rem;">${c.level>=2?'✓':c.level>=1?'·':'?'}</span><strong style="font-size:.85rem;">${c.question.length>30?c.question.slice(0,30)+'...':c.question}</strong><div class="fc-answer text-muted mt-1" style="font-size:.8rem;display:none;color:var(--text-muted)!important;">${c.answer}</div></div><button class="btn btn-sm text-danger study-del-fc" data-id="${c.id}" style="font-size:.8rem;">✕</button></div>`).join(''); }
     } catch(e) {}
 }
 async function addFlashcard() {
@@ -664,5 +664,12 @@ function lapStopwatch() {
     laps.innerHTML = `<div>🏁 ${fmtSW(swMs)}</div>` + laps.innerHTML;
 }
 function resetStopwatch() { clearInterval(swTimer); swMs=0; swRunning=false; document.getElementById('swDisplay').textContent='00:00.00'; document.getElementById('swStart').textContent='▶ '+L.swStart; document.getElementById('swLap').disabled=true; document.getElementById('swLaps').innerHTML=''; }
+// CSP-safe event delegation for JS-rendered elements
+document.addEventListener('click', function(e) {
+    var btn;
+    btn = e.target.closest('.study-del-todo'); if (btn) { deleteTodo(parseInt(btn.dataset.id)); return; }
+    btn = e.target.closest('.study-del-fc'); if (btn) { deleteFlashcard(parseInt(btn.dataset.id)); return; }
+    var flip = e.target.closest('.study-fc-flip'); if (flip) { var a = flip.querySelector('.fc-answer'); if (a) a.style.display = a.style.display === 'none' ? 'block' : 'none'; return; }
+});
 </script>
 {% endblock %}

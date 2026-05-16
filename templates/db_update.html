@@ -120,8 +120,8 @@ function loadTableData() {
                     const pkVal = encodeURIComponent(row[0]);
                     rows += '<tr>';
                     rows += '<td class="text-nowrap">';
-                    rows += '<button class="btn btn-sm btn-outline-primary me-1" onclick="showEditDialog(' + JSON.stringify(row).replace(/"/g,'&quot;') + ')" title="编辑">✏️</button>';
-                    rows += '<button class="btn btn-sm btn-outline-danger" onclick="showDeleteDialog(\'' + pkVal + '\')" title="删除">🗑️</button>';
+                    rows += '<button class="btn btn-sm btn-outline-primary me-1 dbu-edit-btn" data-row=\'' + JSON.stringify(row).replace(/'/g,"\\'") + '\' title="编辑">✏️</button>';
+                    rows += '<button class="btn btn-sm btn-outline-danger dbu-del-btn" data-pk="' + pkVal + '" title="删除">🗑️</button>';
                     rows += '</td>';
                     row.forEach(cell => {
                         rows += '<td>' + escapeHtml(String(cell)) + '</td>';
@@ -243,5 +243,12 @@ function confirmDelete() {
         })
         .catch(e => alert('请求失败: ' + e.message));
 }
+// CSP-safe event delegation
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.dbu-edit-btn');
+    if (btn) { var row = JSON.parse(btn.getAttribute('data-row')); showEditDialog(row); return; }
+    btn = e.target.closest('.dbu-del-btn');
+    if (btn) { showDeleteDialog(decodeURIComponent(btn.getAttribute('data-pk'))); return; }
+});
 </script>
 {% endblock %}

@@ -337,6 +337,7 @@
             badge.style.display = 'none';
             menu.innerHTML = '<div class="empty-msg">暂无新通知</div>';
         }
+        window.markAllRead = markAllRead;  // 导出给全局 CSP 事件调度器
 
         function fetchNotifs() {
             var since = getLastRead();
