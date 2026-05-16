@@ -434,7 +434,7 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span class="fw-bold">🏪 {{ _('admin_market_list') }}</span>
-            <button class="btn btn-sm btn-outline-secondary" onclick="loadMarketplace()">🔄 {{ _('admin_market_refresh') }}</button>
+            <button class="btn btn-sm btn-outline-secondary" id="refreshMarketBtn">🔄 {{ _('admin_market_refresh') }}</button>
         </div>
         <div class="card-body p-2">
             <div id="marketplaceList">
@@ -850,6 +850,31 @@ document.addEventListener('DOMContentLoaded', function() {
     if (saveBtn) saveBtn.addEventListener('click', saveRateConfig);
     const refreshBtn = document.getElementById('refreshServerBtn');
     if (refreshBtn) refreshBtn.addEventListener('click', refreshServerStats);
+    const refreshMktBtn = document.getElementById('refreshMarketBtn');
+    if (refreshMktBtn) refreshMktBtn.addEventListener('click', loadMarketplace);
+    // Event delegation for marketplace list edit/delete buttons
+    const mktList = document.getElementById('marketplaceList');
+    if (mktList) {
+        mktList.addEventListener('click', function(e) {
+            const editBtn = e.target.closest('.mp-admin-edit-btn');
+            const delBtn = e.target.closest('.mp-admin-del-btn');
+            if (editBtn) {
+                const ds = editBtn.dataset;
+                editMarketPlugin(
+                    parseInt(ds.id),
+                    ds.name.replace(/&quot;/g, '"'),
+                    ds.desc.replace(/&quot;/g, '"'),
+                    ds.version,
+                    ds.author.replace(/&quot;/g, '"'),
+                    ds.icon
+                );
+            }
+            if (delBtn) {
+                const ds = delBtn.dataset;
+                deleteMarketPlugin(parseInt(ds.id), ds.name.replace(/&quot;/g, '"'));
+            }
+        });
+    }
 });
 </script>
 
@@ -1294,8 +1319,8 @@ async function loadMarketplace() {
         }
         container.innerHTML = data.plugins.map(p => {
             const manageBtns = p.can_manage ? `
-                <button class="btn btn-sm btn-outline-warning" onclick="editMarketPlugin(${p.id},'${(p.display_name||'').replace(/'/g,"\\'")}','${(p.description||'').replace(/'/g,"\\'")}','${p.version}','${(p.author||'').replace(/'/g,"\\'")}','${p.icon||'🧩'}')">✏️ ` + __mp.edit + `</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteMarketPlugin(${p.id},'${(p.display_name||'').replace(/'/g,"\\'")}')">🗑 ` + __mp.delete_ + `</button>
+                <button class="btn btn-sm btn-outline-warning mp-admin-edit-btn" data-id="${p.id}" data-name="${(p.display_name||'').replace(/"/g,'&quot;')}" data-desc="${(p.description||'').replace(/"/g,'&quot;')}" data-version="${p.version}" data-author="${(p.author||'').replace(/"/g,'&quot;')}" data-icon="${p.icon||'🧩'}">✏️ ` + __mp.edit + `</button>
+                <button class="btn btn-sm btn-outline-danger mp-admin-del-btn" data-id="${p.id}" data-name="${(p.display_name||'').replace(/"/g,'&quot;')}">🗑 ` + __mp.delete_ + `</button>
             ` : '';
             return `
             <div class="d-flex align-items-center p-3 border-bottom">

@@ -19,7 +19,7 @@
                     <label class="form-label">{{ _('login_captcha') }}</label>
                     <div class="input-group">
                         <input type="text" name="captcha" class="form-control" placeholder="{{ _('login_placeholder_captcha') }}" maxlength="4" required style="font-size:18px;letter-spacing:4px">
-                        <img src="/api/captcha" onclick="this.src='/api/captcha?'+Date.now()" title="{{ _('login_captcha_click') }}" alt="{{ _('login_captcha') }}" style="height:46px;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer">
+                        <img src="/api/captcha" class="captcha-img" title="{{ _('login_captcha_click') }}" alt="{{ _('login_captcha') }}" style="height:46px;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer">
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary btn-lg w-100 mb-2">{{ _('login_submit') }}</button>

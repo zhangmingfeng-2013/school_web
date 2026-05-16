@@ -258,6 +258,12 @@
     // 绑定主题切换按钮（用 addEventListener 替代 onclick，避免 CSP nonce 屏蔽内联事件处理器）
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
+    // 验证码图片点击刷新（事件委托，替代被 CSP 屏蔽的 onclick）
+    document.addEventListener('click', function(e) {
+        var img = e.target.closest('.captcha-img');
+        if (img) { img.src = '/api/captcha?' + Date.now(); }
+    });
+
     // ====== 语言切换 ======
     document.querySelectorAll('.lang-switch').forEach(function(el) {
         el.addEventListener('click', function(e) {

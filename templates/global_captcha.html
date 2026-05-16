@@ -10,7 +10,7 @@
         <form method="POST">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
             <div class="mb-3">
-                <img src="/api/captcha" onclick="this.src='/api/captcha?'+Date.now()" title="点击刷新" alt="验证码" style="border:1px solid #d9d9d9;border-radius:6px;cursor:pointer">
+                <img src="/api/captcha" class="captcha-img" title="点击刷新" alt="验证码" style="border:1px solid #d9d9d9;border-radius:6px;cursor:pointer">
             </div>
             <div class="mb-3">
                 <input type="text" name="captcha" class="form-control text-center" placeholder="输入验证码" maxlength="4" autofocus style="font-size:22px;letter-spacing:6px">

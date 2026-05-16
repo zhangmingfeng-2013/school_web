@@ -227,30 +227,41 @@ var __ = {
 
 function renderPlugins(plugins) {
     const grid = document.getElementById('mpGrid');
+    // HTML-escape user-provided strings to prevent XSS
+    function esc(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
     grid.innerHTML = plugins.map(p => {
+        const name = esc(p.display_name);
+        const desc = esc(p.description || '');
+        const author = esc(p.author || '');
+        const icon = esc(p.icon || '🧩');
         const manageHtml = p.can_manage ? `
             <div class="mp-manage-btns">
-                <button onclick="openEditModal(${p.id}, '${p.display_name.replace(/'/g,"\\'")}', '${(p.description||'').replace(/'/g,"\\'")}', '${p.version}', '${(p.author||'').replace(/'/g,"\\'")}', '${p.icon||'🧩'}')" title="${__.edit}">✏️</button>
-                <button onclick="deletePlugin(${p.id}, '${p.display_name.replace(/'/g,"\\'")}')" title="${__.delete_}">🗑️</button>
+                <button class="mp-edit-btn" data-id="${p.id}" data-name="${name}" data-desc="${desc}" data-version="${esc(p.version)}" data-author="${author}" data-icon="${icon}" title="${esc(__.edit)}">✏️</button>
+                <button class="mp-del-btn" data-id="${p.id}" data-name="${name}" title="${esc(__.delete_)}">🗑️</button>
             </div>` : '';
-        const uploaderHtml = p.uploader ? `<span class="mp-uploader-badge">${__.uploader}: ${p.uploader}</span>` : '';
+        const uploaderHtml = p.uploader ? `<span class="mp-uploader-badge">${esc(__.uploader)}: ${esc(p.uploader)}</span>` : '';
         return `
             <div class="mp-card">
                 ${manageHtml}
-                <div class="mp-icon">${p.icon || '🧩'}</div>
-                <div class="mp-title">${p.display_name}</div>
+                <div class="mp-icon">${icon}</div>
+                <div class="mp-title">${name}</div>
                 <div class="mp-badges">
-                    <span class="badge bg-info">${p.file_type.toUpperCase()}</span>
-                    <span class="badge bg-secondary">v${p.version}</span>
+                    <span class="badge bg-info">${esc(p.file_type.toUpperCase())}</span>
+                    <span class="badge bg-secondary">v${esc(p.version)}</span>
                 </div>
-                <div class="mp-desc">${p.description || __.no_desc}</div>
+                <div class="mp-desc">${desc || esc(__.no_desc)}</div>
                 <div class="mp-meta">
-                    ${__.author} ${p.author || '-'} · ${p.created_at || ''}
+                    ${esc(__.author)} ${author || '-'} · ${esc(p.created_at || '')}
                 </div>
                 ${uploaderHtml}
                 <div class="mp-actions">
-                    <a class="mp-btn mp-btn-preview" href="${p.preview_url}" target="_blank">👁 ${__.preview}</a>
-                    <a class="mp-btn mp-btn-open" href="${p.preview_url}" target="_blank">🚀 ${__.open}</a>
+                    <a class="mp-btn mp-btn-preview" href="${p.preview_url}" target="_blank">👁 ${esc(__.preview)}</a>
+                    <a class="mp-btn mp-btn-open" href="${p.preview_url}" target="_blank">🚀 ${esc(__.open)}</a>
                 </div>
             </div>
         `;
@@ -299,6 +310,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('mpEditSave').addEventListener('click', saveEdit);
     document.getElementById('mpEditOverlay').addEventListener('click', function(e) {
         if (e.target === this) closeEditModal();
+    });
+    // Event delegation for dynamically rendered edit/delete buttons
+    const grid = document.getElementById('mpGrid');
+    grid.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.mp-edit-btn');
+        const delBtn = e.target.closest('.mp-del-btn');
+        if (editBtn) {
+            const ds = editBtn.dataset;
+            openEditModal(
+                parseInt(ds.id),
+                ds.name.replace(/&quot;/g, '"'),
+                ds.desc.replace(/&quot;/g, '"'),
+                ds.version,
+                ds.author.replace(/&quot;/g, '"'),
+                ds.icon
+            );
+        }
+        if (delBtn) {
+            const ds = delBtn.dataset;
+            deletePlugin(parseInt(ds.id), ds.name.replace(/&quot;/g, '"'));
+        }
     });
     loadMarketplace();
 });
