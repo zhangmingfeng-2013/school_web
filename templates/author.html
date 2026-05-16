@@ -318,7 +318,7 @@ body.light #starCanvas { opacity: .25; }
 <canvas id="starCanvas"></canvas>
 
 <!-- 主题 -->
-<div id="themeBtn" onclick="toggleTheme()">🌙</div>
+<div id="themeBtn" data-csp-click="toggleTheme">🌙</div>
 
 <div class="author-main">
 
@@ -331,7 +331,7 @@ body.light #starCanvas { opacity: .25; }
         <p class="sm right">———《少年码农 · 铭》</p>
     </div>
     <div style="text-align:center;">
-        <button class="btn-start" onclick="scrollToSection('sec2')">开始探索 →</button>
+        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec2"]\'>开始探索 →</button>
     </div>
 </section>
 
@@ -362,7 +362,7 @@ body.light #starCanvas { opacity: .25; }
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start" onclick="scrollToSection('sec3')">查看技能 →</button>
+        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec3"]\'>查看技能 →</button>
     </div>
 </section>
 
@@ -375,7 +375,7 @@ body.light #starCanvas { opacity: .25; }
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start" onclick="scrollToSection('sec4')">查看荣誉 →</button>
+        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec4"]\'>查看荣誉 →</button>
     </div>
 </section>
 
@@ -450,7 +450,7 @@ body.light #starCanvas { opacity: .25; }
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start" onclick="scrollToSection('sec5')">查看项目 →</button>
+        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec5"]\'>查看项目 →</button>
     </div>
 </section>
 
@@ -486,7 +486,7 @@ body.light #starCanvas { opacity: .25; }
     </div>
     {% if not loop.last %}
     <div style="text-align:center;margin-top:1.5rem;">
-        <button class="btn-start" onclick="scrollToSection('{{ next_sec }}')">下一个项目 ↓</button>
+        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["{{ next_sec }}"]\'>下一个项目 ↓</button>
     </div>
     {% endif %}
 </section>

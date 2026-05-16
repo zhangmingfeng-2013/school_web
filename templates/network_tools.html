@@ -90,7 +90,7 @@
     <!-- Ping -->
     <div class="tab-pane fade" id="ping">
         <div class="card"><div class="card-body">
-            <form onsubmit="return toolSubmit(event, 'ping')">
+            <form data-csp-submit="toolSubmit" data-csp-submit-arg="ping">
                 <div class="input-group mb-3">
                     <input type="text" id="pingTarget" class="form-control form-control-lg" placeholder="输入域名或IP地址" required>
                     <input type="number" id="pingCount" class="form-control" value="4" min="1" max="20" style="max-width:80px;" title="次数">
@@ -104,7 +104,7 @@
     <!-- Traceroute -->
     <div class="tab-pane fade" id="traceroute">
         <div class="card"><div class="card-body">
-            <form onsubmit="return toolSubmit(event, 'traceroute')">
+            <form data-csp-submit="toolSubmit" data-csp-submit-arg="traceroute">
                 <div class="input-group mb-3">
                     <input type="text" id="traceTarget" class="form-control form-control-lg" placeholder="输入域名或IP地址" required>
                     <button type="submit" class="btn btn-info btn-lg">🗺️ Traceroute</button>
@@ -117,7 +117,7 @@
     <!-- Whois -->
     <div class="tab-pane fade" id="whois">
         <div class="card"><div class="card-body">
-            <form onsubmit="return toolSubmit(event, 'whois')">
+            <form data-csp-submit="toolSubmit" data-csp-submit-arg="whois">
                 <div class="input-group mb-3">
                     <input type="text" id="whoisTarget" class="form-control form-control-lg" placeholder="输入域名 (如 example.com)" required>
                     <button type="submit" class="btn btn-dark btn-lg">🔎 Whois</button>
@@ -130,7 +130,7 @@
     <!-- DNS -->
     <div class="tab-pane fade" id="dns">
         <div class="card"><div class="card-body">
-            <form onsubmit="return toolSubmit(event, 'dns')">
+            <form data-csp-submit="toolSubmit" data-csp-submit-arg="dns">
                 <div class="row g-2 mb-3">
                     <div class="col-md-7">
                         <input type="text" id="dnsTarget" class="form-control form-control-lg" placeholder="输入域名" required>
@@ -158,7 +158,7 @@
     <!-- HTTP Headers -->
     <div class="tab-pane fade" id="headers">
         <div class="card"><div class="card-body">
-            <form onsubmit="return toolSubmit(event, 'http_headers')">
+            <form data-csp-submit="toolSubmit" data-csp-submit-arg="http_headers">
                 <div class="input-group mb-3">
                     <input type="text" id="headersTarget" class="form-control form-control-lg" placeholder="输入URL (如 https://example.com)" required>
                     <button type="submit" class="btn btn-success btn-lg">📋 {{ _('common_search') }}</button>
@@ -171,7 +171,7 @@
     <!-- SSL Check -->
     <div class="tab-pane fade" id="ssl">
         <div class="card"><div class="card-body">
-            <form onsubmit="return toolSubmit(event, 'ssl')">
+            <form data-csp-submit="toolSubmit" data-csp-submit-arg="ssl">
                 <div class="input-group mb-3">
                     <input type="text" id="sslTarget" class="form-control form-control-lg" placeholder="输入域名 (如 example.com)" required>
                     <button type="submit" class="btn btn-warning btn-lg">🔒 {{ _('common_search') }}</button>
@@ -184,7 +184,7 @@
     <!-- Subnet Calculator -->
     <div class="tab-pane fade" id="subnet">
         <div class="card"><div class="card-body">
-            <form onsubmit="return toolSubmit(event, 'subnet')">
+            <form data-csp-submit="toolSubmit" data-csp-submit-arg="subnet">
                 <div class="input-group mb-3">
                     <input type="text" id="subnetCidr" class="form-control form-control-lg" placeholder="CIDR 格式 (如 192.168.1.0/24)" required>
                     <button type="submit" class="btn btn-secondary btn-lg">🧮 计算</button>

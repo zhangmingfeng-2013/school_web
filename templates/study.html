@@ -62,14 +62,14 @@
                 </div>
             </div>
             <div class="mt-3 d-flex justify-content-center gap-2">
-                <button class="btn btn-primary" id="pomoStart" onclick="startPomodoro()">▶ {{ _('study_pomo_start') }}</button>
-                <button class="btn btn-outline-secondary" id="pomoPause" onclick="pausePomodoro()" disabled>⏸ {{ _('study_pomo_pause') }}</button>
-                <button class="btn btn-outline-danger" id="pomoReset" onclick="resetPomodoro()" disabled>↺ {{ _('study_pomo_reset') }}</button>
+                <button class="btn btn-primary" id="pomoStart" data-csp-click="startPomodoro">▶ {{ _('study_pomo_start') }}</button>
+                <button class="btn btn-outline-secondary" id="pomoPause" data-csp-click="pausePomodoro" disabled>⏸ {{ _('study_pomo_pause') }}</button>
+                <button class="btn btn-outline-danger" id="pomoReset" data-csp-click="resetPomodoro" disabled>↺ {{ _('study_pomo_reset') }}</button>
             </div>
             <div class="mt-3 mode-btns">
-                <button class="btn btn-sm btn-outline-info active" onclick="setPomoMode('work',25)">🍅 {{ _('study_pomo_25') }}</button>
-                <button class="btn btn-sm btn-outline-info" onclick="setPomoMode('work',45)">🔥 {{ _('study_pomo_45') }}</button>
-                <button class="btn btn-sm btn-outline-success" onclick="setPomoMode('break',5)">☕ {{ _('study_pomo_break5') }}</button>
+                <button class="btn btn-sm btn-outline-info active" data-csp-click="setPomoMode" data-csp-args=\'["work",25]\'>🍅 {{ _('study_pomo_25') }}</button>
+                <button class="btn btn-sm btn-outline-info" data-csp-click="setPomoMode" data-csp-args=\'["work",45]\'>🔥 {{ _('study_pomo_45') }}</button>
+                <button class="btn btn-sm btn-outline-success" data-csp-click="setPomoMode" data-csp-args=\'["break",5]\'>☕ {{ _('study_pomo_break5') }}</button>
             </div>
         </div>
         <div class="col-md-7">
@@ -102,7 +102,7 @@
                 <h6>➕ {{ _('study_todo_add') }}</h6>
                 <div class="input-group input-group-sm mb-2">
                     <input class="form-control" id="todoTitle" placeholder="{{ _('study_todo_title_ph') }}" maxlength="200">
-                    <button class="btn btn-primary" onclick="addTodo()">{{ _('study_todo_add') }}</button>
+                    <button class="btn btn-primary" data-csp-click="addTodo">{{ _('study_todo_add') }}</button>
                 </div>
                 <div class="row g-1">
                     <div class="col-7"><input type="date" class="form-control form-control-sm" id="todoDue"></div>
@@ -147,7 +147,7 @@
                 </div>
                 <div class="input-group input-group-sm mb-2">
                     <input class="form-control" id="fcTags" placeholder="{{ _('study_fc_tags_ph') }}">
-                    <button class="btn btn-primary" onclick="addFlashcard()">{{ _('study_todo_add') }}</button>
+                    <button class="btn btn-primary" data-csp-click="addFlashcard">{{ _('study_todo_add') }}</button>
                 </div>
             </div>
             <div class="card p-3">
@@ -172,22 +172,22 @@
                     <h6 class="mb-0">🔄 {{ _('study_fc_review') }}</h6>
                     <div class="d-flex gap-2 align-items-center">
                         <label class="form-check form-switch mb-0" style="font-size:.8rem;" title="{{ _('study_fc_random_tip') }}">
-                            <input class="form-check-input" type="checkbox" id="fcRandomMode" onchange="loadReviewCard()" style="cursor:pointer;">
+                            <input class="form-check-input" type="checkbox" id="fcRandomMode" data-csp-change="loadReviewCard()" style="cursor:pointer;">
                             🎲 {{ _('study_fc_random') }}
                         </label>
-                        <button class="btn btn-sm btn-outline-info" onclick="loadReviewCard()">{{ _('study_fc_next') }}</button>
+                        <button class="btn btn-sm btn-outline-info" data-csp-click="loadReviewCard">{{ _('study_fc_next') }}</button>
                     </div>
                 </div>
-                <div class="flashcard" id="fcReviewCard" onclick="flipFlashcard()">
+                <div class="flashcard" id="fcReviewCard" data-csp-click="flipFlashcard">
                     <div class="flashcard-inner">
                         <div class="flashcard-front" id="fcReviewFront">{{ _('study_fc_tap_next') }}</div>
                         <div class="flashcard-back" id="fcReviewBack"></div>
                     </div>
                 </div>
                 <div class="d-flex justify-content-center gap-2 mt-3" id="fcReviewBtns" style="display:none;">
-                    <button class="btn btn-sm btn-outline-danger" onclick="reviewFlashcard(-1)">😰 {{ _('study_fc_forgot') }}</button>
-                    <button class="btn btn-sm btn-outline-warning" onclick="reviewFlashcard(0)">🤔 {{ _('study_fc_hard') }}</button>
-                    <button class="btn btn-sm btn-outline-success" onclick="reviewFlashcard(1)">😊 {{ _('study_fc_easy') }}</button>
+                    <button class="btn btn-sm btn-outline-danger" data-csp-click="reviewFlashcard" data-csp-args=\'[-1]\'>😰 {{ _('study_fc_forgot') }}</button>
+                    <button class="btn btn-sm btn-outline-warning" data-csp-click="reviewFlashcard" data-csp-args=\'[0]\'>🤔 {{ _('study_fc_hard') }}</button>
+                    <button class="btn btn-sm btn-outline-success" data-csp-click="reviewFlashcard" data-csp-args=\'[1]\'>😊 {{ _('study_fc_easy') }}</button>
                 </div>
             </div>
             <details>
@@ -207,7 +207,7 @@
         <div class="col-md-5">
             <div class="input-group mb-3">
                 <input class="form-control" id="dictWord" placeholder="{{ _('study_dict_ph') }}" onkeydown="if(event.key==='Enter')lookupWord()">
-                <button class="btn btn-primary" onclick="lookupWord()">🔍 {{ _('study_dict_search') }}</button>
+                <button class="btn btn-primary" data-csp-click="lookupWord">🔍 {{ _('study_dict_search') }}</button>
             </div>
             <div class="card p-3" id="dictResult" style="display:none;">
                 <h4 id="dictTitle" class="mb-1"></h4>
@@ -223,10 +223,10 @@
                 <p class="small text-muted" id="dictTip">{{ _('study_dict_tip_text') }}</p>
                 <div class="mt-2">
                     <span class="text-muted small">{{ _('study_dict_try') }}:</span>
-                    <span class="badge bg-secondary me-1" style="cursor:pointer" onclick="quickLookup('serendipity')">serendipity</span>
-                    <span class="badge bg-secondary me-1" style="cursor:pointer" onclick="quickLookup('algorithm')">algorithm</span>
-                    <span class="badge bg-secondary me-1" style="cursor:pointer" onclick="quickLookup('harmony')">harmony</span>
-                    <span class="badge bg-secondary" style="cursor:pointer" onclick="quickLookup('resilient')">resilient</span>
+                    <span class="badge bg-secondary me-1" style="cursor:pointer" data-csp-click="quickLookup" data-csp-args=\'["serendipity"]\'>serendipity</span>
+                    <span class="badge bg-secondary me-1" style="cursor:pointer" data-csp-click="quickLookup" data-csp-args=\'["algorithm"]\'>algorithm</span>
+                    <span class="badge bg-secondary me-1" style="cursor:pointer" data-csp-click="quickLookup" data-csp-args=\'["harmony"]\'>harmony</span>
+                    <span class="badge bg-secondary" style="cursor:pointer" data-csp-click="quickLookup" data-csp-args=\'["resilient"]\'>resilient</span>
                 </div>
             </div>
         </div>
@@ -239,7 +239,7 @@
         <div class="col-md-4">
             <div class="card p-3 mb-3">
                 <label class="form-label fw-bold">{{ _('study_conv_category') }}</label>
-                <select class="form-select" id="convCategory" onchange="switchConvCategory()">
+                <select class="form-select" id="convCategory" data-csp-change="switchConvCategory()">
                     <option value="length">{{ _('study_conv_length') }}</option>
                     <option value="weight">{{ _('study_conv_weight') }}</option>
                     <option value="temp">{{ _('study_conv_temp') }}</option>
@@ -255,11 +255,11 @@
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">{{ _('study_conv_to') }}</label>
-                    <select class="form-select form-select-sm" id="convFrom" onchange="doConvert()"></select>
+                    <select class="form-select form-select-sm" id="convFrom" data-csp-change="doConvert()"></select>
                 </div>
                 <div class="text-center my-2">⬇️</div>
                 <div class="mb-2">
-                    <select class="form-select form-select-sm" id="convTo" onchange="doConvert()"></select>
+                    <select class="form-select form-select-sm" id="convTo" data-csp-change="doConvert()"></select>
                 </div>
                 <div class="alert alert-info text-center mb-0">
                     <span id="convResult" style="font-size:1.3rem;font-weight:700;">—</span>
@@ -287,7 +287,7 @@
             <div class="card p-3 mb-3">
                 <h6>🎲 {{ _('study_rand_picker') }}</h6>
                 <textarea class="form-control form-control-sm mb-2" id="randItems" rows="6" placeholder="{{ _('study_rand_ph') }}"></textarea>
-                <button class="btn btn-primary" onclick="randomPick()">🎲 {{ _('study_rand_go') }}</button>
+                <button class="btn btn-primary" data-csp-click="randomPick">🎲 {{ _('study_rand_go') }}</button>
                 <div id="randResult" class="mt-3 text-center" style="display:none;">
                     <div style="font-size:3rem;" id="randEmoji">🎉</div>
                     <div style="font-size:1.5rem;font-weight:700;" id="randText"></div>
@@ -301,7 +301,7 @@
                     <div class="col-6"><input type="number" class="form-control form-control-sm" id="randMin" value="1" placeholder="Min"></div>
                     <div class="col-6"><input type="number" class="form-control form-control-sm" id="randMax" value="100" placeholder="Max"></div>
                 </div>
-                <button class="btn btn-outline-info btn-sm w-100" onclick="randomNumber()">🎲 {{ _('study_rand_go') }}</button>
+                <button class="btn btn-outline-info btn-sm w-100" data-csp-click="randomNumber">🎲 {{ _('study_rand_go') }}</button>
                 <div id="randNumResult" class="text-center mt-3" style="font-size:2.5rem;font-weight:700;" hidden>0</div>
             </div>
             <div class="card p-3">
@@ -309,9 +309,9 @@
                 <div class="text-center">
                     <div style="font-size:2.5rem;font-weight:700;font-variant-numeric:tabular-nums;" id="swDisplay">00:00.00</div>
                     <div class="mt-2">
-                        <button class="btn btn-sm btn-success" id="swStart" onclick="toggleStopwatch()">▶ {{ _('study_pomo_start') }}</button>
-                        <button class="btn btn-sm btn-outline-info" id="swLap" onclick="lapStopwatch()" disabled>🏁 {{ _('study_rand_lap') }}</button>
-                        <button class="btn btn-sm btn-outline-danger" id="swReset" onclick="resetStopwatch()">↺</button>
+                        <button class="btn btn-sm btn-success" id="swStart" data-csp-click="toggleStopwatch">▶ {{ _('study_pomo_start') }}</button>
+                        <button class="btn btn-sm btn-outline-info" id="swLap" data-csp-click="lapStopwatch" disabled>🏁 {{ _('study_rand_lap') }}</button>
+                        <button class="btn btn-sm btn-outline-danger" id="swReset" data-csp-click="resetStopwatch">↺</button>
                     </div>
                     <div id="swLaps" class="mt-2 text-start small text-muted" style="max-height:120px;overflow-y:auto;"></div>
                 </div>
@@ -471,7 +471,7 @@ async function loadTodos() {
                 <div class="list-group-item d-flex justify-content-between align-items-start ${t.completed?'todo-done':''}">
                     <div class="flex-grow-1">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" ${t.completed?'checked':''} onchange="toggleTodo(${t.id})">
+                            <input class="form-check-input" type="checkbox" ${t.completed?'checked':''} data-csp-change="toggleTodo" data-csp-args='["${t.id}"]'>
                             <span>${t.priority?'⭐ ':''}${t.title}</span>
                         </div>
                         ${t.due_date?`<small class="text-muted ms-4">📅 ${t.due_date}</small>`:''}

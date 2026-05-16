@@ -228,6 +228,57 @@
         if (img) { img.src = '/api/captcha?' + Date.now(); }
     });
 
+    // ====== 全局 CSP 安全事件委托（替代所有被 nonce 屏蔽的 onclick/onchange） ======
+    (function() {
+        // ---- click 事件委托 ----
+        document.addEventListener('click', function(e) {
+            var el = e.target.closest('[data-csp-click]');
+            if (!el) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var fnName = el.getAttribute('data-csp-click');
+            var fn = window[fnName];
+            if (typeof fn === 'function') {
+                var argsStr = el.getAttribute('data-csp-args');
+                var args = argsStr ? (function() { try { return JSON.parse(argsStr); } catch(ex) { return [argsStr]; } })() : [];
+                fn.apply(null, args);
+            }
+        });
+        
+        // ---- change 事件委托 ----
+        document.addEventListener('change', function(e) {
+            var el = e.target.closest('[data-csp-change]');
+            if (!el) return;
+            var fnName = el.getAttribute('data-csp-change');
+            var fn = window[fnName];
+            if (typeof fn === 'function') fn.call(el, e);
+        });
+        
+        // ---- submit 事件委托（对 data-csp-submit 表单用 fetch） ----
+        document.addEventListener('submit', function(e) {
+            var form = e.target.closest('[data-csp-submit]');
+            if (!form) return;
+            e.preventDefault();
+            var fnName = form.getAttribute('data-csp-submit');
+            var fn = window[fnName];
+            if (typeof fn === 'function') {
+                // Pass form element so the handler can use FormData or individual fields
+                fn.call(form, e);
+            }
+        });
+        
+        // ---- keyup Enter 事件委托 ----
+        document.addEventListener('keyup', function(e) {
+            if (e.key !== 'Enter') return;
+            var el = e.target.closest('[data-csp-enter]');
+            if (!el) return;
+            e.preventDefault();
+            var fnName = el.getAttribute('data-csp-enter');
+            var fn = window[fnName];
+            if (typeof fn === 'function') fn.call(el, e);
+        });
+    })();
+
     // 登出确认（替代被 CSP 屏蔽的 onclick）
     var logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
@@ -305,10 +356,10 @@
                     bell.classList.remove('has-notif'); badge.style.display = 'none';
                 }
                 var items = [];
-                if (d.chat_unread > 0) items.push('<a class="dropdown-item" href="/chat" onclick="markAllRead()">💬 <strong>' + d.chat_unread + '</strong> 条未读聊天消息</a>');
-                if (d.admin_requests > 0) items.push('<a class="dropdown-item" href="/admin" style="color:#d9534f;" onclick="markAllRead()">📋 <strong>' + d.admin_requests + '</strong> 个待审核管理员申请</a>');
-                if (d.pending_photos > 0) items.push('<a class="dropdown-item" href="/album" style="color:#d9534f;" onclick="markAllRead()">🖼️ <strong>' + d.pending_photos + '</strong> 张待审核照片</a>');
-                if (d.blocked_ips > 0) items.push('<a class="dropdown-item" href="/admin" style="color:#f0ad4e;" onclick="markAllRead()">🚫 <strong>' + d.blocked_ips + '</strong> 个IP被自动封禁</a>');
+                if (d.chat_unread > 0) items.push('<a class="dropdown-item" href="/chat" data-csp-click="markAllRead">💬 <strong>' + d.chat_unread + '</strong> 条未读聊天消息</a>');
+                if (d.admin_requests > 0) items.push('<a class="dropdown-item" href="/admin" style="color:#d9534f;" data-csp-click="markAllRead">📋 <strong>' + d.admin_requests + '</strong> 个待审核管理员申请</a>');
+                if (d.pending_photos > 0) items.push('<a class="dropdown-item" href="/album" style="color:#d9534f;" data-csp-click="markAllRead">🖼️ <strong>' + d.pending_photos + '</strong> 张待审核照片</a>');
+                if (d.blocked_ips > 0) items.push('<a class="dropdown-item" href="/admin" style="color:#f0ad4e;" data-csp-click="markAllRead">🚫 <strong>' + d.blocked_ips + '</strong> 个IP被自动封禁</a>');
                 menu.innerHTML = items.length ? items.join('') : '<div class="empty-msg">暂无新通知</div>';
             }).catch(function(){});
         }

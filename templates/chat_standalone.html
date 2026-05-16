@@ -2,15 +2,14 @@
 {% block title %}聊天 - 多合一工具箱{% endblock %}
 {% block content %}
 <div style="display:flex;height:calc(100vh - 120px);min-height:500px;border:1px solid #ddd;border-radius:10px;overflow:hidden;background:#fff">
-    <!-- Sidebar -->
     <div id="sidebar" style="width:220px;background:#f8f9fa;border-right:1px solid #ddd;display:flex;flex-direction:column">
         <div style="padding:12px;border-bottom:1px solid #ddd;font-weight:700">💬 聊天</div>
-        <button onclick="switchToWorld()" id="worldBtn" class="ch-btn active">🌍 世界频道</button>
+        <button data-csp-click="switchToWorld" id="worldBtn" class="ch-btn active">🌍 世界频道</button>
         <div style="font-size:12px;color:#999;padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
-            好友 <button onclick="toggleSearch()" style="background:none;border:none;cursor:pointer">🔍</button>
+            好友 <button data-csp-click="toggleSearch" style="background:none;border:none;cursor:pointer">🔍</button>
         </div>
         <div id="searchBox" style="display:none;padding:4px 8px;position:relative">
-            <input id="searchQ" placeholder="搜索昵称..." style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:13px" onkeyup="if(event.key==='Enter')doSearch()">
+            <input id="searchQ" placeholder="搜索昵称..." style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:13px" data-csp-enter="doSearch">
             <div id="searchResults" style="display:none;position:absolute;top:100%;left:8px;right:8px;background:#fff;border:1px solid #ddd;border-radius:6px;z-index:10;max-height:150px;overflow-y:auto"></div>
         </div>
         <div id="friendReqs" style="font-size:11px;color:#f60;padding:4px 8px;display:none">好友请求</div>
@@ -18,21 +17,20 @@
         <div id="friendList" style="flex:1;overflow-y:auto;padding:4px 8px"></div>
     </div>
 
-    <!-- Chat area -->
     <div style="flex:1;display:flex;flex-direction:column">
         <div id="chatHeader" style="padding:10px 14px;border-bottom:1px solid #ddd;font-weight:700">🌍 世界频道</div>
         <div id="messages" style="flex:1;overflow-y:auto;padding:14px;background:#fafafa">
             <div style="text-align:center;color:#999;padding:60px">暂无消息，开始聊天吧！</div>
         </div>
         <div style="display:flex;gap:8px;padding:10px 14px;border-top:1px solid #ddd">
-            <input id="msgInput" placeholder="发消息..." maxlength="1000" style="flex:1;padding:8px 14px;border:1px solid #ddd;border-radius:20px;font-size:14px" onkeyup="if(event.key==='Enter')sendMsg()">
-            <button onclick="sendMsg()" style="padding:6px 20px;background:#04c;color:#fff;border:none;border-radius:20px;cursor:pointer;font-size:14px">发送</button>
+            <input id="msgInput" placeholder="发消息..." maxlength="1000" style="flex:1;padding:8px 14px;border:1px solid #ddd;border-radius:20px;font-size:14px" data-csp-enter="sendMsg">
+            <button data-csp-click="sendMsg" style="padding:6px 20px;background:#04c;color:#fff;border:none;border-radius:20px;cursor:pointer;font-size:14px">发送</button>
         </div>
     </div>
 </div>
 
-<div id="ctxMenu" style="display:none;position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:1000" onclick="this.style.display='none'">
-    <div onclick="recallMsg()" style="padding:8px 16px;cursor:pointer;font-size:13px">↩️ 撤回消息</div>
+<div id="ctxMenu" style="display:none;position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:1000">
+    <div data-csp-click="recallMsg" style="padding:8px 16px;cursor:pointer;font-size:13px">↩️ 撤回消息</div>
 </div>
 
 <style nonce="{{ csp_nonce }}">
@@ -116,7 +114,7 @@ async function loadFriends() {
     friends = fs;
     var list = document.getElementById('friendList');
     list.innerHTML = fs.map(function(f){
-        return '<div class="fr-item'+(dmUser===f.username?' active':'')+'" onclick="switchDM(\''+f.username+'\')">'+f.nickname+' <small>('+f.username+')</small></div>';
+        return '<div class="fr-item'+(dmUser===f.username?' active':'')+'" data-chat-user="'+f.username+'">'+f.nickname+' <small>('+f.username+')</small></div>';
     }).join('');
     var frs = await ajax('/api/chat/friends/requests') || [];
     var reqsDiv = document.getElementById('friendReqs');
@@ -124,7 +122,7 @@ async function loadFriends() {
     if(frs.length) {
         reqsDiv.style.display = 'block';
         reqsList.innerHTML = frs.map(function(r){
-            return '<div class="req-item"><span>'+r.nickname+'</span><div><button class="btn-xs primary" onclick="acceptReq(\''+r.from+'\')">✓</button> <button class="btn-xs danger" onclick="delFriend(\''+r.from+'\')">✕</button></div></div>';
+            return '<div class="req-item"><span>'+r.nickname+'</span><div><button class="btn-xs primary chat-accept-btn" data-chat-user="'+r.from+'">\u2713</button> <button class="btn-xs danger chat-delfriend-btn" data-chat-user="'+r.from+'">\u2715</button></div></div>';
         }).join('');
     } else { reqsDiv.style.display = 'none'; reqsList.innerHTML = ''; }
 }
@@ -141,7 +139,7 @@ async function doSearch() {
     if(results.length===0) { box.style.display='none'; return; }
     box.style.display = 'block';
     box.innerHTML = results.map(function(r){
-        return '<div class="sr-item" onclick="sendReq(\''+r.username+'\')">'+r.nickname+' <small>('+r.username+')</small></div>';
+        return '<div class="sr-item chat-sendreq-btn" data-chat-user="'+r.username+'">'+r.nickname+' <small>('+r.username+')</small></div>';
     }).join('');
 }
 
@@ -161,6 +159,26 @@ async function delFriend(username) {
     await ajax('/api/chat/friends/remove', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:username})});
     loadFriends();
 }
+
+// ---- CSP-safe event delegation for JS-rendered elements ----
+document.addEventListener('click', function(e) {
+    var el;
+    // Friend list item click → switchDM
+    el = e.target.closest('[data-chat-user]');
+    if (el && el.closest('#friendList')) {
+        switchDM(el.getAttribute('data-chat-user'));
+        return;
+    }
+    // Search result → sendReq
+    el = e.target.closest('.chat-sendreq-btn');
+    if (el) { sendReq(el.getAttribute('data-chat-user')); return; }
+    // Accept friend request
+    el = e.target.closest('.chat-accept-btn');
+    if (el) { acceptReq(el.getAttribute('data-chat-user')); return; }
+    // Del friend request
+    el = e.target.closest('.chat-delfriend-btn');
+    if (el) { delFriend(el.getAttribute('data-chat-user')); return; }
+});
 
 setInterval(function(){ loadMsgs(); loadFriends(); }, 3000);
 loadMsgs(); loadFriends();

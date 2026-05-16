@@ -195,9 +195,10 @@ def inject_csp_nonce():
 
 @app.context_processor
 def inject_i18n():
-    """将翻译函数和语言信息注入所有模板"""
+    """将翻译函数、语言信息、缓存破坏器注入所有模板"""
     lang = session.get("lang", "zh-CN")
     perm = session.get("permission", "guest")
+    import time as _time
     return {
         "_": lambda key, default=None, **kw: _(key, lang, default, **kw),
         "lang": lang,
@@ -205,8 +206,11 @@ def inject_i18n():
         "lang_name": lambda l: _(f"_name", l) if l in SUPPORTED_LANGS else l,
         "plugin_menu_items": plugins.get_menu_items(perm),
         "plugin_footer_blocks": plugins.get_template_blocks("footer"),
+        "cache_buster": str(int(_time.time() * 1000)),  # captcha/bg 全站缓存破坏
         "plugin_head_blocks": plugins.get_template_blocks("head"),
     }
+
+
 
 
 def _save_user_lang(username, lang):
@@ -427,17 +431,37 @@ def _save_whitelist():
 ip_whitelist = _load_whitelist()
 
 def _verify_captcha(user_input):
-    """验证图形验证码"""
-    if not user_input:
-        return False
+    """验证图形验证码。统一入口，返回 (success: bool, error_msg: str)
+    
+    图片显示大写字母（23456789ABCDEFGHJKLMNPQRSTUVWXYZ），
+    session 存储小写码，比较时忽略大小写。
+    有效期 5 分钟，防止重放。
+    """
+    if not user_input or not user_input.strip():
+        return False, "验证码不能为空"
+    
     stored = session.get("captcha_code", "")
+    
+    if not stored:
+        return False, "验证码已失效，请刷新"
+    
+    # 5 分钟过期
+    captcha_time = session.get("captcha_time", 0)
+    if time.time() - captcha_time > 300:
+        session.pop("captcha_code", None)
+        session.pop("captcha_time", None)
+        return False, "验证码已过期，请刷新"
+    
+    # 不区分大小写比较（图片显示大写，session 存小写）
     if user_input.strip().lower() != stored:
         session.pop("captcha_code", None)
         session.pop("captcha_time", None)
-        return False
+        return False, "验证码错误"
+    
+    # 验证通过，消费验证码（防止重放攻击）
     session.pop("captcha_code", None)
     session.pop("captcha_time", None)
-    return True
+    return True, "验证通过"
 
 
 # ---------- 图形验证码 ----------
@@ -623,12 +647,11 @@ def check_global_captcha():
     if session.get("global_captcha_verified"):
         return None
     if request.method == "POST" and request.form.get("captcha"):
-        inp = request.form.get("captcha", "").strip().lower()
-        if inp == session.get("captcha_code", ""):
+        ok, err_msg = _verify_captcha(request.form.get("captcha", ""))
+        if ok:
             session["global_captcha_verified"] = True
-            session.pop("captcha_code", None)
             return redirect(request.path)
-        flash("验证码错误", "danger")
+        flash(err_msg, "danger")
     if path.startswith("/api/"):
         return jsonify({"error": "需要安全验证"}), 403
     return render_template("global_captcha.html",
@@ -987,14 +1010,11 @@ def db_captcha_required(f):
         if session.get("db_captcha_verified"):
             return f(*args, **kwargs)
         if request.method == "POST" and request.form.get("db_captcha"):
-            captcha_input = request.form.get("db_captcha", "").strip().lower()
-            stored = session.get("captcha_code", "")
-            if captcha_input == stored:
+            ok, err_msg = _verify_captcha(request.form.get("db_captcha", ""))
+            if ok:
                 session["db_captcha_verified"] = True
-                session.pop("captcha_code", None)
                 return redirect(request.path)
-            else:
-                flash("验证码错误", "danger")
+            flash(err_msg, "danger")
         # API 请求返回 JSON 错误
         if request.path.startswith("/api/"):
             return jsonify({"error": "需要数据库操作验证"}), 403
@@ -1065,8 +1085,9 @@ def login():
 
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
-        if not _verify_captcha(captcha_input):
-            flash("验证码错误", "danger")
+        ok, err_msg = _verify_captcha(captcha_input)
+        if not ok:
+            flash(err_msg, "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
 
         # 登录防爆破检查
@@ -1156,8 +1177,9 @@ def register():
 
         # 验证码校验
         captcha_input = request.form.get("captcha", "").strip().lower()
-        if not _verify_captcha(captcha_input):
-            flash("验证码错误", "danger")
+        ok, err_msg = _verify_captcha(captcha_input)
+        if not ok:
+            flash(err_msg, "danger")
             return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
         username = sanitize_input(request.form.get("username", ""), 50)
@@ -3929,17 +3951,9 @@ def change_password():
         captcha_input = request.form.get("captcha", "").strip().lower()
 
         # 验证码校验
-        stored_code = session.get("captcha_code", "")
-        captcha_time = session.get("captcha_time", 0)
-
-        if not stored_code:
-            flash("验证码已失效，请刷新", "danger")
-        elif time.time() - captcha_time > 300:
-            session.pop("captcha_code", None)
-            flash("验证码已过期，请刷新", "danger")
-        elif captcha_input != stored_code:
-            session.pop("captcha_code", None)
-            flash("验证码错误", "danger")
+        ok, err_msg = _verify_captcha(captcha_input)
+        if not ok:
+            flash(err_msg, "danger")
         elif not new_pwd or not confirm_pwd:
             flash("新密码和确认密码不能为空", "danger")
         elif new_pwd != confirm_pwd:

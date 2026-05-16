@@ -58,10 +58,10 @@
 
 <!-- 操作按钮 -->
 <div class="d-flex gap-2 mb-3 flex-wrap">
-    <button class="btn btn-primary" onclick="createBackup()">
+    <button class="btn btn-primary" data-csp-click="createBackup">
         ➕ {{ _('backup_create') }}
     </button>
-    <button class="btn btn-outline-secondary" onclick="refreshBackups()">
+    <button class="btn btn-outline-secondary" data-csp-click="refreshBackups">
         🔄 {{ _('backup_refresh') }}
     </button>
     <div class="ms-auto">
@@ -70,9 +70,9 @@
                 🗑️ {{ _('backup_batch_delete') }}
             </button>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="#" onclick="deleteAllBackups()">{{ _('backup_delete_all') }}</a></li>
-                <li><a class="dropdown-item" href="#" onclick="deleteOldBackups(5)">{{ _('backup_keep_n', n=5) }}</a></li>
-                <li><a class="dropdown-item" href="#" onclick="deleteOldBackups(10)">{{ _('backup_keep_n', n=10) }}</a></li>
+                <li><a class="dropdown-item" href="#" data-csp-click="deleteAllBackups">{{ _('backup_delete_all') }}</a></li>
+                <li><a class="dropdown-item" href="#" data-csp-click="deleteOldBackups" data-csp-args=\'[5]\'>{{ _('backup_keep_n', n=5) }}</a></li>
+                <li><a class="dropdown-item" href="#" data-csp-click="deleteOldBackups" data-csp-args=\'[10]\'>{{ _('backup_keep_n', n=10) }}</a></li>
             </ul>
         </div>
     </div>
@@ -164,7 +164,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('backup_restore_cancel') }}</button>
-                <button type="button" class="btn btn-danger" id="restoreBtn" onclick="doRestore()" disabled>{{ _('backup_restore_start') }}</button>
+                <button type="button" class="btn btn-danger" id="restoreBtn" data-csp-click="doRestore" disabled>{{ _('backup_restore_start') }}</button>
             </div>
         </div>
     </div>
@@ -231,10 +231,10 @@ async function refreshBackups() {
                 <td>${b.created}</td>
                 <td class="file-size">${formatSize(b.size)}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-success me-1" onclick="showRestoreModal('${b.name}')" title="${LANG.restore}">↩️ ${LANG.restore}</button>
-                    <button class="btn btn-sm btn-outline-info me-1" onclick="downloadBackup('${b.name}')" title="${LANG.download}">⬇️ ${LANG.download}</button>
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="showDiff('${b.name}')" title="${LANG.diff}">📊 ${LANG.diff}</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteBackup('${b.name}')" title="${LANG.delete}">🗑️ ${LANG.delete}</button>
+                    <button class="btn btn-sm btn-outline-success me-1" data-csp-click="showRestoreModal" data-csp-args=\'["${b.name}"]\' title="${LANG.restore}">↩️ ${LANG.restore}</button>
+                    <button class="btn btn-sm btn-outline-info me-1" data-csp-click="downloadBackup" data-csp-args=\'["${b.name}"]\' title="${LANG.download}">⬇️ ${LANG.download}</button>
+                    <button class="btn btn-sm btn-outline-primary me-1" data-csp-click="showDiff" data-csp-args=\'["${b.name}"]\' title="${LANG.diff}">📊 ${LANG.diff}</button>
+                    <button class="btn btn-sm btn-outline-danger" data-csp-click="deleteBackup" data-csp-args=\'["${b.name}"]\' title="${LANG.delete}">🗑️ ${LANG.delete}</button>
                 </td>
             </tr>
         `).join('');

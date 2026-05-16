@@ -89,7 +89,7 @@ textarea { resize:none; }
       <span>{{ user.u }}</span>
       <span :class="'badge '+(user.p=='administrator'?'badge-teacher':'badge-student')">{{ user.p=='administrator'?'管理员':'用户' }}</span>
       <button class="btn btn-sm btn-default" @click="goDashboard">← 返回</button>
-      <button class="theme-btn" id="albumThemeToggle" onclick="toggleAlbumTheme()" title="切换主题" style="margin-left:6px;background:none;border:1px solid var(--aborder,#ccc);border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;color:var(--acolor,#333);transition:.2s;">🌙</button>
+      <button class="theme-btn" id="albumThemeToggle" data-csp-click="toggleAlbumTheme" title="切换主题" style="margin-left:6px;background:none;border:1px solid var(--aborder,#ccc);border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;color:var(--acolor,#333);transition:.2s;">🌙</button>
     </div>
   </header>
 

@@ -13,7 +13,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">密码 <small class="text-muted">(至少8位)</small></label>
-                    <input type="password" name="password" id="regPwd" autocomplete="new-password" class="form-control form-control-lg" placeholder="请输入密码" required onkeyup="checkStrength()">
+                    <input type="password" name="password" id="regPwd" autocomplete="new-password" class="form-control form-control-lg" placeholder="请输入密码" required data-csp-enter="checkStrength">
                     <div id="strengthBar" class="mt-1" style="height:4px;border-radius:2px;background:#eee;overflow:hidden">
                         <div id="strengthInner" style="height:100%;width:0;transition:all .3s"></div>
                     </div>
@@ -31,7 +31,7 @@
                     <label class="form-label">验证码</label>
                     <div class="input-group">
                         <input type="text" name="captcha" class="form-control form-control-lg" placeholder="输入验证码" maxlength="4" required style="font-size:18px;letter-spacing:4px">
-                        <img src="/api/captcha" class="captcha-img" title="点击刷新" alt="验证码" style="height:48px;cursor:pointer" class="border rounded">
+                        <img src="/api/captcha?t={{ cache_buster }}" class="captcha-img" title="点击刷新" alt="验证码" style="height:48px;cursor:pointer" class="border rounded">
                     </div>
                 </div>
                 <button type="submit" class="btn btn-success btn-lg w-100">注 册</button>

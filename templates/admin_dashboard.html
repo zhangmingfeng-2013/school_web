@@ -25,7 +25,7 @@
 <p class="text-muted mb-3">IP · Server · Plugins</p>
 
 {% if pending_admin_reqs > 0 %}
-<div class="alert alert-warning py-2 mb-3" style="cursor:pointer;" onclick="showAdminRequests()">
+<div class="alert alert-warning py-2 mb-3" style="cursor:pointer;" data-csp-click="showAdminRequests">
     ⚠️ 有 <strong>{{ pending_admin_reqs }}</strong> 个待审核的管理员申请 — 点击查看
 </div>
 {% endif %}
@@ -117,13 +117,13 @@
                 <div class="card-body p-2">
                     <div class="input-group input-group-sm mb-2">
                         <input type="text" id="wlIpInput" class="form-control ip-row" placeholder="单个 IP 地址...">
-                        <button class="btn btn-success" onclick="addWhitelist()">➕ 添加</button>
+                        <button class="btn btn-success" data-csp-click="addWhitelist">➕ 添加</button>
                     </div>
                     <details class="mb-2">
                         <summary class="text-muted small" style="cursor:pointer">📋 批量添加</summary>
                         <textarea id="wlBatchInput" class="form-control form-control-sm ip-row mt-1" rows="3"
                             placeholder="每行一个 IP，或用逗号/空格分隔&#10;例如:&#10;192.168.1.100&#10;10.0.0.1, 10.0.0.2"></textarea>
-                        <button class="btn btn-sm btn-success mt-1 w-100" onclick="batchWhitelist()">📋 批量添加白名单</button>
+                        <button class="btn btn-sm btn-success mt-1 w-100" data-csp-click="batchWhitelist">📋 批量添加白名单</button>
                     </details>
                     <div class="mt-2" id="wlList" style="max-height:120px;overflow-y:auto">
                         <span class="text-muted small">加载中...</span>
@@ -148,13 +148,13 @@
                             <option value="21600">6小时</option>
                             <option value="86400">24小时</option>
                         </select>
-                        <button class="btn btn-warning" onclick="manualBlock()">🚫 封禁</button>
+                        <button class="btn btn-warning" data-csp-click="manualBlock">🚫 封禁</button>
                     </div>
                     <details class="mb-2">
                         <summary class="text-muted small" style="cursor:pointer">📋 批量封禁</summary>
                         <textarea id="mbBatchInput" class="form-control form-control-sm ip-row mt-1" rows="3"
                             placeholder="每行一个 IP，或用逗号/空格分隔"></textarea>
-                        <button class="btn btn-sm btn-warning mt-1 w-100" onclick="batchManualBlock()">📋 批量封禁</button>
+                        <button class="btn btn-sm btn-warning mt-1 w-100" data-csp-click="batchManualBlock">📋 批量封禁</button>
                     </details>
                     <div class="mt-2" id="mbList" style="max-height:120px;overflow-y:auto">
                         <span class="text-muted small">暂无手动封禁</span>
@@ -166,10 +166,10 @@
     <div class="d-flex justify-content-between align-items-center mb-2">
         <div>
             <span class="text-muted small">每 <span id="refreshCountdown">3</span> 秒自动刷新</span>
-            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="refreshIPStats()">🔄 手动刷新</button>
+            <button class="btn btn-sm btn-outline-secondary ms-2" data-csp-click="refreshIPStats">🔄 手动刷新</button>
         </div>
         <div>
-            <button class="btn btn-sm btn-outline-danger" onclick="clearAllIPStats()">🗑️ 清除统计</button>
+            <button class="btn btn-sm btn-outline-danger" data-csp-click="clearAllIPStats">🗑️ 清除统计</button>
         </div>
     </div>
 
@@ -324,7 +324,7 @@
             <div style="position:absolute;top:0;left:0;right:0;z-index:1000;background:linear-gradient(180deg,rgba(6,11,20,.95) 60%,transparent);padding:10px 16px 20px;">
                 <span style="color:#fff;font-size:16px;font-weight:700;">🌍 全球网络威胁态势</span>
                 <span style="color:#4a6fa5;font-size:12px;margin-left:8px;" id="mapUpdateTime"></span>
-                <button class="btn btn-sm btn-outline-info float-end" onclick="refreshCyberMap()" style="border-color:#1a3a5c;color:#4a8fcc;">🔄 刷新</button>
+                <button class="btn btn-sm btn-outline-info float-end" data-csp-click="refreshCyberMap" style="border-color:#1a3a5c;color:#4a8fcc;">🔄 刷新</button>
             </div>
             <!-- 底部攻击类型统计条 -->
             <div style="position:absolute;bottom:0;left:0;right:0;z-index:1000;background:linear-gradient(0deg,rgba(6,11,20,.97) 60%,transparent);padding:20px 16px 10px;">
@@ -373,7 +373,7 @@
     <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span class="fw-bold">🧩 系统插件</span>
-            <button class="btn btn-sm btn-outline-primary" onclick="reloadAllPlugins()">🔄 重新加载全部</button>
+            <button class="btn btn-sm btn-outline-primary" data-csp-click="reloadAllPlugins">🔄 重新加载全部</button>
         </div>
         <div class="card-body">
             <div id="pluginList">
@@ -389,7 +389,7 @@
             <span class="badge bg-primary">{{ _('admin_market_only_admin') }}</span>
         </div>
         <div class="card-body">
-            <form id="marketplaceUploadForm" enctype="multipart/form-data" onsubmit="uploadMarketPlugin(event)">
+            <form id="marketplaceUploadForm" enctype="multipart/form-data" data-csp-submit="uploadMarketPlugin">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label small">{{ _('admin_market_file_label') }} <span class="text-danger">*</span></label>
@@ -509,17 +509,17 @@ async function refreshIPStats() {
 
             let actions = '';
             if (r.blocked || r.manual_blocked) {
-                actions += `<button class="btn btn-sm btn-outline-success me-1" onclick="unblockIP('${r.ip}')">🔓 解封</button>`;
+                actions += `<button class="btn btn-sm btn-outline-success me-1" data-csp-click="unblockIP" data-csp-args=\'["${r.ip}"]\'>🔓 解封</button>`;
             }
             if (!r.whitelisted) {
-                actions += `<button class="btn btn-sm btn-outline-success me-1" onclick="addWhitelistIP('${r.ip}')">⭐ 加白</button>`;
+                actions += `<button class="btn btn-sm btn-outline-success me-1" data-csp-click="addWhitelistIP" data-csp-args=\'["${r.ip}"]\'>⭐ 加白</button>`;
             } else {
-                actions += `<button class="btn btn-sm btn-outline-secondary me-1" onclick="removeWhitelistIP('${r.ip}')">➖ 移白</button>`;
+                actions += `<button class="btn btn-sm btn-outline-secondary me-1" data-csp-click="removeWhitelistIP" data-csp-args=\'["${r.ip}"]\'>➖ 移白</button>`;
             }
             if (!r.whitelisted && !r.blocked && !r.manual_blocked) {
-                actions += `<button class="btn btn-sm btn-outline-warning me-1" onclick="manualBlockIP('${r.ip}')">🚫 封禁</button>`;
+                actions += `<button class="btn btn-sm btn-outline-warning me-1" data-csp-click="manualBlockIP" data-csp-args=\'["${r.ip}"]\'>🚫 封禁</button>`;
             }
-            actions += `<button class="btn btn-sm btn-outline-danger" onclick="clearIP('${r.ip}')">🗑️</button>`;
+            actions += `<button class="btn btn-sm btn-outline-danger" data-csp-click="clearIP" data-csp-args=\'["${r.ip}"]\'>🗑️</button>`;
 
             return `<tr class="ip-row ${rowClass}">
                 <td><code>${r.ip}</code>${r.whitelisted ? ' <span class="badge bg-success" style="font-size:9px">白名单</span>' : ''}</td>
@@ -601,7 +601,7 @@ async function refreshWhitelist() {
             wlList.innerHTML = data.whitelist.map(ip =>
                 `<div class="d-flex justify-content-between align-items-center border-bottom py-1">
                     <code class="ip-row">${ip}</code>
-                    <button class="btn btn-sm btn-outline-danger" onclick="removeWhitelistIP('${ip}')">✕ 移除</button>
+                    <button class="btn btn-sm btn-outline-danger" data-csp-click="removeWhitelistIP" data-csp-args=\'["${ip}"]\'>✕ 移除</button>
                 </div>`
             ).join('');
         }
@@ -1206,8 +1206,8 @@ async function loadPlugins() {
                 </div>
                 <div>
                     ${p.loaded
-                        ? `<button class="btn btn-sm btn-outline-danger" onclick="togglePlugin('${p.name}','unload')">卸载</button>`
-                        : `<button class="btn btn-sm btn-outline-success" onclick="togglePlugin('${p.name}','load')">加载</button>`}
+                        ? `<button class="btn btn-sm btn-outline-danger" data-csp-click="togglePlugin" data-csp-args=\'["${p.name}","unload"]\'>卸载</button>`
+                        : `<button class="btn btn-sm btn-outline-success" data-csp-click="togglePlugin" data-csp-args=\'["${p.name}","load"]\'>加载</button>`}
                 </div>
             </div>
         `).join('');

@@ -7,15 +7,15 @@
     <div class="card-body">
         <!-- 月份导航 -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <button class="btn btn-outline-secondary" onclick="prevMonth()">← {{ _('calendar_prev') }}</button>
+            <button class="btn btn-outline-secondary" data-csp-click="prevMonth">← {{ _('calendar_prev') }}</button>
             <h4 class="mb-0" id="monthLabel"></h4>
-            <button class="btn btn-outline-secondary" onclick="nextMonth()">{{ _('calendar_next') }} →</button>
-            <button class="btn btn-primary btn-sm ms-2" onclick="goToday()">{{ _('calendar_today') }}</button>
+            <button class="btn btn-outline-secondary" data-csp-click="nextMonth">{{ _('calendar_next') }} →</button>
+            <button class="btn btn-primary btn-sm ms-2" data-csp-click="goToday">{{ _('calendar_today') }}</button>
         </div>
 
         <!-- 添加事件按钮 -->
         <div class="mb-3">
-            <button class="btn btn-success btn-sm" onclick="showAddModal()">+ {{ _('calendar_new_event') }}</button>
+            <button class="btn btn-success btn-sm" data-csp-click="showAddModal">+ {{ _('calendar_new_event') }}</button>
         </div>
 
         <!-- 分类图例 -->
@@ -72,9 +72,9 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger me-auto" id="btnDelete" style="display:none;" onclick="deleteEvent()">{{ _('calendar_delete') }}</button>
+                <button type="button" class="btn btn-danger me-auto" id="btnDelete" style="display:none;" data-csp-click="deleteEvent">{{ _('calendar_delete') }}</button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('common_cancel') }}</button>
-                <button type="button" class="btn btn-primary" onclick="saveEvent()">{{ _('calendar_save') }}</button>
+                <button type="button" class="btn btn-primary" data-csp-click="saveEvent">{{ _('calendar_save') }}</button>
             </div>
         </div>
     </div>
@@ -188,11 +188,11 @@ function renderCalendar() {
             let cls = 'cal-cell';
             if (cell.otherMonth) cls += ' other-month';
             if (cell.isToday) cls += ' today';
-            html += `<td class="${cls}" onclick="onCellClick('${cell.dateStr}')">`;
+            html += `<td class="${cls}" data-csp-click="onCellClick" data-csp-args=\'["${cell.dateStr}"]\'>`;
             html += `<div class="cal-date${cell.isToday ? ' today-label' : ''}">${cell.day}</div>`;
             const dayEvents = evMap[cell.dateStr] || [];
             dayEvents.slice(0, 3).forEach(ev => {
-                html += `<div class="cal-event" style="background:${ev.color};" onclick="event.stopPropagation();openEvent(${ev.id})">${ev.event_time ? ev.event_time.substring(0,5)+' ' : ''}${escapeHtml(ev.title)}</div>`;
+                html += `<div class="cal-event" style="background:${ev.color};" data-csp-click="openEvent" data-csp-args='[${ev.id}]'>${ev.event_time ? ev.event_time.substring(0,5)+' ' : ''}${escapeHtml(ev.title)}</div>`;
             });
             if (dayEvents.length > 3) {
                 html += `<div class="cal-more">+${dayEvents.length - 3} 更多</div>`;
