@@ -648,19 +648,21 @@ def add_security_headers(response):
     # CSP: 防 XSS + 点击劫持 + 资源来源限制（使用 nonce 替代 unsafe-inline）
     nonce = getattr(g, "csp_nonce", "")
     nonce_directive = f" 'nonce-{nonce}'" if nonce else ""
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        # script-src：nonce 已覆盖所有 <script> 标签，unsafe-inline 暂保留以兼容 100+ 内联事件 handler（onclick 等），逐步迁移后可移除
-        f"script-src 'self' 'unsafe-inline'{nonce_directive} https://connect.qq.com https://cdn.bootcdn.net https://unpkg.com; "
-        # style-src：所有内联 <style> 已加 nonce，移除了 unsafe-inline
-        f"style-src 'self'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
-        "font-src 'self' https://cdn.bootcdn.net; "
-        "img-src 'self' data: blob:; "
-        "connect-src 'self' https://api.dictionaryapi.dev https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
-        "frame-ancestors 'self'; "
-        "form-action 'self'"
-    )
-        # 隐藏 Werkzeug 版本信息
+    # 如果路由处理器已设置了 CSP，保留原样不覆盖（例如插件沙箱需要 unsafe-inline）
+    if "Content-Security-Policy" not in response.headers:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            # script-src：nonce 已覆盖所有 <script> 标签，unsafe-inline 暂保留以兼容 100+ 内联事件 handler（onclick 等），逐步迁移后可移除
+            f"script-src 'self' 'unsafe-inline'{nonce_directive} https://connect.qq.com https://cdn.bootcdn.net https://unpkg.com; "
+            # style-src：所有内联 <style> 已加 nonce，移除了 unsafe-inline
+            f"style-src 'self'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
+            "font-src 'self' https://cdn.bootcdn.net; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self' https://api.dictionaryapi.dev https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
+            "frame-ancestors 'self'; "
+            "form-action 'self'"
+        )
+    # 隐藏 Werkzeug 版本信息
     response.headers.pop("Server", None)
     # 敏感页面禁用缓存
     if "text/html" in response.content_type:
@@ -5717,7 +5719,7 @@ SANDBOX_TEMPLATE = '''<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ plugin_title }} - 插件预览</title>
-<style>
+<style nonce="{{ csp_nonce }}">
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
