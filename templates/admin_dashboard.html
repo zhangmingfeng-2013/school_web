@@ -99,6 +99,7 @@
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-server">💻 服务器状态</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-cybermap">🌍 网络请求地图</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-plugins">🧩 插件管理</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-marketplace">🏪 插件市场</a></li>
     <li class="nav-item"><a class="nav-link" href="/backup">💾 数据备份</a></li>
 </ul>
 
@@ -368,13 +369,75 @@
 
 <!-- Tab: 插件管理 -->
 <div class="tab-pane fade" id="tab-plugins">
-    <div class="card">
+    <!-- 系统插件 -->
+    <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-bold">🧩 插件管理</span>
+            <span class="fw-bold">🧩 系统插件</span>
             <button class="btn btn-sm btn-outline-primary" onclick="reloadAllPlugins()">🔄 重新加载全部</button>
         </div>
         <div class="card-body">
             <div id="pluginList">
+                <div class="text-center text-muted py-3">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 插件市场：上传 -->
+    <div class="card mb-3 border-primary">
+        <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+            <span class="fw-bold">📦 插件市场 · 上传新插件</span>
+            <span class="badge bg-primary">仅管理员</span>
+        </div>
+        <div class="card-body">
+            <form id="marketplaceUploadForm" enctype="multipart/form-data" onsubmit="uploadMarketPlugin(event)">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">插件文件 <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm" type="file" id="mpFile" accept=".html,.vue" required>
+                        <div class="form-text small">支持 .html 或 .vue 文件，最大 5MB，UTF-8 编码</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">插件标识（英文）</label>
+                        <input class="form-control form-control-sm" type="text" id="mpName" placeholder="my-plugin" maxlength="50">
+                        <div class="form-text small">用于URL和存储目录，留空自动生成</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">显示名称 <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm" type="text" id="mpDisplay" placeholder="我的插件" maxlength="200" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">版本号</label>
+                        <input class="form-control form-control-sm" type="text" id="mpVersion" value="1.0.0" maxlength="20">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">图标 Emoji</label>
+                        <input class="form-control form-control-sm" type="text" id="mpIcon" value="🧩" maxlength="10">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">作者</label>
+                        <input class="form-control form-control-sm" type="text" id="mpAuthor" placeholder="作者名" maxlength="100">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">简介</label>
+                        <textarea class="form-control form-control-sm" id="mpDesc" rows="2" placeholder="简要描述插件功能..." maxlength="500"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">📤 上传到市场</button>
+                        <span id="mpUploadStatus" class="ms-2 small"></span>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 插件市场：列表 -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold">🏪 插件市场列表</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadMarketplace()">🔄 刷新</button>
+        </div>
+        <div class="card-body p-2">
+            <div id="marketplaceList">
                 <div class="text-center text-muted py-3">加载中...</div>
             </div>
         </div>
@@ -1132,6 +1195,104 @@ async function reloadAllPlugins() {
 }
 
 // 切换插件标签时自动加载
-document.querySelector('a[href="#tab-plugins"]')?.addEventListener('shown.bs.tab', loadPlugins);
+document.querySelector('a[href="#tab-plugins"]')?.addEventListener('shown.bs.tab', () => {
+    loadPlugins();
+    loadMarketplace();
+});
+
+// ====== 插件市场 ======
+async function uploadMarketPlugin(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('mpFile');
+    const file = fileInput.files[0];
+    if (!file) { alert('请选择文件'); return; }
+
+    const statusEl = document.getElementById('mpUploadStatus');
+    statusEl.textContent = '上传中...';
+    statusEl.className = 'ms-2 small text-warning';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('plugin_name', document.getElementById('mpName').value);
+    formData.append('display_name', document.getElementById('mpDisplay').value);
+    formData.append('description', document.getElementById('mpDesc').value);
+    formData.append('version', document.getElementById('mpVersion').value);
+    formData.append('author', document.getElementById('mpAuthor').value);
+    formData.append('icon', document.getElementById('mpIcon').value);
+
+    try {
+        const resp = await fetch('/api/admin/plugins/marketplace/upload', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            statusEl.textContent = '✅ ' + data.message;
+            statusEl.className = 'ms-2 small text-success';
+            document.getElementById('marketplaceUploadForm').reset();
+            document.getElementById('mpIcon').value = '🧩';
+            document.getElementById('mpVersion').value = '1.0.0';
+            loadMarketplace();
+        } else {
+            statusEl.textContent = '❌ ' + (data.error || '上传失败');
+            statusEl.className = 'ms-2 small text-danger';
+        }
+    } catch(err) {
+        statusEl.textContent = '❌ 网络错误: ' + err.message;
+        statusEl.className = 'ms-2 small text-danger';
+    }
+}
+
+async function loadMarketplace() {
+    try {
+        const resp = await fetch('/api/admin/plugins/marketplace', { credentials: 'include' });
+        const data = await resp.json();
+        const container = document.getElementById('marketplaceList');
+        if (!data.ok || !data.plugins) {
+            container.innerHTML = '<div class="alert alert-danger">加载失败</div>';
+            return;
+        }
+        if (data.plugins.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-4">🏪 市场暂无插件，上传第一个吧！</div>';
+            return;
+        }
+        container.innerHTML = data.plugins.map(p => `
+            <div class="d-flex align-items-center p-3 border-bottom">
+                <div class="flex-grow-1">
+                    <strong>${p.icon || '🧩'} ${p.display_name}</strong>
+                    <span class="badge bg-info ms-2">${p.file_type.toUpperCase()}</span>
+                    <span class="badge bg-secondary ms-1">v${p.version}</span>
+                    <div class="text-muted small">${p.description || '暂无简介'}</div>
+                    <div class="text-muted" style="font-size:11px;">
+                        作者: ${p.author || '-'} | 上传者: ${p.uploader || '-'} | ${p.created_at || ''}
+                        ${!p.exists_on_disk ? ' <span class="text-danger">⚠️ 文件丢失</span>' : ''}
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    ${p.id ? `<a class="btn btn-sm btn-outline-info" href="/plugin-market/${p.id}" target="_blank">👁 预览</a>` : ''}
+                    ${p.id ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteMarketPlugin(${p.id},'${p.display_name}')">🗑 删除</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch(e) {
+        document.getElementById('marketplaceList').innerHTML = '<div class="alert alert-danger">请求失败: ' + e.message + '</div>';
+    }
+}
+
+async function deleteMarketPlugin(id, name) {
+    if (!confirm(`确定要删除插件 "${name}" 吗？此操作不可撤销。`)) return;
+    try {
+        const resp = await fetch(`/api/admin/plugins/marketplace/${id}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        const data = await resp.json();
+        alert(data.message || (data.ok ? '删除成功' : '删除失败'));
+        loadMarketplace();
+    } catch(e) {
+        alert('删除失败: ' + e.message);
+    }
+}
 </script>
 {% endblock %}

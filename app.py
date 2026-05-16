@@ -23,7 +23,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import io
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, jsonify, send_from_directory, send_file, abort, Response, g
+    session, flash, jsonify, send_from_directory, send_file, abort, Response, g,
+    render_template_string, make_response,
 )
 from flask_cors import CORS
 from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
@@ -236,6 +237,7 @@ def _init_db_once():
     if not _db_init_done:
         _db_init_done = True
         _init_reset_table()
+        _init_marketplace_table()
 
 
 def _init_reset_table():
@@ -315,6 +317,36 @@ def _init_reset_table():
         conn.close()
     except pymysql.MySQLError:
         pass
+
+
+def _init_marketplace_table():
+    """确保 plugin_marketplace 表存在 — 管理员上传的 HTML/Vue 插件"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS plugin_marketplace (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                plugin_name VARCHAR(100) NOT NULL UNIQUE,
+                display_name VARCHAR(200) NOT NULL,
+                description TEXT,
+                version VARCHAR(20) DEFAULT '1.0.0',
+                author VARCHAR(100) DEFAULT '',
+                file_type ENUM('html', 'vue') NOT NULL DEFAULT 'html',
+                icon VARCHAR(10) DEFAULT '🧩',
+                uploader VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError:
+        pass
+
 
 # ---------- IP 访问限制 ----------
 # ---------- 速率限制配置（持久化到文件，可在管理后台动态修改） ----------
@@ -536,7 +568,7 @@ def check_rate_limit():
 def check_session_idle_timeout():
     """如果 IP 在 SESSION_IDLE_TIMEOUT 秒内无任何动作，下次请求强制重新登录"""
     # 排除不需要超时检测的路由
-    skip_prefixes = ("/static/", "/assets/", "/favicon.ico", "/share/")
+    skip_prefixes = ("/static/", "/assets/", "/favicon.ico", "/share/", "/plugin-market/")
     path = request.path
     if any(path.startswith(p) for p in skip_prefixes):
         return None
@@ -565,8 +597,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/")
 
 @app.before_request
 def check_global_captcha():
@@ -5220,6 +5252,534 @@ def api_admin_plugins_reload_all():
         ok, msg = plugins.load_plugin(p["name"])
         results.append({"name": p["name"], "ok": ok, "message": msg})
     return jsonify({"ok": True, "results": results})
+
+
+# ---------- 插件市场目录 ----------
+MARKETPLACE_DIR = os.path.join(os.path.dirname(__file__), "plugins", "marketplace")
+os.makedirs(MARKETPLACE_DIR, exist_ok=True)
+
+
+# ---------- 插件市场 API（管理员上传 HTML/Vue 插件） ----------
+@app.route("/api/admin/plugins/marketplace/upload", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_plugin_marketplace_upload():
+    """管理员上传 HTML 或 Vue 插件到市场"""
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"ok": False, "error": "请选择文件"}), 400
+
+    filename = file.filename or "untitled"
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".html", ".vue"):
+        return jsonify({"ok": False, "error": "仅支持 .html 或 .vue 文件"}), 400
+
+    file_type = "html" if ext == ".html" else "vue"
+
+    # 安全：校验文件大小为字节对象获取真实大小
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > 5 * 1024 * 1024:  # 5MB 上限
+        return jsonify({"ok": False, "error": "文件不能超过 5MB"}), 400
+
+    # 读取文件内容并做安全扫描
+    content = file.read()
+    try:
+        content_str = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return jsonify({"ok": False, "error": "文件编码必须是 UTF-8"}), 400
+
+    # 基础安全检查：拒绝包含危险标签的 HTML（防止服务端模板注入相关的）
+    dangerous_patterns = [
+        "{{", "}}", "{%", "%}",  # Jinja2 模板注入防护
+    ]
+    for pattern in dangerous_patterns:
+        if pattern in content_str:
+            return jsonify({"ok": False, "error": f"文件包含不安全的模板语法: {pattern}"}), 400
+
+    # 表单参数
+    plugin_name = request.form.get("plugin_name", "").strip()
+    display_name = request.form.get("display_name", "").strip()
+    description = request.form.get("description", "").strip()
+    version = request.form.get("version", "1.0.0").strip()
+    author = request.form.get("author", "").strip()
+    icon = request.form.get("icon", "🧩").strip()
+
+    # 生成唯一目录名
+    safe_plugin_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", plugin_name) if plugin_name else ""
+    if not safe_plugin_name:
+        safe_plugin_name = "plugin_" + uuid.uuid4().hex[:8]
+
+    # 确保不重名
+    plugin_dir = os.path.join(MARKETPLACE_DIR, safe_plugin_name)
+    counter = 1
+    original_name = safe_plugin_name
+    while os.path.exists(plugin_dir):
+        safe_plugin_name = f"{original_name}_{counter}"
+        plugin_dir = os.path.join(MARKETPLACE_DIR, safe_plugin_name)
+        counter += 1
+
+    os.makedirs(plugin_dir, exist_ok=True)
+
+    # 保存文件
+    dest_path = os.path.join(plugin_dir, "index" + ext)
+    try:
+        with open(dest_path, "wb") as f:
+            f.write(content)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"文件保存失败: {e}"}), 500
+
+    # 写入 manifest
+    manifest = {
+        "name": safe_plugin_name,
+        "display_name": display_name or safe_plugin_name,
+        "description": description,
+        "version": version,
+        "author": author,
+        "file_type": file_type,
+        "icon": icon,
+        "uploader": session["username"],
+    }
+    with open(os.path.join(plugin_dir, "plugin.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    # 如果是 Vue 文件，创建 wrapper HTML 用于沙箱渲染
+    if file_type == "vue":
+        _create_vue_wrapper(plugin_dir, safe_plugin_name, version)
+
+    # 写入数据库
+    conn = get_db()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO plugin_marketplace
+                    (plugin_name, display_name, description, version, author, file_type, icon, uploader)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    display_name=VALUES(display_name),
+                    description=VALUES(description),
+                    version=VALUES(version),
+                    file_type=VALUES(file_type),
+                    icon=VALUES(icon),
+                    updated_at=CURRENT_TIMESTAMP
+            """, (
+                safe_plugin_name,
+                display_name or safe_plugin_name,
+                description,
+                version,
+                author,
+                file_type,
+                icon,
+                session["username"],
+            ))
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            pass  # 数据库可降级，文件已保存
+
+    write_log("插件市场上传", f"插件: {display_name or safe_plugin_name} (类型:{file_type}), 上传者: {session['username']}")
+    return jsonify({
+        "ok": True,
+        "message": "插件上传成功",
+        "plugin": {
+            "name": safe_plugin_name,
+            "display_name": display_name or safe_plugin_name,
+            "file_type": file_type,
+            "version": version,
+        }
+    })
+
+
+def _create_vue_wrapper(plugin_dir, plugin_name, version="3"):
+    """为 Vue 插件创建沙箱 wrapper HTML"""
+    wrapper_html = '''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{plugin_title}</title>
+<script src="https://cdn.bootcdn.net/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<style>
+  * {margin: 0; padding: 0; box-sizing: border-box;}
+  body {font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;}
+  #app {min-height: 100vh;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+  const {createApp} = Vue;
+  // 通过 fetch 加载 .vue 模板内容
+  try {
+    const response = await fetch("./index.vue");
+    const template = await response.text();
+    // 简易 SFC 解析：提取 <template>, <script>, <style>
+    const templateMatch = template.match(/<template>([\\s\\S]*?)<\\/template>/i);
+    const scriptMatch = template.match(/<script[^>]*>([\\s\\S]*?)<\\/script>/i);
+    const styleMatch = template.match(/<style[^>]*>([\\s\\S]*?)<\\/style>/i);
+    const appOptions = {
+      template: templateMatch ? templateMatch[1].trim() : "<div>No template found</div>",
+    };
+    if (scriptMatch) {
+      try {
+        const scriptContent = scriptMatch[1].trim();
+        const componentFunc = new Function("Vue", scriptContent + "; return (typeof defaultExport !== 'undefined' ? defaultExport : (typeof component !== 'undefined' ? component : {}) );");
+        const component = componentFunc(Vue);
+        if (component && typeof component === "object") {
+          Object.assign(appOptions, component);
+        }
+      } catch (e) {
+        console.error("Vue script eval failed:", e);
+      }
+    }
+    // 注入样式
+    if (styleMatch) {
+      const styleEl = document.createElement("style");
+      styleEl.textContent = styleMatch[1];
+      document.head.appendChild(styleEl);
+    }
+    const app = createApp(appOptions);
+    app.mount("#app");
+  } catch (e) {
+    document.getElementById("app").innerHTML = '<div style="padding:20px;color:red;">Plugin load error: ' + e.message + '</div>';
+  }
+</script>
+</body>
+</html>'''
+    wrapper_html = wrapper_html.replace("{plugin_title}", plugin_name)
+    with open(os.path.join(plugin_dir, "index.html"), "w", encoding="utf-8") as f:
+        f.write(wrapper_html)
+
+
+@app.route("/api/admin/plugins/marketplace")
+@login_required
+@admin_required
+def api_admin_plugin_marketplace_list():
+    """获取插件市场列表（管理员视图，含上传者信息）"""
+    result = []
+    conn = get_db()
+    if conn:
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            cursor.execute(
+                "SELECT * FROM plugin_marketplace ORDER BY updated_at DESC"
+            )
+            rows = cursor.fetchall()
+            for r in rows:
+                plugin_dir = os.path.join(MARKETPLACE_DIR, r["plugin_name"])
+                result.append({
+                    "id": r["id"],
+                    "name": r["plugin_name"],
+                    "display_name": r["display_name"],
+                    "description": r.get("description", ""),
+                    "version": r["version"],
+                    "author": r.get("author", ""),
+                    "file_type": r["file_type"],
+                    "icon": r.get("icon", "🧩"),
+                    "uploader": r["uploader"],
+                    "created_at": r["created_at"].strftime("%Y-%m-%d %H:%M") if r.get("created_at") else "",
+                    "exists_on_disk": os.path.isdir(plugin_dir),
+                    "preview_url": f"/plugin-market/{r['id']}",
+                })
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+
+    # 合并磁盘上有但数据库没有记录的文件（容错）
+    if os.path.isdir(MARKETPLACE_DIR):
+        for dirname in os.listdir(MARKETPLACE_DIR):
+            full = os.path.join(MARKETPLACE_DIR, dirname)
+            if os.path.isdir(full):
+                manifest_path = os.path.join(full, "plugin.json")
+                if os.path.exists(manifest_path):
+                    try:
+                        with open(manifest_path, "r", encoding="utf-8") as f:
+                            m = json.load(f)
+                        db_names = {r["name"] for r in result}
+                        if dirname not in db_names:
+                            result.append({
+                                "id": None,
+                                "name": dirname,
+                                "display_name": m.get("display_name", dirname),
+                                "description": m.get("description", ""),
+                                "version": m.get("version", "1.0.0"),
+                                "author": m.get("author", ""),
+                                "file_type": m.get("file_type", "html"),
+                                "icon": m.get("icon", "🧩"),
+                                "uploader": m.get("uploader", "?"),
+                                "created_at": "",
+                                "exists_on_disk": True,
+                                "preview_url": f"/plugin-market-raw/{dirname}",
+                            })
+                    except Exception:
+                        pass
+
+    return jsonify({"ok": True, "plugins": result})
+
+
+@app.route("/api/admin/plugins/marketplace/<int:plugin_id>", methods=["DELETE"])
+@login_required
+@admin_required
+def api_admin_plugin_marketplace_delete(plugin_id):
+    """删除插件市场中的插件（数据库 + 文件）"""
+    conn = get_db()
+    plugin_name = None
+    if conn:
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            cursor.execute(
+                "SELECT plugin_name FROM plugin_marketplace WHERE id=%s", (plugin_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                plugin_name = row["plugin_name"]
+                cursor.execute("DELETE FROM plugin_marketplace WHERE id=%s", (plugin_id,))
+                conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+
+    # 删除文件
+    if plugin_name:
+        plugin_dir = os.path.join(MARKETPLACE_DIR, plugin_name)
+        if os.path.isdir(plugin_dir):
+            import shutil
+            shutil.rmtree(plugin_dir, ignore_errors=True)
+        write_log("插件市场删除", f"插件: {plugin_name}, 操作者: {session['username']}")
+        return jsonify({"ok": True, "message": f"插件 '{plugin_name}' 已删除"})
+
+    return jsonify({"ok": False, "error": "未找到该插件"}), 404
+
+
+# ---------- 插件市场沙箱渲染（安全隔离） ----------
+@app.route("/plugin-market/<int:plugin_id>")
+def plugin_market_render(plugin_id):
+    """在沙箱 iframe 中渲染插件市场中的插件"""
+    conn = get_db()
+    if conn:
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            cursor.execute(
+                "SELECT * FROM plugin_marketplace WHERE id=%s", (plugin_id,)
+            )
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if row:
+                plugin_dir = os.path.join(MARKETPLACE_DIR, row["plugin_name"])
+                if not os.path.isdir(plugin_dir):
+                    return "<h3>插件文件丢失</h3>", 404
+
+                # 决定用哪个入口文件
+                if row["file_type"] == "vue":
+                    entry = "index.html"  # Vue wrapper
+                else:
+                    entry = "index.html"
+
+                entry_path = os.path.join(plugin_dir, entry)
+                if not os.path.exists(entry_path):
+                    return "<h3>插件入口文件丢失</h3>", 404
+
+                # 读取插件内容
+                with open(entry_path, "r", encoding="utf-8") as f:
+                    plugin_content = f.read()
+
+                # 构建沙箱页面：插件在 sandboxed iframe 中运行
+                return render_template_string(
+                    SANDBOX_TEMPLATE,
+                    plugin_title=row["display_name"],
+                    plugin_content=plugin_content,
+                    plugin_id=plugin_id,
+                )
+        except Exception:
+            pass
+
+    return "<h3>插件不存在</h3>", 404
+
+
+@app.route("/plugin-market/<int:plugin_id>/direct")
+def plugin_market_direct(plugin_id):
+    """直接提供沙箱内容（iframe src），返回插件 HTML 并附加沙箱 CSP"""
+    conn = get_db()
+    if conn:
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            cursor.execute(
+                "SELECT * FROM plugin_marketplace WHERE id=%s", (plugin_id,)
+            )
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if row:
+                plugin_dir = os.path.join(MARKETPLACE_DIR, row["plugin_name"])
+                if row["file_type"] == "vue":
+                    entry = "index.html"
+                else:
+                    entry = "index.html"
+
+                entry_path = os.path.join(plugin_dir, entry)
+                if os.path.exists(entry_path):
+                    resp = make_response(send_file(entry_path))
+                    # 强 CSP：限制插件能力
+                    resp.headers["Content-Security-Policy"] = (
+                        "default-src 'self'; "
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.bootcdn.net; "
+                        "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
+                        "img-src 'self' data: blob: https:; "
+                        "connect-src 'self' https:; "
+                        "frame-ancestors 'none'; "
+                        "sandbox allow-scripts allow-same-origin; "
+                    )
+                    resp.headers["X-Content-Type-Options"] = "nosniff"
+                    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+                    return resp
+        except Exception:
+            pass
+
+    return "<h3>插件不存在</h3>", 404
+
+
+# 沙箱包装页面模板
+SANDBOX_TEMPLATE = '''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ plugin_title }} - 插件预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1a1a2e;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  .toolbar {
+    background: #16213e;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #0f3460;
+    flex-shrink: 0;
+  }
+  .toolbar h2 {
+    font-size: 16px;
+    margin: 0;
+    color: #e94560;
+    flex: 1;
+  }
+  .toolbar .badge {
+    background: #0f3460;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    color: #a8dadc;
+  }
+  .toolbar button {
+    background: #e94560;
+    color: white;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .toolbar button:hover { background: #c73e54; }
+  .sandbox-container {
+    flex: 1;
+    position: relative;
+  }
+  .sandbox-container iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+  }
+  .sandbox-watermark {
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 10px;
+    color: #666;
+    pointer-events: none;
+    background: rgba(255,255,255,0.85);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h2>🧩 {{ plugin_title }}</h2>
+  <span class="badge">沙箱隔离模式</span>
+  <button onclick="window.location.href='/dashboard'">← 返回工具箱</button>
+</div>
+<div class="sandbox-container">
+  <iframe
+    src="/plugin-market/{{ plugin_id }}/direct"
+    sandbox="allow-scripts allow-same-origin"
+    referrerpolicy="no-referrer"
+    loading="lazy"
+  ></iframe>
+  <div class="sandbox-watermark">🔒 沙箱隔离 · 插件代码受限运行</div>
+</div>
+</body>
+</html>'''
+
+
+# ---------- 公开插件市场浏览（所有用户） ----------
+@app.route("/marketplace")
+@login_required
+def marketplace_browse():
+    """用户端插件市场浏览页面"""
+    return render_template("marketplace.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
+@app.route("/api/marketplace")
+@login_required
+def api_marketplace_public():
+    """公开 API：获取插件市场列表（不含管理员专属信息）"""
+    result = []
+    conn = get_db()
+    if conn:
+        try:
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            cursor.execute(
+                "SELECT id, plugin_name, display_name, description, version, "
+                "author, file_type, icon, created_at "
+                "FROM plugin_marketplace ORDER BY updated_at DESC"
+            )
+            rows = cursor.fetchall()
+            for r in rows:
+                result.append({
+                    "id": r["id"],
+                    "name": r["plugin_name"],
+                    "display_name": r["display_name"],
+                    "description": r.get("description", ""),
+                    "version": r["version"],
+                    "author": r.get("author", ""),
+                    "file_type": r["file_type"],
+                    "icon": r.get("icon", "🧩"),
+                    "created_at": r["created_at"].strftime("%Y-%m-%d %H:%M") if r.get("created_at") else "",
+                    "preview_url": f"/plugin-market/{r['id']}",
+                })
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+    return jsonify({"ok": True, "plugins": result})
 
 
 def _init_plugins():

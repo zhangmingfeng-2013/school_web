@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}插件市场{% endblock %}
+{% block content %}
+<style>
+    .mp-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+    }
+    .mp-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 20px;
+        transition: all 0.2s;
+        background: white;
+        display: flex;
+        flex-direction: column;
+    }
+    .mp-card:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    .mp-icon {
+        font-size: 40px;
+        margin-bottom: 10px;
+    }
+    .mp-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .mp-badges {
+        margin-bottom: 8px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .mp-desc {
+        color: #666;
+        font-size: 13px;
+        flex: 1;
+        margin-bottom: 12px;
+        line-height: 1.5;
+    }
+    .mp-meta {
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 12px;
+    }
+    .mp-actions {
+        display: flex;
+        gap: 8px;
+    }
+    .mp-btn {
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .mp-btn-preview {
+        background: #3b82f6;
+        color: white;
+    }
+    .mp-btn-preview:hover { background: #2563eb; color: white; text-decoration: none; }
+    .mp-btn-open {
+        background: #10b981;
+        color: white;
+    }
+    .mp-btn-open:hover { background: #059669; color: white; text-decoration: none; }
+</style>
+
+<h2 class="mb-2">🏪 插件市场</h2>
+<p class="text-muted mb-4">浏览其他用户上传的工具插件，在沙箱中安全预览</p>
+
+<div id="mpLoading" class="text-center text-muted py-5">
+    <div class="spinner-border spinner-border-sm me-2"></div>加载中...
+</div>
+
+<div class="mp-grid" id="mpGrid" style="display:none;"></div>
+
+<div id="mpEmpty" class="text-center text-muted py-5" style="display:none;">
+    <div style="font-size:48px;">🏪</div>
+    <p class="mt-3">市场暂无插件</p>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+async function loadMarketplace() {
+    try {
+        const resp = await fetch('/api/marketplace', { credentials: 'include' });
+        const data = await resp.json();
+        document.getElementById('mpLoading').style.display = 'none';
+
+        if (!data.ok || !data.plugins || data.plugins.length === 0) {
+            document.getElementById('mpEmpty').style.display = 'block';
+            return;
+        }
+
+        const grid = document.getElementById('mpGrid');
+        grid.style.display = 'grid';
+        grid.innerHTML = data.plugins.map(p => `
+            <div class="mp-card">
+                <div class="mp-icon">${p.icon || '🧩'}</div>
+                <div class="mp-title">${p.display_name}</div>
+                <div class="mp-badges">
+                    <span class="badge bg-info">${p.file_type.toUpperCase()}</span>
+                    <span class="badge bg-secondary">v${p.version}</span>
+                </div>
+                <div class="mp-desc">${p.description || '暂无简介'}</div>
+                <div class="mp-meta">
+                    作者: ${p.author || '-'} · ${p.created_at || ''}
+                </div>
+                <div class="mp-actions">
+                    <a class="mp-btn mp-btn-preview" href="${p.preview_url}" target="_blank">👁 预览</a>
+                    <a class="mp-btn mp-btn-open" href="${p.preview_url}" target="_blank">🚀 打开</a>
+                </div>
+            </div>
+        `).join('');
+    } catch(e) {
+        document.getElementById('mpLoading').innerHTML =
+            '<div class="alert alert-danger">加载失败: ' + e.message + '</div>';
+    }
+}
+
+loadMarketplace();
+</script>
+{% endblock %}

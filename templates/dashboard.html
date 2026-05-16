@@ -235,8 +235,15 @@
     </div>
     {% endif %}
 
-    {% if permission == 'administrator' %}
-    {% endif %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('marketplace_browse') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(16,185,129,.2)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(16,185,129,.08)!important;"><span style="font-size:2rem;">🏪</span></div>
+                <h5>插件市场</h5>
+                <p class="text-muted small">浏览沙箱插件，发现实用工具</p>
+            </div></div>
+        </a>
+    </div>
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('profile') }}" class="text-decoration-none text-dark">
