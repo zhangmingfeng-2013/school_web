@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}管理后台{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-<style>
+<link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous" />
+<style nonce="{{ csp_nonce }}">
     .stat-card { border-radius: 12px; padding: 20px; }
     .ip-row { font-family: 'SF Mono', 'Courier New', monospace; font-size: 0.9rem; }
     .ip-row.blocked { background: rgba(220,53,69,0.08); }
@@ -842,7 +842,7 @@ async function saveRateConfig() {
 </script>
 
 <!-- Leaflet + 网络请求地图 Kaspersky 风格 -->
-<script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script nonce="{{ csp_nonce }}">
 let cyberMap = null;
 let cyberMarkers = [];

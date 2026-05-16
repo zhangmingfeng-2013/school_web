@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _('backup_title') }} - {{ _('app_title') }}{% endblock %}
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
     .backup-card { border-radius: 12px; }
     .backup-card .card-header { border-radius: 12px 12px 0 0; }
     .file-size { font-family: 'SF Mono', 'Courier New', monospace; font-size: 0.85rem; }

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}关于作者{% endblock %}
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
 /* ===== 全局 ===== */
 :root {
     --text: #f2f2f2;

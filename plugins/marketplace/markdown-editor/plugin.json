@@ -1,0 +1,9 @@
+{
+  "plugin_name": "markdown-editor",
+  "display_name": "Markdown 实时编辑器",
+  "description": "功能齐全的 Markdown 实时编辑器插件。支持粗体、斜体、代码块、表格、图片、列表、引用等完整 Markdown 语法，配备工具栏和键盘快捷键，响应式布局支持移动端。",
+  "version": "1.0.0",
+  "author": "张铭枫",
+  "file_type": "html",
+  "icon": "📝"
+}

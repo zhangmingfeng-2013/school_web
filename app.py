@@ -137,7 +137,7 @@ CORS(app, supports_credentials=True, origins=['http://localhost:3000', 'http://1
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_SECURE=False,  # HTTP 环境必须为 False，HTTPS 反向代理后改为 True
+    SESSION_COOKIE_SECURE=bool(os.environ.get("HTTPS")),  # 生产 HTTPS 环境自动启用 Secure；HTTP 内网环境设为 False
     PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=2),
 )
 
@@ -597,7 +597,7 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace"}
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace"}
 CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/")
 
 @app.before_request
@@ -653,11 +653,12 @@ def add_security_headers(response):
     nonce_directive = f" 'nonce-{nonce}'" if nonce else ""
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        # script-src 保留 unsafe-inline（全站 130+ 内联 onclick/onchange 等事件 handler，暂无法迁到 JS 事件监听）
-        "script-src 'self' 'unsafe-inline' https://connect.qq.com https://cdn.bootcdn.net; "
-        "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
+        # script-src：nonce 已覆盖所有 <script> 标签，unsafe-inline 暂保留以兼容 100+ 内联事件 handler（onclick 等），逐步迁移后可移除
+        f"script-src 'self' 'unsafe-inline'{nonce_directive} https://connect.qq.com https://cdn.bootcdn.net https://unpkg.com; "
+        # style-src：所有内联 <style> 已加 nonce，移除了 unsafe-inline
+        f"style-src 'self'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
         "font-src 'self' https://cdn.bootcdn.net; "
-        "img-src 'self' data: blob: *; "
+        "img-src 'self' data: blob:; "
         "connect-src 'self' https://api.dictionaryapi.dev https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
         "frame-ancestors 'self'; "
         "form-action 'self'"
@@ -5557,6 +5558,72 @@ def api_admin_plugin_marketplace_delete(plugin_id):
 
 
 # ---------- 插件市场沙箱渲染（安全隔离） ----------
+@app.route("/plugin-market-raw/<dirname>")
+def plugin_market_raw_render(dirname):
+    """在沙箱 iframe 中渲染磁盘上的插件（无需 DB 记录）"""
+    # 安全检查：防止目录遍历
+    safe_dirname = re.sub(r"[^a-zA-Z0-9_\-]", "", dirname)
+    if safe_dirname != dirname or ".." in dirname:
+        return "<h3>无效的插件名称</h3>", 400
+
+    plugin_dir = os.path.join(MARKETPLACE_DIR, safe_dirname)
+    if not os.path.isdir(plugin_dir):
+        return "<h3>插件不存在</h3>", 404
+
+    # 读取 manifest 获取显示信息
+    display_name = safe_dirname
+    manifest_path = os.path.join(plugin_dir, "plugin.json")
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                m = json.load(f)
+            display_name = m.get("display_name", safe_dirname)
+        except Exception:
+            pass
+
+    # 读取 index.html
+    entry_path = os.path.join(plugin_dir, "index.html")
+    if not os.path.exists(entry_path):
+        return "<h3>插件入口文件不存在</h3>", 404
+
+    with open(entry_path, "r", encoding="utf-8") as f:
+        plugin_content = f.read()
+
+    return render_template_string(
+        SANDBOX_TEMPLATE,
+        plugin_title=display_name,
+        plugin_content=plugin_content,
+        iframe_src=f"/plugin-market-raw/{safe_dirname}/direct",
+    )
+
+
+@app.route("/plugin-market-raw/<dirname>/direct")
+def plugin_market_raw_direct(dirname):
+    """直接提供沙箱内容（iframe src），返回磁盘上的插件 HTML"""
+    safe_dirname = re.sub(r"[^a-zA-Z0-9_\-]", "", dirname)
+    if safe_dirname != dirname or ".." in dirname:
+        return "<h3>无效的插件名称</h3>", 400
+
+    plugin_dir = os.path.join(MARKETPLACE_DIR, safe_dirname)
+    entry_path = os.path.join(plugin_dir, "index.html")
+    if not os.path.exists(entry_path):
+        return "<h3>插件入口文件不存在</h3>", 404
+
+    resp = make_response(send_file(entry_path))
+    resp.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.bootcdn.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
+        "img-src 'self' data: blob: https:; "
+        "connect-src 'self' https:; "
+        "frame-ancestors 'none'; "
+        "sandbox allow-scripts allow-same-origin; "
+    )
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    return resp
+
+
 @app.route("/plugin-market/<int:plugin_id>")
 def plugin_market_render(plugin_id):
     """在沙箱 iframe 中渲染插件市场中的插件"""
@@ -5595,7 +5662,7 @@ def plugin_market_render(plugin_id):
                     SANDBOX_TEMPLATE,
                     plugin_title=row["display_name"],
                     plugin_content=plugin_content,
-                    plugin_id=plugin_id,
+                    iframe_src=f"/plugin-market/{plugin_id}/direct",
                 )
         except Exception:
             pass
@@ -5726,7 +5793,7 @@ SANDBOX_TEMPLATE = '''<!DOCTYPE html>
 </div>
 <div class="sandbox-container">
   <iframe
-    src="/plugin-market/{{ plugin_id }}/direct"
+    src="{{ iframe_src }}"
     sandbox="allow-scripts allow-same-origin"
     referrerpolicy="no-referrer"
     loading="lazy"
@@ -5779,6 +5846,34 @@ def api_marketplace_public():
             conn.close()
         except Exception:
             pass
+
+    # 合并磁盘上有 plugin.json 但没有数据库记录的文件（容错）
+    if os.path.isdir(MARKETPLACE_DIR):
+        for dirname in os.listdir(MARKETPLACE_DIR):
+            full = os.path.join(MARKETPLACE_DIR, dirname)
+            if os.path.isdir(full):
+                manifest_path = os.path.join(full, "plugin.json")
+                if os.path.exists(manifest_path):
+                    try:
+                        with open(manifest_path, "r", encoding="utf-8") as f:
+                            m = json.load(f)
+                        db_names = {r["name"] for r in result}
+                        if dirname not in db_names:
+                            result.append({
+                                "id": None,
+                                "name": dirname,
+                                "display_name": m.get("display_name", dirname),
+                                "description": m.get("description", ""),
+                                "version": m.get("version", "1.0.0"),
+                                "author": m.get("author", ""),
+                                "file_type": m.get("file_type", "html"),
+                                "icon": m.get("icon", "🧩"),
+                                "created_at": "",
+                                "preview_url": f"/plugin-market-raw/{dirname}",
+                            })
+                    except Exception:
+                        pass
+
     return jsonify({"ok": True, "plugins": result})
 
 

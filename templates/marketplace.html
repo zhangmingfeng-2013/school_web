@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}插件市场{% endblock %}
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
     .mp-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

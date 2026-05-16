@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown 实时编辑器</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --accent: #e94560;
+    --text: #eaeaea;
+    --text2: #a0a0b0;
+    --border: #2a2a4a;
+    --code-bg: #0d1117;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .toolbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .toolbar .logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-right: auto;
+  }
+  .toolbar button {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+  .toolbar button:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .toolbar button.active { background: var(--accent); }
+  .editor-wrap {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  .pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-header {
+    padding: 8px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text2);
+    flex-shrink: 0;
+  }
+  .divider {
+    width: 4px;
+    background: var(--border);
+    cursor: col-resize;
+    flex-shrink: 0;
+  }
+  #editor {
+    flex: 1;
+    background: var(--code-bg);
+    color: #c9d1d9;
+    border: none;
+    padding: 16px;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    tab-size: 2;
+  }
+  #preview {
+    flex: 1;
+    padding: 16px 24px;
+    overflow-y: auto;
+    background: #ffffff;
+    color: #24292f;
+  }
+  /* Markdown preview styles */
+  #preview h1 { font-size: 2em; border-bottom: 2px solid #eaecef; padding-bottom: 0.3em; margin: 16px 0; }
+  #preview h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; margin: 16px 0; }
+  #preview h3 { font-size: 1.25em; margin: 14px 0; }
+  #preview h4, #preview h5, #preview h6 { font-size: 1em; margin: 12px 0; }
+  #preview p { margin: 8px 0; line-height: 1.7; }
+  #preview ul, #preview ol { padding-left: 24px; margin: 8px 0; }
+  #preview li { margin: 4px 0; }
+  #preview code {
+    background: #f6f8fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.9em;
+    color: #d63384;
+  }
+  #preview pre {
+    background: #f6f8fa;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  #preview pre code {
+    background: none;
+    padding: 0;
+    color: #24292f;
+  }
+  #preview blockquote {
+    border-left: 4px solid #0969da;
+    padding: 4px 16px;
+    margin: 12px 0;
+    color: #656d76;
+    background: #f6f8fa;
+    border-radius: 0 6px 6px 0;
+  }
+  #preview table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+  }
+  #preview th, #preview td {
+    border: 1px solid #d0d7de;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  #preview th { background: #f6f8fa; font-weight: 600; }
+  #preview tr:nth-child(even) { background: #f6f8fa; }
+  #preview a { color: #0969da; text-decoration: none; }
+  #preview a:hover { text-decoration: underline; }
+  #preview img { max-width: 100%; border-radius: 8px; }
+  #preview hr { border: none; border-top: 2px solid #eaecef; margin: 16px 0; }
+  .stats {
+    padding: 6px 16px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text2);
+    display: flex;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  /* 移动端适配 */
+  @media (max-width: 768px) {
+    .editor-wrap { flex-direction: column; }
+    .divider { width: 100%; height: 4px; cursor: row-resize; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="logo">📝 Markdown 实时编辑器</span>
+  <button id="btn-bold" title="粗体 Ctrl+B">B</button>
+  <button id="btn-italic" title="斜体 Ctrl+I"><em>I</em></button>
+  <button id="btn-heading" title="标题">H</button>
+  <button id="btn-link" title="链接">🔗</button>
+  <button id="btn-image" title="图片">🖼</button>
+  <button id="btn-code" title="代码块">&lt;/&gt;</button>
+  <button id="btn-quote" title="引用">❝</button>
+  <button id="btn-list" title="列表">≡</button>
+  <button id="btn-table" title="表格">⊞</button>
+  <button id="btn-clear" style="margin-left:auto;background:#e94560;">清空</button>
+</div>
+
+<div class="editor-wrap">
+  <div class="pane">
+    <div class="pane-header">✏️ 编辑</div>
+    <textarea id="editor" placeholder="# 开始编写 Markdown...&#10;&#10;支持 **粗体**、*斜体*、`代码`、链接、图片等"></textarea>
+  </div>
+  <div class="divider" id="divider"></div>
+  <div class="pane">
+    <div class="pane-header">👁 预览</div>
+    <div id="preview"></div>
+  </div>
+</div>
+
+<div class="stats">
+  <span id="char-count">字符: 0</span>
+  <span id="word-count">词: 0</span>
+  <span id="line-count">行: 0</span>
+</div>
+
+<script>
+// ============ 简易 Markdown 解析器 ============
+function parseMarkdown(text) {
+  if (!text) return '<p style="color:#656d76;font-style:italic;">在左侧输入 Markdown 内容...</p>';
+  
+  // HTML 转义
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  
+  // 代码块 (必须是完整的 ``` 配对)
+  const codeBlocks = [];
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    codeBlocks.push({ lang, code: code.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') });
+    return `%%CODEBLOCK_${codeBlocks.length - 1}%%`;
+  });
+  
+  // 行内代码
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  
+  // 图片 ![alt](url)
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
+  
+  // 链接 [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  
+  // 标题
+  html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>');
+  html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  
+  // 粗体/斜体
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  
+  // 删除线
+  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+  
+  // 水平线
+  html = html.replace(/^---$/gm, '<hr>');
+  html = html.replace(/^\*\*\*$/gm, '<hr>');
+  
+  // 引用
+  const lines = html.split('\n');
+  let inQuote = false;
+  html = '';
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('&gt; ')) {
+      if (!inQuote) { html += '<blockquote>'; inQuote = true; }
+      html += lines[i].replace(/^&gt; /, '') + '<br>';
+    } else {
+      if (inQuote) { html += '</blockquote>'; inQuote = false; }
+      html += lines[i] + '\n';
+    }
+  }
+  if (inQuote) html += '</blockquote>';
+  
+  // 有序列表
+  html = html.replace(/^(\d+)\. (.+)$/gm, (_, num, content) => {
+    // wrap consecutive items
+    return `%%OLI%%${num}. ${content}%%OLI_END%%`;
+  });
+  html = html.replace(/(%%OLI%%.*?%%OLI_END%%\n?)+/g, (match) => {
+    const items = match.split('%%OLI_END%%').filter(s => s.trim());
+    return '<ol>' + items.map(s => {
+      const content = s.replace(/^%%OLI%%\d+\. /, '');
+      return `<li>${content.trim()}</li>`;
+    }).join('') + '</ol>';
+  });
+  
+  // 无序列表
+  html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, (match) => {
+    if (match.includes('%%OLI%%')) return match; // 跳过有序列表
+    return `<ul>\n${match}</ul>`;
+  });
+  
+  // 表格
+  html = html.replace(/\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)+)/g, (_, header, body) => {
+    const hCells = header.split('|').filter(c => c.trim());
+    const rows = body.trim().split('\n');
+    let tbl = '<table><thead><tr>';
+    hCells.forEach(c => { tbl += `<th>${c.trim()}</th>`; });
+    tbl += '</tr></thead><tbody>';
+    rows.forEach(row => {
+      const cells = row.split('|').filter(c => c.trim());
+      tbl += '<tr>';
+      cells.forEach(c => { tbl += `<td>${c.trim()}</td>`; });
+      tbl += '</tr>';
+    });
+    tbl += '</tbody></table>';
+    return tbl;
+  });
+  
+  // 恢复代码块
+  html = html.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => {
+    const cb = codeBlocks[parseInt(i)];
+    const langAttr = cb.lang ? ` class="language-${cb.lang}"` : '';
+    return `<pre><code${langAttr}>${cb.code}</code></pre>`;
+  });
+  
+  // 段落：连续的非空行
+  html = html.replace(/\n\n+/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  
+  // 清理空段落
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  html = html.replace(/<p>(<h[1-6]|<hr|<ul|<ol|<table|<blockquote|<pre)/g, '$1');
+  html = html.replace(/(<\/h[1-6]>|<\/hr>|<\/ul>|<\/ol>|<\/table>|<\/blockquote>|<\/pre>)<\/p>/g, '$1');
+  
+  return html;
+}
+
+// ============ DOM 元素 ============
+const editor = document.getElementById('editor');
+const preview = document.getElementById('preview');
+const charCount = document.getElementById('char-count');
+const wordCount = document.getElementById('word-count');
+const lineCount = document.getElementById('line-count');
+
+// ============ 默认示例内容 ============
+const defaultContent = `# 🎉 欢迎使用 Markdown 编辑器
+
+这是一个**功能齐全**的 Markdown 实时编辑器插件。
+
+## ✨ 支持的功能
+
+- **粗体**、*斜体*、~~删除线~~
+- \`行内代码\`
+- [超链接](https://example.com)
+- ![图片](https://via.placeholder.com/200x100/16213e/e94560?text=Plugin)
+- 有序列表和无序列表
+- 引用块
+- 代码块
+- 表格
+
+## 📊 表格示例
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 实时预览 | ✅ | 输入即预览 |
+| 工具栏 | ✅ | 快捷插入 |
+| 移动适配 | ✅ | 响应式布局 |
+| 字数统计 | ✅ | 底部状态栏 |
+
+## 💻 代码块
+
+\`\`\`javascript
+// 这是一个 JavaScript 代码块
+function greet(name) {
+  return \`你好，\${name}！\`;
+}
+console.log(greet('张铭枫'));
+\`\`\`
+
+\`\`\`python
+# Python 代码块
+def fibonacci(n):
+    a, b = 0, 1
+    for _ in range(n):
+        yield a
+        a, b = b, a + b
+\`\`\`
+
+> 💡 **提示**：这个插件运行在沙箱 iframe 中，安全隔离，不会影响主应用。
+
+---
+
+*开始编辑左侧内容来体验实时预览吧！*
+`;
+
+// ============ 初始化 ============
+editor.value = defaultContent;
+updatePreview();
+
+// ============ 实时预览 ============
+editor.addEventListener('input', updatePreview);
+
+function updatePreview() {
+  const md = editor.value;
+  preview.innerHTML = parseMarkdown(md);
+  updateStats(md);
+}
+
+function updateStats(text) {
+  charCount.textContent = `字符: ${text.length}`;
+  wordCount.textContent = `词: ${text.trim() ? text.trim().split(/\s+/).length : 0}`;
+  lineCount.textContent = `行: ${text.split('\n').length}`;
+}
+
+// ============ 工具栏按钮 ============
+function insertText(before, after) {
+  const start = editor.selectionStart;
+  const end = editor.selectionEnd;
+  const selected = editor.value.substring(start, end);
+  const newText = before + selected + after;
+  editor.value = editor.value.substring(0, start) + newText + editor.value.substring(end);
+  editor.focus();
+  editor.selectionStart = start + before.length;
+  editor.selectionEnd = start + before.length + selected.length;
+  updatePreview();
+}
+
+document.getElementById('btn-bold').addEventListener('click', () => insertText('**', '**'));
+document.getElementById('btn-italic').addEventListener('click', () => insertText('*', '*'));
+document.getElementById('btn-heading').addEventListener('click', () => insertText('\n## ', ''));
+document.getElementById('btn-link').addEventListener('click', () => insertText('[', '](url)'));
+document.getElementById('btn-image').addEventListener('click', () => insertText('![', '](url)'));
+document.getElementById('btn-code').addEventListener('click', () => insertText('\n```\n', '\n```\n'));
+document.getElementById('btn-quote').addEventListener('click', () => insertText('\n> ', ''));
+document.getElementById('btn-list').addEventListener('click', () => insertText('\n- ', ''));
+document.getElementById('btn-table').addEventListener('click', () => {
+  insertText('\n| 列1 | 列2 | 列3 |\n|-----|-----|-----|\n| 值1 | 值2 | 值3 |\n', '');
+});
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (confirm('确定要清空全部内容吗？')) {
+    editor.value = '';
+    updatePreview();
+  }
+});
+
+// ============ 键盘快捷键 ============
+editor.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    switch(e.key) {
+      case 'b': e.preventDefault(); insertText('**', '**'); break;
+      case 'i': e.preventDefault(); insertText('*', '*'); break;
+      case 's': e.preventDefault(); break; // 阻止保存
+    }
+  }
+  // Tab 缩进
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    insertText('  ', '');
+  }
+});
+
+// ============ 拖拽分隔线 ============
+const divider = document.getElementById('divider');
+let isDragging = false;
+
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const wrap = document.querySelector('.editor-wrap');
+  const rect = wrap.getBoundingClientRect();
+  const leftPercent = ((e.clientX - rect.left) / rect.width) * 100;
+  if (leftPercent < 20 || leftPercent > 80) return;
+  document.querySelectorAll('.pane')[0].style.flex = `${leftPercent}`;
+  document.querySelectorAll('.pane')[1].style.flex = `${100 - leftPercent}`;
+});
+
+document.addEventListener('mouseup', () => {
+  isDragging = false;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
+
+// ============ 响应式检测 ============
+function checkMobile() {
+  const isMobile = window.innerWidth < 768;
+  document.body.classList.toggle('mobile', isMobile);
+}
+window.addEventListener('resize', checkMobile);
+checkMobile();
+</script>
+</body>
+</html>

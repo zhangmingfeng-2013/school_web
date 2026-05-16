@@ -82,7 +82,7 @@
 {% endblock %}
 
 {% block scripts %}
-<style>
+<style nonce="{{ csp_nonce }}">
     .cal-cell { height: 90px; vertical-align: top; padding: 4px; cursor: pointer; position: relative; transition: background .15s; }
     .cal-cell:hover { background: #f0f4ff; }
     .cal-cell.today { background: #e8f4fd; }
