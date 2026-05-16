@@ -1,6 +1,3 @@
-"""
-多合一工具箱 Web 版
-"""
 import os
 import re
 import uuid
