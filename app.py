@@ -365,11 +365,11 @@ def _init_marketplace_table():
 RATE_CONFIG_FILE = os.path.join(os.path.dirname(__file__), "rate_config.json")
 
 DEFAULT_RATE_CONFIG = {
-    "RATE_LIMIT": 40,         # 最大请求数
-    "RATE_WINDOW": 10,        # 时间窗口（秒）
-    "BLOCK_DURATION": 240,    # 封禁时长（秒）
-    "BLOCK_PROBE_LIMIT": 50, # 封禁期间试探次数阈值
-    "BLOCK_EXTEND": 240,      # 试探超限后追加封禁（秒）
+    "RATE_LIMIT":         int(os.environ.get("RATE_GLOBAL_LIMIT", "40")),
+    "RATE_WINDOW":        int(os.environ.get("RATE_GLOBAL_WINDOW", "10")),
+    "BLOCK_DURATION":     int(os.environ.get("RATE_BLOCK_DURATION", "240")),
+    "BLOCK_PROBE_LIMIT":  int(os.environ.get("RATE_BLOCK_PROBE", "50")),
+    "BLOCK_EXTEND":       int(os.environ.get("RATE_BLOCK_EXTEND", "240")),
 }
 
 def _load_rate_config():
