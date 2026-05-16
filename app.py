@@ -5484,7 +5484,7 @@ def _create_vue_wrapper(plugin_dir, plugin_name, version="3"):
 def api_admin_plugin_marketplace_list():
     """获取插件市场列表（含管理标记：作者或管理员可编辑/删除）"""
     username = session.get("username", "")
-    is_admin = session.get("is_admin", False)
+    is_admin = (session.get("permission") == "administrator")
     result = []
     conn = get_db()
     if conn:
@@ -5554,7 +5554,7 @@ def api_admin_plugin_marketplace_delete(plugin_id):
     """删除插件市场中的插件（数据库 + 文件）—— 作者或管理员"""
     conn = get_db()
     username = session.get("username", "")
-    is_admin = session.get("is_admin", False)
+    is_admin = (session.get("permission") == "administrator")
     plugin_name = None
     if conn:
         try:
@@ -5595,7 +5595,7 @@ def api_admin_plugin_marketplace_delete(plugin_id):
 def api_admin_plugin_marketplace_update(plugin_id):
     """修改插件信息或替换文件 — 作者或管理员"""
     username = session.get("username", "")
-    is_admin = session.get("is_admin", False)
+    is_admin = (session.get("permission") == "administrator")
 
     conn = get_db()
     if not conn:
@@ -5995,7 +5995,7 @@ def marketplace_browse():
 def api_marketplace_public():
     """公开 API：获取插件市场列表（作者和管理员可编辑/删除自己的插件）"""
     username = session.get("username", "")
-    is_admin = session.get("is_admin", False)
+    is_admin = (session.get("permission") == "administrator")
     result = []
     conn = get_db()
     if conn:
