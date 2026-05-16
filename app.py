@@ -680,8 +680,9 @@ def add_security_headers(response):
         )
     # 隐藏 Werkzeug 版本信息
     response.headers.pop("Server", None)
-    # 敏感页面禁用缓存
-    if "text/html" in response.content_type:
+    # 敏感页面和 API 禁用缓存
+    ct = response.content_type or ""
+    if "text/html" in ct or "application/json" in ct:
         response.headers["Cache-Control"] = "no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
