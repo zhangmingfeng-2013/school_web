@@ -99,7 +99,7 @@
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-server">💻 服务器状态</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-cybermap">🌍 网络请求地图</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-plugins">🧩 插件管理</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-marketplace">🏪 插件市场</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-marketplace">🏪 {{ _('market_title') }}</a></li>
     <li class="nav-item"><a class="nav-link" href="/backup">💾 数据备份</a></li>
 </ul>
 
@@ -385,44 +385,44 @@
     <!-- 插件市场：上传 -->
     <div class="card mb-3 border-primary">
         <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
-            <span class="fw-bold">📦 插件市场 · 上传新插件</span>
-            <span class="badge bg-primary">仅管理员</span>
+            <span class="fw-bold">📦 {{ _('admin_market_title') }} · {{ _('admin_market_upload') }}</span>
+            <span class="badge bg-primary">{{ _('admin_market_only_admin') }}</span>
         </div>
         <div class="card-body">
             <form id="marketplaceUploadForm" enctype="multipart/form-data" onsubmit="uploadMarketPlugin(event)">
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label small">插件文件 <span class="text-danger">*</span></label>
+                        <label class="form-label small">{{ _('admin_market_file_label') }} <span class="text-danger">*</span></label>
                         <input class="form-control form-control-sm" type="file" id="mpFile" accept=".html,.vue" required>
-                        <div class="form-text small">支持 .html 或 .vue 文件，最大 5MB，UTF-8 编码</div>
+                        <div class="form-text small">{{ _('admin_market_file_hint') }}</div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">插件标识（英文）</label>
+                        <label class="form-label small">{{ _('admin_market_name_label') }}</label>
                         <input class="form-control form-control-sm" type="text" id="mpName" placeholder="my-plugin" maxlength="50">
-                        <div class="form-text small">用于URL和存储目录，留空自动生成</div>
+                        <div class="form-text small">{{ _('admin_market_name_hint') }}</div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">显示名称 <span class="text-danger">*</span></label>
-                        <input class="form-control form-control-sm" type="text" id="mpDisplay" placeholder="我的插件" maxlength="200" required>
+                        <label class="form-label small">{{ _('admin_market_display_label') }} <span class="text-danger">*</span></label>
+                        <input class="form-control form-control-sm" type="text" id="mpDisplay" placeholder="My Plugin" maxlength="200" required>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label small">版本号</label>
+                        <label class="form-label small">{{ _('admin_market_version_label') }}</label>
                         <input class="form-control form-control-sm" type="text" id="mpVersion" value="1.0.0" maxlength="20">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label small">图标 Emoji</label>
+                        <label class="form-label small">{{ _('admin_market_icon_label') }}</label>
                         <input class="form-control form-control-sm" type="text" id="mpIcon" value="🧩" maxlength="10">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">作者</label>
-                        <input class="form-control form-control-sm" type="text" id="mpAuthor" placeholder="作者名" maxlength="100">
+                        <label class="form-label small">{{ _('admin_market_author_label') }}</label>
+                        <input class="form-control form-control-sm" type="text" id="mpAuthor" placeholder="Author" maxlength="100">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">简介</label>
-                        <textarea class="form-control form-control-sm" id="mpDesc" rows="2" placeholder="简要描述插件功能..." maxlength="500"></textarea>
+                        <label class="form-label small">{{ _('admin_market_desc_label') }}</label>
+                        <textarea class="form-control form-control-sm" id="mpDesc" rows="2" placeholder="{{ _('admin_market_desc_placeholder') }}" maxlength="500"></textarea>
                     </div>
                     <div class="col-12">
-                        <button type="submit" class="btn btn-primary">📤 上传到市场</button>
+                        <button type="submit" class="btn btn-primary">📤 {{ _('admin_market_upload_btn') }}</button>
                         <span id="mpUploadStatus" class="ms-2 small"></span>
                     </div>
                 </div>
@@ -433,12 +433,12 @@
     <!-- 插件市场：列表 -->
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span class="fw-bold">🏪 插件市场列表</span>
-            <button class="btn btn-sm btn-outline-secondary" onclick="loadMarketplace()">🔄 刷新</button>
+            <span class="fw-bold">🏪 {{ _('admin_market_list') }}</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadMarketplace()">🔄 {{ _('admin_market_refresh') }}</button>
         </div>
         <div class="card-body p-2">
             <div id="marketplaceList">
-                <div class="text-center text-muted py-3">加载中...</div>
+                <div class="text-center text-muted py-3">{{ _('market_loading') }}</div>
             </div>
         </div>
     </div>
@@ -1200,15 +1200,34 @@ document.querySelector('a[href="#tab-plugins"]')?.addEventListener('shown.bs.tab
     loadMarketplace();
 });
 
+// ====== 插件市场 i18n 映射 ======
+var __mp = {
+    uploading: {{ _('admin_market_uploading')|tojson }},
+    select_file: {{ _('admin_market_select_file')|tojson }},
+    upload_failed: {{ _('admin_market_upload_failed')|tojson }},
+    network_error: {{ _('admin_market_network_error')|tojson }},
+    no_desc: {{ _('market_no_desc')|tojson }},
+    author: {{ _('market_author')|tojson }},
+    uploader: "上传者:",  /* Chinese always used for DB field label */
+    file_lost: {{ _('admin_market_file_lost')|tojson }},
+    preview: {{ _('admin_market_preview')|tojson }},
+    delete: {{ _('admin_market_delete')|tojson }},
+    load_failed: {{ _('admin_market_load_failed')|tojson }},
+    empty: {{ _('admin_market_empty')|tojson }},
+    delete_confirm: {{ _('admin_market_delete_confirm')|tojson }},
+    delete_success: "删除成功",
+    delete_failed: "删除失败"
+};
+
 // ====== 插件市场 ======
 async function uploadMarketPlugin(e) {
     e.preventDefault();
     const fileInput = document.getElementById('mpFile');
     const file = fileInput.files[0];
-    if (!file) { alert('请选择文件'); return; }
+    if (!file) { alert(__mp.select_file); return; }
 
     const statusEl = document.getElementById('mpUploadStatus');
-    statusEl.textContent = '上传中...';
+    statusEl.textContent = __mp.uploading;
     statusEl.className = 'ms-2 small text-warning';
 
     const formData = new FormData();
@@ -1228,18 +1247,18 @@ async function uploadMarketPlugin(e) {
         });
         const data = await resp.json();
         if (data.ok) {
-            statusEl.textContent = '✅ ' + data.message;
+            statusEl.textContent = '✅ ' + (data.message || {{ _('admin_market_upload_success')|tojson }});
             statusEl.className = 'ms-2 small text-success';
             document.getElementById('marketplaceUploadForm').reset();
             document.getElementById('mpIcon').value = '🧩';
             document.getElementById('mpVersion').value = '1.0.0';
             loadMarketplace();
         } else {
-            statusEl.textContent = '❌ ' + (data.error || '上传失败');
+            statusEl.textContent = '❌ ' + (data.error || __mp.upload_failed);
             statusEl.className = 'ms-2 small text-danger';
         }
     } catch(err) {
-        statusEl.textContent = '❌ 网络错误: ' + err.message;
+        statusEl.textContent = '❌ ' + __mp.network_error + ': ' + err.message;
         statusEl.className = 'ms-2 small text-danger';
     }
 }
@@ -1250,11 +1269,11 @@ async function loadMarketplace() {
         const data = await resp.json();
         const container = document.getElementById('marketplaceList');
         if (!data.ok || !data.plugins) {
-            container.innerHTML = '<div class="alert alert-danger">加载失败</div>';
+            container.innerHTML = '<div class="alert alert-danger">' + __mp.load_failed + '</div>';
             return;
         }
         if (data.plugins.length === 0) {
-            container.innerHTML = '<div class="text-center text-muted py-4">🏪 市场暂无插件，上传第一个吧！</div>';
+            container.innerHTML = '<div class="text-center text-muted py-4">🏪 ' + __mp.empty + '</div>';
             return;
         }
         container.innerHTML = data.plugins.map(p => `
@@ -1263,35 +1282,35 @@ async function loadMarketplace() {
                     <strong>${p.icon || '🧩'} ${p.display_name}</strong>
                     <span class="badge bg-info ms-2">${p.file_type.toUpperCase()}</span>
                     <span class="badge bg-secondary ms-1">v${p.version}</span>
-                    <div class="text-muted small">${p.description || '暂无简介'}</div>
+                    <div class="text-muted small">${p.description || __mp.no_desc}</div>
                     <div class="text-muted" style="font-size:11px;">
-                        作者: ${p.author || '-'} | 上传者: ${p.uploader || '-'} | ${p.created_at || ''}
-                        ${!p.exists_on_disk ? ' <span class="text-danger">⚠️ 文件丢失</span>' : ''}
+                        ${__mp.author} ${p.author || '-'} | ${__mp.uploader} ${p.uploader || '-'} | ${p.created_at || ''}
+                        ${!p.exists_on_disk ? ' <span class="text-danger">⚠️ ' + __mp.file_lost + '</span>' : ''}
                     </div>
                 </div>
                 <div class="d-flex gap-2">
-                    ${p.id ? `<a class="btn btn-sm btn-outline-info" href="/plugin-market/${p.id}" target="_blank">👁 预览</a>` : ''}
-                    ${p.id ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteMarketPlugin(${p.id},'${p.display_name}')">🗑 删除</button>` : ''}
+                    ${p.id ? `<a class="btn btn-sm btn-outline-info" href="/plugin-market/${p.id}" target="_blank">👁 ` + __mp.preview + `</a>` : ''}
+                    ${p.id ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteMarketPlugin(${p.id},'${p.display_name}')">🗑 ` + __mp.delete + `</button>` : ''}
                 </div>
             </div>
         `).join('');
     } catch(e) {
-        document.getElementById('marketplaceList').innerHTML = '<div class="alert alert-danger">请求失败: ' + e.message + '</div>';
+        document.getElementById('marketplaceList').innerHTML = '<div class="alert alert-danger">' + (__mp.network_error || {{ _('admin_market_network_error')|tojson }}) + ': ' + e.message + '</div>';
     }
 }
 
 async function deleteMarketPlugin(id, name) {
-    if (!confirm(`确定要删除插件 "${name}" 吗？此操作不可撤销。`)) return;
+    if (!confirm(__mp.delete_confirm.replace('{name}', name))) return;
     try {
         const resp = await fetch(`/api/admin/plugins/marketplace/${id}`, {
             method: 'DELETE',
             credentials: 'include'
         });
         const data = await resp.json();
-        alert(data.message || (data.ok ? '删除成功' : '删除失败'));
+        alert(data.message || (data.ok ? __mp.delete_success : __mp.delete_failed));
         loadMarketplace();
     } catch(e) {
-        alert('删除失败: ' + e.message);
+        alert(__mp.delete_failed + ': ' + e.message);
     }
 }
 </script>
