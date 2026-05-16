@@ -643,8 +643,8 @@ LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "app.log")
 def add_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # X-XSS-Protection 头在现代浏览器已弃用（Chrome/Edge 完全忽略，Firefox 使用内置过滤器），不再发送
     # CSP: 防 XSS + 点击劫持 + 资源来源限制（使用 nonce 替代 unsafe-inline）
     nonce = getattr(g, "csp_nonce", "")
     nonce_directive = f" 'nonce-{nonce}'" if nonce else ""
@@ -653,7 +653,7 @@ def add_security_headers(response):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             # script-src：nonce 已覆盖所有 <script> 标签，unsafe-inline 暂保留以兼容 100+ 内联事件 handler（onclick 等），逐步迁移后可移除
-            f"script-src 'self' 'unsafe-inline'{nonce_directive} https://connect.qq.com https://cdn.bootcdn.net https://unpkg.com; "
+            f"script-src 'self' 'unsafe-inline'{nonce_directive} https://cdn.bootcdn.net https://unpkg.com; "
             # style-src：所有内联 <style> 已加 nonce，移除了 unsafe-inline
             f"style-src 'self'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.bootcdn.net; "
@@ -1024,6 +1024,12 @@ def login():
     # 生成 CSRF token
     if "csrf_token" not in session:
         session["csrf_token"] = os.urandom(32).hex()
+
+    # GET 请求频率限制（未登录用户每 60 秒最多 30 次）
+    if request.method == "GET" and "username" not in session:
+        client_ip = request.remote_addr or "unknown"
+        if not rate_limiter.check((client_ip, "login_page"), max_requests=30, window=60):
+            return Response("请求过于频繁", status=429)
 
     if request.method == "POST":
         # 登录速率限制: 每 IP 每 60 秒最多 5 次 POST
