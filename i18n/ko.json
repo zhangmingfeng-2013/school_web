@@ -501,5 +501,15 @@
   "market_save_fail": "저장 실패",
   "market_delete_ok": "삭제 성공",
   "market_delete_fail": "삭제 실패",
-  "market_updating": "업데이트 중..."
+  "market_updating": "업데이트 중...",
+  "utils_title": "유틸리티",
+  "utils_subtitle": "비밀번호 생성 · 해시 계산 · 인코딩 · JSON 포맷 · 더보기",
+  "utils_tab_password": "🔑 비밀번호",
+  "utils_tab_hash": "🔐 해시",
+  "utils_tab_base64": "📝 Base64",
+  "utils_tab_url": "🔗 URL",
+  "utils_tab_json": "📋 JSON",
+  "utils_tab_uuid": "🆔 UUID",
+  "utils_tab_timestamp": "⏱ 시간",
+  "utils_tab_count": "📊 카운터"
 }

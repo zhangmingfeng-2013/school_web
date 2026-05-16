@@ -492,5 +492,15 @@
   "market_save_fail": "Save failed",
   "market_delete_ok": "Deleted successfully",
   "market_delete_fail": "Delete failed",
-  "market_updating": "Updating..."
+  "market_updating": "Updating...",
+  "utils_title": "Utility Tools",
+  "utils_subtitle": "Password Generator · Hash Calculator · Encoding · JSON Formatter · More",
+  "utils_tab_password": "🔑 Password",
+  "utils_tab_hash": "🔐 Hash",
+  "utils_tab_base64": "📝 Base64",
+  "utils_tab_url": "🔗 URL",
+  "utils_tab_json": "📋 JSON",
+  "utils_tab_uuid": "🆔 UUID",
+  "utils_tab_timestamp": "⏱ Timestamp",
+  "utils_tab_count": "📊 Counter"
 }

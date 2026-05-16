@@ -634,8 +634,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/")
 
 @app.before_request
 def check_global_captcha():
@@ -5016,6 +5016,188 @@ def _fmt_size(bytes):
         return f"{bytes/1024:.1f}KB"
     else:
         return f"{bytes/1024/1024:.1f}MB"
+
+
+# ========== 🧰 实用工具 ==========
+@app.route("/utils")
+@login_required
+def utils_page():
+    """实用工具页面（密码生成/哈希/Base64/URL/JSON/UUID/时间戳/字数统计）"""
+    return render_template("utils.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+# --- 密码生成器 ---
+@app.route("/api/utils/password")
+@login_required
+def api_utils_password():
+    length = request.args.get("len", 16, type=int)
+    upper = request.args.get("upper", "1") != "0"
+    lower = request.args.get("lower", "1") != "0"
+    digits = request.args.get("digits", "1") != "0"
+    symbols = request.args.get("symbols", "0") != "0"
+    length = max(8, min(128, length))
+    import string, secrets
+    pool = ""
+    if upper: pool += string.ascii_uppercase
+    if lower: pool += string.ascii_lowercase
+    if digits: pool += string.digits
+    if symbols: pool += "!@#$%^&*()-_=+[]{}|;:,.<>?"
+    if not pool: pool = string.ascii_letters + string.digits
+    pw = ''.join(secrets.choice(pool) for _ in range(length))
+    # Ensure at least one char from each requested set
+    required = []
+    if upper: required.append(secrets.choice(string.ascii_uppercase))
+    if lower: required.append(secrets.choice(string.ascii_lowercase))
+    if digits: required.append(secrets.choice(string.digits))
+    if symbols: required.append(secrets.choice("!@#$%^&*()-_=+[]{}|;:,.<>?"))
+    pw_list = list(pw)
+    for i, ch in enumerate(required):
+        pw_list[i] = ch
+    import random
+    random.shuffle(pw_list)
+    return jsonify({"ok": True, "password": ''.join(pw_list)})
+
+
+# --- 哈希计算器 ---
+@app.route("/api/utils/hash")
+@login_required
+def api_utils_hash():
+    text = request.args.get("text", "").strip()
+    algo = request.args.get("algo", "sha256")
+    if not text:
+        return jsonify({"ok": False, "error": "请输入文本"})
+    import hashlib
+    algos = {"md5": "md5", "sha1": "sha1", "sha256": "sha256", "sha512": "sha512"}
+    fn = algos.get(algo)
+    if not fn:
+        return jsonify({"ok": False, "error": "不支持的算法"})
+    h = hashlib.new(fn, text.encode("utf-8"))
+    return jsonify({"ok": True, "algo": algo, "hash": h.hexdigest()})
+
+
+# --- Base64 编解码 ---
+@app.route("/api/utils/base64", methods=["POST"])
+@login_required
+def api_utils_base64():
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "").strip()
+    action = data.get("action", "encode")
+    if not text:
+        return jsonify({"ok": False, "error": "请输入文本"})
+    import base64
+    try:
+        if action == "encode":
+            result = base64.b64encode(text.encode("utf-8")).decode("ascii")
+        else:
+            result = base64.b64decode(text.encode("ascii")).decode("utf-8")
+        return jsonify({"ok": True, "result": result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+# --- URL 编解码 ---
+@app.route("/api/utils/url", methods=["POST"])
+@login_required
+def api_utils_url():
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "").strip()
+    action = data.get("action", "encode")
+    if not text:
+        return jsonify({"ok": False, "error": "请输入文本"})
+    from urllib.parse import quote, unquote
+    try:
+        result = quote(text, safe="") if action == "encode" else unquote(text)
+        return jsonify({"ok": True, "result": result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+# --- JSON 格式化/校验 ---
+@app.route("/api/utils/json", methods=["POST"])
+@login_required
+def api_utils_json():
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "").strip()
+    indent = data.get("indent", 2)
+    try:
+        indent = int(indent)
+    except (ValueError, TypeError):
+        indent = 2
+    indent = max(0, min(8, indent))
+    if not text:
+        return jsonify({"ok": False, "error": "请输入 JSON 文本"})
+    try:
+        obj = json.loads(text)
+        formatted = json.dumps(obj, indent=indent, ensure_ascii=False)
+        return jsonify({"ok": True, "result": formatted, "type": type(obj).__name__})
+    except json.JSONDecodeError as e:
+        return jsonify({"ok": False, "error": f"JSON 解析错误: {e}"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"处理错误: {e}"})
+
+
+# --- UUID 生成器 ---
+@app.route("/api/utils/uuid")
+@login_required
+def api_utils_uuid():
+    count = request.args.get("count", 1, type=int)
+    version = request.args.get("version", "4")
+    count = max(1, min(50, count))
+    import uuid as _uuid
+    uuids = []
+    for _ in range(count):
+        if version == "1":
+            uuids.append(str(_uuid.uuid1()))
+        elif version == "7":
+            uuids.append(str(_uuid.uuid7())) if hasattr(_uuid, 'uuid7') else uuids.append(str(_uuid.uuid4()))
+        else:
+            uuids.append(str(_uuid.uuid4()))
+    return jsonify({"ok": True, "uuids": uuids})
+
+
+# --- 时间戳转换 ---
+@app.route("/api/utils/timestamp")
+@login_required
+def api_utils_timestamp():
+    ts = request.args.get("ts", "").strip()
+    import time, datetime
+    now = int(time.time())
+    if not ts:
+        return jsonify({"ok": True, "now": now, "now_readable": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+    try:
+        val = int(ts)
+        # 13-digit → ms, 10-digit → s
+        if val > 1e12:
+            val = val // 1000
+        dt = datetime.datetime.fromtimestamp(val)
+        return jsonify({"ok": True, "ts": val, "readable": dt.strftime("%Y-%m-%d %H:%M:%S"), "iso": dt.isoformat()})
+    except (ValueError, OSError):
+        # Try parsing human-readable
+        for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d"]:
+            try:
+                dt = datetime.datetime.strptime(ts, fmt)
+                ts_val = int(dt.timestamp())
+                return jsonify({"ok": True, "ts": ts_val, "readable": dt.strftime("%Y-%m-%d %H:%M:%S")})
+            except ValueError:
+                continue
+        return jsonify({"ok": False, "error": "无法解析时间"})
+
+
+# --- 字数统计 ---
+@app.route("/api/utils/count", methods=["POST"])
+@login_required
+def api_utils_count():
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "")
+    chars = len(text)
+    chars_no_space = len(text.replace(" ", "").replace("\n", "").replace("\t", ""))
+    words = len(text.split()) if text.strip() else 0
+    lines = text.count("\n") + (1 if text else 0)
+    bytes_utf8 = len(text.encode("utf-8"))
+    cn_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff' or '\u3400' <= c <= '\u4dbf')
+    return jsonify({"ok": True, "chars": chars, "chars_no_space": chars_no_space,
+                    "words": words, "lines": lines, "bytes": bytes_utf8, "cn_chars": cn_chars})
 
 
 # ========== 📚 学习工具 ==========

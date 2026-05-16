@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}🧰 实用工具 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.ut-tabs { display:flex;gap:4px;flex-wrap:wrap;margin-bottom:20px;border-bottom:2px solid #e5e7eb;padding-bottom:0 }
+.ut-tab { padding:8px 16px;border:none;background:none;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:#6b7280;transition:all .2s }
+.ut-tab:hover { color:#374151 }
+.ut-tab.active { color:#3b82f6;border-bottom-color:#3b82f6;font-weight:600 }
+.ut-panel { display:none }
+.ut-panel.active { display:block }
+.ut-row { display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px }
+.ut-row input,.ut-row select,.ut-row textarea { padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:14px }
+.ut-row textarea { flex:1;min-height:80px;resize:vertical;font-family:monospace }
+.ut-row button { padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500 }
+.ut-btn-primary { background:#3b82f6;color:#fff }
+.ut-btn-primary:hover { background:#2563eb }
+.ut-btn-success { background:#10b981;color:#fff }
+.ut-btn-success:hover { background:#059669 }
+.ut-btn-warning { background:#f59e0b;color:#fff }
+.ut-btn-warning:hover { background:#d97706 }
+.ut-result { margin-top:12px;padding:12px 16px;background:#f3f4f6;border-radius:8px;font-family:monospace;font-size:14px;word-break:break-all;display:none }
+.ut-result.show { display:block }
+.ut-result.error { background:#fef2f2;color:#dc2626 }
+.ut-result.success { background:#f0fdf4;color:#166534 }
+.ut-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px }
+.ut-stat { text-align:center;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb }
+.ut-stat-val { font-size:28px;font-weight:700;color:#3b82f6 }
+.ut-stat-label { font-size:12px;color:#6b7280;margin-top:4px }
+.ut-check-row { display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px }
+.ut-check-row label { display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer }
+</style>
+
+<h2 class="mb-1">🧰 实用工具</h2>
+<p class="text-muted mb-3">密码生成 · 哈希计算 · 编码转换 · JSON 格式化 · 更多</p>
+
+<div class="ut-tabs">
+    <button class="ut-tab active" data-csp-click="switchUtilTab" data-csp-args='[0]'>🔑 密码</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[1]'>🔐 哈希</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[2]'>📝 Base64</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[3]'>🔗 URL</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[4]'>📋 JSON</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[5]'>🆔 UUID</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[6]'>⏱ 时间戳</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[7]'>📊 字数</button>
+</div>
+
+<!-- 0: 密码生成器 -->
+<div class="ut-panel active" id="utPanel0">
+    <div class="ut-row">
+        <div><label style="font-size:13px;display:block;margin-bottom:4px">长度</label><input type="number" id="pwLen" value="16" min="8" max="128" style="width:80px"></div>
+        <div class="ut-check-row" style="align-self:flex-end;padding-bottom:8px">
+            <label><input type="checkbox" id="pwUpper" checked> 大写</label>
+            <label><input type="checkbox" id="pwLower" checked> 小写</label>
+            <label><input type="checkbox" id="pwDigits" checked> 数字</label>
+            <label><input type="checkbox" id="pwSymbols"> 符号</label>
+        </div>
+        <button class="ut-btn-primary" data-csp-click="genPassword">生成密码</button>
+    </div>
+    <div class="ut-result" id="pwResult"></div>
+</div>
+
+<!-- 1: 哈希计算器 -->
+<div class="ut-panel" id="utPanel1">
+    <div class="ut-row">
+        <input type="text" id="hashInput" placeholder="输入要哈希的文本..." style="flex:1;min-width:200px">
+        <select id="hashAlgo">
+            <option value="md5">MD5</option>
+            <option value="sha1">SHA-1</option>
+            <option value="sha256" selected>SHA-256</option>
+            <option value="sha512">SHA-512</option>
+        </select>
+        <button class="ut-btn-primary" data-csp-click="calcHash">计算哈希</button>
+    </div>
+    <div class="ut-result" id="hashResult"></div>
+</div>
+
+<!-- 2: Base64 -->
+<div class="ut-panel" id="utPanel2">
+    <div class="ut-row">
+        <textarea id="b64Input" placeholder="输入文本..."></textarea>
+    </div>
+    <div class="ut-row">
+        <button class="ut-btn-success" data-csp-click="b64Encode">编码 → Base64</button>
+        <button class="ut-btn-warning" data-csp-click="b64Decode">Base64 → 解码</button>
+    </div>
+    <div class="ut-result" id="b64Result"></div>
+</div>
+
+<!-- 3: URL 编解码 -->
+<div class="ut-panel" id="utPanel3">
+    <div class="ut-row">
+        <textarea id="urlInput" placeholder="输入 URL 或文本..."></textarea>
+    </div>
+    <div class="ut-row">
+        <button class="ut-btn-success" data-csp-click="urlEncode">编码 → URL</button>
+        <button class="ut-btn-warning" data-csp-click="urlDecode">URL → 解码</button>
+    </div>
+    <div class="ut-result" id="urlResult"></div>
+</div>
+
+<!-- 4: JSON 格式化 -->
+<div class="ut-panel" id="utPanel4">
+    <div class="ut-row">
+        <textarea id="jsonInput" placeholder='粘贴 JSON 文本... 如 {"name":"test","num":42}'></textarea>
+    </div>
+    <div class="ut-row">
+        <label style="font-size:13px">缩进 <input type="number" id="jsonIndent" value="2" min="0" max="8" style="width:50px"></label>
+        <button class="ut-btn-primary" data-csp-click="formatJson">格式化 / 校验</button>
+    </div>
+    <div class="ut-result" id="jsonResult"></div>
+</div>
+
+<!-- 5: UUID 生成器 -->
+<div class="ut-panel" id="utPanel5">
+    <div class="ut-row">
+        <label style="font-size:13px">版本 <select id="uuidVer"><option value="4">v4 (随机)</option><option value="1">v1 (时间)</option></select></label>
+        <label style="font-size:13px">数量 <input type="number" id="uuidCount" value="5" min="1" max="50" style="width:60px"></label>
+        <button class="ut-btn-primary" data-csp-click="genUUID">生成 UUID</button>
+    </div>
+    <div class="ut-result" id="uuidResult"></div>
+</div>
+
+<!-- 6: 时间戳转换 -->
+<div class="ut-panel" id="utPanel6">
+    <div class="ut-row">
+        <input type="text" id="tsInput" placeholder="Unix 时间戳 (如 1700000000) 或日期 (如 2024-01-01)" style="flex:1">
+        <button class="ut-btn-primary" data-csp-click="convertTs">转换</button>
+        <button class="ut-btn-success" data-csp-click="getNowTs">现在</button>
+    </div>
+    <div class="ut-result" id="tsResult"></div>
+</div>
+
+<!-- 7: 字数统计 -->
+<div class="ut-panel" id="utPanel7">
+    <div class="ut-row">
+        <textarea id="countInput" placeholder="粘贴或输入文本...&#10;支持多行、中英文混合"></textarea>
+    </div>
+    <div class="ut-row">
+        <button class="ut-btn-primary" data-csp-click="countText">统计</button>
+    </div>
+    <div class="ut-grid" id="countStats" style="display:none;margin-top:12px"></div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+// ====== Tab 切换 ======
+function switchUtilTab(idx) {
+    document.querySelectorAll('.ut-tab').forEach(function(t,i){ t.classList.toggle('active', i===idx) });
+    document.querySelectorAll('.ut-panel').forEach(function(p,i){ p.classList.toggle('active', i===idx) });
+}
+
+// ====== API 辅助 ======
+async function apiFetch(url, opts) {
+    if (!opts) opts = {};
+    opts.credentials = 'include';
+    var r = await fetch(url, opts);
+    return r.json();
+}
+
+function showResult(id, data, isErr) {
+    var el = document.getElementById(id);
+    el.className = 'ut-result show ' + (isErr ? 'error' : 'success');
+    el.textContent = isErr ? ('❌ ' + data) : data;
+}
+
+// ====== 0. 密码 ======
+async function genPassword() {
+    var len = document.getElementById('pwLen').value || 16;
+    var params = 'len=' + len +
+        '&upper=' + (document.getElementById('pwUpper').checked ? 1 : 0) +
+        '&lower=' + (document.getElementById('pwLower').checked ? 1 : 0) +
+        '&digits=' + (document.getElementById('pwDigits').checked ? 1 : 0) +
+        '&symbols=' + (document.getElementById('pwSymbols').checked ? 1 : 0);
+    var d = await apiFetch('/api/utils/password?' + params);
+    if (d.ok) {
+        showResult('pwResult', '✅ ' + d.password);
+        // Also copy to clipboard
+        try { navigator.clipboard.writeText(d.password); } catch(e) {}
+    } else showResult('pwResult', d.error, true);
+}
+
+// ====== 1. 哈希 ======
+async function calcHash() {
+    var text = document.getElementById('hashInput').value.trim();
+    if (!text) { showResult('hashResult', '请输入文本', true); return; }
+    var algo = document.getElementById('hashAlgo').value;
+    var d = await apiFetch('/api/utils/hash?text=' + encodeURIComponent(text) + '&algo=' + algo);
+    if (d.ok) {
+        showResult('hashResult', algo.toUpperCase() + ': ' + d.hash);
+        try { navigator.clipboard.writeText(d.hash); } catch(e) {}
+    } else showResult('hashResult', d.error, true);
+}
+
+// ====== 2. Base64 ======
+async function b64Encode() {
+    var text = document.getElementById('b64Input').value.trim();
+    if (!text) { showResult('b64Result', '请输入文本', true); return; }
+    var d = await apiFetch('/api/utils/base64', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,action:'encode'})});
+    if (d.ok) showResult('b64Result', '✅ ' + d.result);
+    else showResult('b64Result', d.error, true);
+}
+async function b64Decode() {
+    var text = document.getElementById('b64Input').value.trim();
+    if (!text) { showResult('b64Result', '请输入文本', true); return; }
+    var d = await apiFetch('/api/utils/base64', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,action:'decode'})});
+    if (d.ok) showResult('b64Result', '✅ ' + d.result);
+    else showResult('b64Result', d.error, true);
+}
+
+// ====== 3. URL ======
+async function urlEncode() {
+    var text = document.getElementById('urlInput').value.trim();
+    if (!text) { showResult('urlResult', '请输入文本', true); return; }
+    var d = await apiFetch('/api/utils/url', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,action:'encode'})});
+    if (d.ok) showResult('urlResult', '✅ ' + d.result);
+    else showResult('urlResult', d.error, true);
+}
+async function urlDecode() {
+    var text = document.getElementById('urlInput').value.trim();
+    if (!text) { showResult('urlResult', '请输入文本', true); return; }
+    var d = await apiFetch('/api/utils/url', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,action:'decode'})});
+    if (d.ok) showResult('urlResult', '✅ ' + d.result);
+    else showResult('urlResult', d.error, true);
+}
+
+// ====== 4. JSON ======
+async function formatJson() {
+    var text = document.getElementById('jsonInput').value.trim();
+    if (!text) { showResult('jsonResult', '请输入 JSON', true); return; }
+    var indent = parseInt(document.getElementById('jsonIndent').value) || 2;
+    var d = await apiFetch('/api/utils/json', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text,indent:indent})});
+    if (d.ok) showResult('jsonResult', '✅ 类型: ' + d.type + '\n' + d.result);
+    else showResult('jsonResult', d.error, true);
+}
+
+// ====== 5. UUID ======
+async function genUUID() {
+    var ver = document.getElementById('uuidVer').value;
+    var count = parseInt(document.getElementById('uuidCount').value) || 5;
+    var d = await apiFetch('/api/utils/uuid?version=' + ver + '&count=' + count);
+    if (d.ok) {
+        showResult('uuidResult', '✅ 已生成 ' + d.uuids.length + ' 个:\n' + d.uuids.join('\n'));
+        try { navigator.clipboard.writeText(d.uuids.join('\n')); } catch(e) {}
+    }
+    else showResult('uuidResult', d.error, true);
+}
+
+// ====== 6. 时间戳 ======
+async function convertTs() {
+    var ts = document.getElementById('tsInput').value.trim();
+    var d = await apiFetch('/api/utils/timestamp?ts=' + encodeURIComponent(ts));
+    if (d.ok) showResult('tsResult', '✅ 时间戳: ' + d.ts + '\n可读: ' + d.readable);
+    else showResult('tsResult', d.error, true);
+}
+async function getNowTs() {
+    var d = await apiFetch('/api/utils/timestamp');
+    if (d.ok) {
+        showResult('tsResult', '✅ 当前时间戳: ' + d.now + '\n可读: ' + d.now_readable);
+        document.getElementById('tsInput').value = d.now;
+    }
+}
+
+// ====== 7. 字数 ======
+async function countText() {
+    var text = document.getElementById('countInput').value;
+    if (!text) { showResult('countStats', '请输入文本', true); return; }
+    var d = await apiFetch('/api/utils/count', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})});
+    if (d.ok) {
+        var grid = document.getElementById('countStats');
+        grid.style.display = 'grid';
+        grid.innerHTML =
+            '<div class="ut-stat"><div class="ut-stat-val">' + d.chars + '</div><div class="ut-stat-label">总字符</div></div>' +
+            '<div class="ut-stat"><div class="ut-stat-val">' + d.chars_no_space + '</div><div class="ut-stat-label">字符(无空格)</div></div>' +
+            '<div class="ut-stat"><div class="ut-stat-val">' + d.cn_chars + '</div><div class="ut-stat-label">中文字符</div></div>' +
+            '<div class="ut-stat"><div class="ut-stat-val">' + d.words + '</div><div class="ut-stat-label">单词数</div></div>' +
+            '<div class="ut-stat"><div class="ut-stat-val">' + d.lines + '</div><div class="ut-stat-label">行数</div></div>' +
+            '<div class="ut-stat"><div class="ut-stat-val">' + d.bytes + '</div><div class="ut-stat-label">字节(UTF-8)</div></div>';
+    }
+}
+</script>
+{% endblock %}

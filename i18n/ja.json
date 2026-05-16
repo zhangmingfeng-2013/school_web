@@ -501,5 +501,15 @@
   "market_save_fail": "保存失敗",
   "market_delete_ok": "削除しました",
   "market_delete_fail": "削除失敗",
-  "market_updating": "更新中..."
+  "market_updating": "更新中...",
+  "utils_title": "ユーティリティ",
+  "utils_subtitle": "パスワード生成 · ハッシュ計算 · エンコード · JSONフォーマット · その他",
+  "utils_tab_password": "🔑 パスワード",
+  "utils_tab_hash": "🔐 ハッシュ",
+  "utils_tab_base64": "📝 Base64",
+  "utils_tab_url": "🔗 URL",
+  "utils_tab_json": "📋 JSON",
+  "utils_tab_uuid": "🆔 UUID",
+  "utils_tab_timestamp": "⏱ タイム",
+  "utils_tab_count": "📊 カウント"
 }
