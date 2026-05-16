@@ -2,9 +2,9 @@
 
 > 基于 Flask + Vue 3 构建的集成式 Web 工具箱应用，提供用户管理、系统监控、数据库操作、文件管理、毕业相册等丰富功能。
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/License-GPLv2-green.svg)
-![Platform](https://img.shields.io/badge/Platform-macOS%20|%20Linux%20|%20Windows-orange.svg)
+![Platform](https://img.shields.io/badge/Platform-macOS%20-orange.svg)
 
 ***
 
@@ -1101,4 +1101,4 @@ sudo systemctl start school-web
 
 ***
 
-*最后更新：2026-05-05*
+*最后更新：2026-05-16 21:25*
