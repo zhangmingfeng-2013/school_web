@@ -5616,8 +5616,8 @@ def plugin_market_raw_direct(dirname):
         "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
         "img-src 'self' data: blob: https:; "
         "connect-src 'self' https:; "
-        "frame-ancestors 'none'; "
-        "sandbox allow-scripts allow-same-origin; "
+        "frame-ancestors 'self'; "
+        "sandbox allow-scripts allow-same-origin allow-forms allow-modals allow-popups; "
     )
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -5701,8 +5701,8 @@ def plugin_market_direct(plugin_id):
                         "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
                         "img-src 'self' data: blob: https:; "
                         "connect-src 'self' https:; "
-                        "frame-ancestors 'none'; "
-                        "sandbox allow-scripts allow-same-origin; "
+                        "frame-ancestors 'self'; "
+                        "sandbox allow-scripts allow-same-origin allow-forms allow-modals allow-popups; "
                     )
                     resp.headers["X-Content-Type-Options"] = "nosniff"
                     resp.headers["X-Frame-Options"] = "SAMEORIGIN"

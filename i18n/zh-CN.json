@@ -472,5 +472,6 @@
   "admin_market_desc_placeholder": "简要描述插件功能...",
   "admin_market_upload_btn": "上传到市场",
   "admin_market_select_file": "请选择文件",
-  "admin_market_file_lost": "文件丢失"
+  "admin_market_file_lost": "文件丢失",
+  "admin_market_network_error": "网络错误"
 }
