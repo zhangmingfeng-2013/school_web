@@ -464,10 +464,25 @@ def _verify_captcha(user_input):
     return True, "验证通过"
 
 
+def _generate_captcha():
+    """预生成验证码存入 session，供表单使用。已有未过期码则复用，防止重复生成导致 session 膨胀。"""
+    stored = session.get("captcha_code")
+    captcha_time = session.get("captcha_time", 0)
+    if stored and (time.time() - captcha_time < 300):
+        return stored  # 复用已有未过期码
+    code = ''.join(_captcha_random.choice(_captcha_chars) for _ in range(4)).lower()
+    session["captcha_code"] = code
+    session["captcha_time"] = time.time()
+    return code
+
+
 # ---------- 图形验证码 ----------
+# 验证码字符集（模块级，供 _generate_captcha 和 api_captcha 共用）
+import random as _captcha_random
+_captcha_chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 @app.route("/api/captcha")
 def api_captcha():
-    """生成图形验证码"""
+    """生成图形验证码。优先复用 session 中未过期的 code，保证图片与 session 一致。"""
     # 验证码接口速率限制
     client_ip = request.remote_addr or "unknown"
     _limit, _window = RATE_LIMITS["captcha"]
@@ -475,11 +490,7 @@ def api_captcha():
         return jsonify({"error": "请求过于频繁"}), 429
 
     import random as _random
-    # 生成4位随机码（数字+字母，排除易混淆字符）
-    chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-    code = "".join(_random.choice(chars) for _ in range(4))
-    session["captcha_code"] = code.lower()
-    session["captcha_time"] = time.time()
+    code = _generate_captcha()  # 统一使用预生成函数，与表单 code 一致
 
     # 创建验证码图片
     width, height = 140, 50
@@ -654,6 +665,9 @@ def check_global_captcha():
         flash(err_msg, "danger")
     if path.startswith("/api/"):
         return jsonify({"error": "需要安全验证"}), 403
+    # 先预生成验证码再渲染表单，确保 session 中已有 captcha_code
+    # 即使浏览器未能加载验证码图片，code 也存在
+    _generate_captcha()
     return render_template("global_captcha.html",
                            username=session["username"],
                            permission=session["permission"],

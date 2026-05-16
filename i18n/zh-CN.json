@@ -502,5 +502,7 @@
   "utils_tab_json": "📋 JSON",
   "utils_tab_uuid": "🆔 UUID",
   "utils_tab_timestamp": "⏱ 时间戳",
-  "utils_tab_count": "📊 字数"
+  "utils_tab_count": "📊 字数",
+  "dashboard_feature_utils": "🧰 实用工具",
+  "dashboard_feature_utils_desc": "密码生成 · 哈希 · Base64 · JSON格式化等8个工具"
 }

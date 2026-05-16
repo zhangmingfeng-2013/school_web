@@ -511,5 +511,7 @@
   "utils_tab_json": "📋 JSON",
   "utils_tab_uuid": "🆔 UUID",
   "utils_tab_timestamp": "⏱ 시간",
-  "utils_tab_count": "📊 카운터"
+  "utils_tab_count": "📊 카운터",
+  "dashboard_feature_utils": "🧰 유틸리티",
+  "dashboard_feature_utils_desc": "비밀번호 생성 · 해시 · Base64 · JSON 등 8개 도구"
 }
