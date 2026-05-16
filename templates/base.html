@@ -95,12 +95,10 @@
             background: rgba(255,255,255,.15);
             transform: rotate(30deg);
         }
-        /* 明暗自适应文本和背景 */
         .text-muted { color: var(--text-muted) !important; }
         .table { color: var(--text-body); }
         .list-group-item { background: var(--bs-body-bg); border-color: var(--border-light); }
 
-        /* 页脚分割线 */
         .footer-divider {
             margin-top: 3rem;
             padding: 1rem 0;
@@ -111,57 +109,26 @@
         }
         .footer-divider p { margin: 0; max-width: 1000px; margin: 0 auto; }
 
-        /* 暗色下调整一些组件背景 */
         [data-bs-theme="dark"] .card.bg-light,
-        [data-bs-theme="dark"] .bg-light {
-            background-color: var(--bs-tertiary-bg) !important;
-        }
-        [data-bs-theme="dark"] .bg-opacity-10 {
-            background-color: var(--bs-tertiary-bg) !important;
-        }
-        [data-bs-theme="dark"] .table-hover tbody tr:hover {
-            background-color: var(--bg-card-hover);
-        }
-        [data-bs-theme="dark"] .ip-table .table-dark {
-            --bs-table-bg: #252528;
-            --bs-table-color: #e5e7eb;
-        }
-        [data-bs-theme="dark"] .navbar.bg-dark {
-            background-color: #1c1c1e !important;
-        }
-        [data-bs-theme="dark"] .card-header.bg-dark {
-            background-color: #252528 !important;
-        }
-        [data-bs-theme="dark"] .text-dark {
-            color: var(--text-body) !important;
-        }
-        [data-bs-theme="dark"] a.text-dark {
-            color: var(--text-body) !important;
-        }
-        [data-bs-theme="dark"] .btn-outline-dark {
-            color: var(--text-body);
-            border-color: var(--text-muted);
-        }
-        [data-bs-theme="dark"] .btn-outline-dark:hover {
-            background: #4a4a50;
-            color: #fff;
-            border-color: #6a6a70;
-        }
-        [data-bs-theme="dark"] .btn-outline-secondary {
-            color: var(--text-muted);
-            border-color: var(--text-muted);
-        }
+        [data-bs-theme="dark"] .bg-light { background-color: var(--bs-tertiary-bg) !important; }
+        [data-bs-theme="dark"] .bg-opacity-10 { background-color: var(--bs-tertiary-bg) !important; }
+        [data-bs-theme="dark"] .table-hover tbody tr:hover { background-color: var(--bg-card-hover); }
+        [data-bs-theme="dark"] .ip-table .table-dark { --bs-table-bg: #252528; --bs-table-color: #e5e7eb; }
+        [data-bs-theme="dark"] .navbar.bg-dark { background-color: #1c1c1e !important; }
+        [data-bs-theme="dark"] .card-header.bg-dark { background-color: #252528 !important; }
+        [data-bs-theme="dark"] .text-dark { color: var(--text-body) !important; }
+        [data-bs-theme="dark"] a.text-dark { color: var(--text-body) !important; }
+        [data-bs-theme="dark"] .btn-outline-dark { color: var(--text-body); border-color: var(--text-muted); }
+        [data-bs-theme="dark"] .btn-outline-dark:hover { background: #4a4a50; color: #fff; border-color: #6a6a70; }
+        [data-bs-theme="dark"] .btn-outline-secondary { color: var(--text-muted); border-color: var(--text-muted); }
     </style>
 </head>
 <body>
-    <!-- 导航栏 -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">{{ _('app_brand') }}</a>
             <a href="/donate" class="btn btn-sm btn-warning me-2" style="font-weight:700;font-size:1rem;animation:donatePulse 2s ease-in-out infinite;box-shadow:0 0 12px rgba(245,158,11,.4);border-color:#f59e0b;">{{ _('nav_donate') }}</a>
-            <!-- 主题切换（所有人可见） -->
-            <button class="theme-toggle me-2" id="themeToggle" title="切换主题"
-                    aria-label="Toggle theme">
+            <button class="theme-toggle me-2" id="themeToggle" title="切换主题" aria-label="Toggle theme">
                 <span id="themeIcon">🌙</span>
             </button>
             <!-- 语言切换 -->
@@ -177,7 +144,6 @@
             </div>
             {% if session.username %}
             <div class="d-flex align-items-center gap-2">
-                <!-- 通知铃铛 -->
                 <div class="dropdown" id="notifDropdown">
                     <span class="notif-bell" id="notifBell" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="通知">
                         🔔
@@ -195,7 +161,7 @@
                 </span>
                 <form method="POST" action="{{ url_for('logout') }}" style="display:inline">
                     <input type="hidden" name="_csrf_token" value="{{ session.csrf_token }}">
-                    <button type="submit" class="btn btn-outline-light btn-sm" onclick="return confirm('确定要退出登录吗？')">退出</button>
+                    <button type="submit" class="btn btn-outline-light btn-sm" id="logoutBtn">退出</button>
                 </form>
             </div>
             {% endif %}
@@ -229,11 +195,12 @@
         </div>
     </div>
 
-        <script
-            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-            crossorigin="anonymous">
-        </script>
+    <!-- Bootstrap JS (CSP compliant: nonce added so CSP script-src doesn't block it) -->
+    <script nonce="{{ csp_nonce }}"
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous">
+    </script>
 
     <script nonce="{{ csp_nonce }}">
     // ====== 主题切换 ======
@@ -252,17 +219,24 @@
         applyTheme(current === 'dark' ? 'light' : 'dark');
     }
 
-    // 启动时应用保存的主题
     applyTheme(getTheme());
-
-    // 绑定主题切换按钮（用 addEventListener 替代 onclick，避免 CSP nonce 屏蔽内联事件处理器）
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
-    // 验证码图片点击刷新（事件委托，替代被 CSP 屏蔽的 onclick）
+    // 验证码图片点击刷新（事件委托）
     document.addEventListener('click', function(e) {
         var img = e.target.closest('.captcha-img');
         if (img) { img.src = '/api/captcha?' + Date.now(); }
     });
+
+    // 登出确认（替代被 CSP 屏蔽的 onclick）
+    var logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function(e) {
+            if (!confirm('确定要退出登录吗？')) {
+                e.preventDefault();
+            }
+        });
+    }
 
     // ====== 语言切换 ======
     document.querySelectorAll('.lang-switch').forEach(function(el) {
@@ -279,6 +253,7 @@
         });
     });
     </script>
+
     {% if session.username %}
     <script nonce="{{ csp_nonce }}">
     // 通知轮询

@@ -669,7 +669,7 @@ def add_security_headers(response):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             # script-src：nonce 已覆盖所有 <script> 标签，unsafe-inline 暂保留以兼容 100+ 内联事件 handler（onclick 等），逐步迁移后可移除
-            f"script-src 'self' 'unsafe-inline'{nonce_directive} https://cdn.bootcdn.net https://unpkg.com; "
+            f"script-src 'self' 'unsafe-inline'{nonce_directive} https://cdn.bootcdn.net https://unpkg.com https://cdn.jsdelivr.net; "
             # style-src：所有内联 <style> 已加 nonce，移除了 unsafe-inline
             f"style-src 'self'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.bootcdn.net; "
