@@ -24,6 +24,7 @@ from flask import (
     render_template_string, make_response,
 )
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
 
 
@@ -114,6 +115,16 @@ class RateLimiter:
 
 
 rate_limiter = RateLimiter(persist_file=os.path.join(os.path.dirname(__file__), "rate_limiter.json"))
+
+# ---------- 速率限制配置（环境变量，改值后重启生效，无需改代码） ----------
+# 格式: RATE_<操作>_MAX / RATE_<操作>_WINDOW
+# 例如: RATE_LOGIN_MAX=10 RATE_LOGIN_WINDOW=120 python app.py
+RATE_LIMITS = {
+    "captcha":    (int(os.environ.get("RATE_CAPTCHA_MAX", "10")),  int(os.environ.get("RATE_CAPTCHA_WINDOW", "60"))),
+    "login_page": (int(os.environ.get("RATE_LOGINPAGE_MAX", "30")), int(os.environ.get("RATE_LOGINPAGE_WINDOW", "60"))),
+    "login":      (int(os.environ.get("RATE_LOGIN_MAX", "5")),    int(os.environ.get("RATE_LOGIN_WINDOW", "60"))),
+    "register":   (int(os.environ.get("RATE_REGISTER_MAX", "5")),  int(os.environ.get("RATE_REGISTER_WINDOW", "60"))),
+}
 import plugins
 
 app = Flask(__name__)
@@ -127,6 +138,10 @@ else:
     app.secret_key = os.urandom(64).hex()
     with open(SECRET_KEY_FILE, "w") as f:
         f.write(app.secret_key)
+
+# ---------- ProxyFix：部署在 Nginx 后正确获取客户端真实 IP ----------
+# 信任第一个反向代理（Nginx）的 X-Forwarded-* 头
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
 CORS(app, supports_credentials=True, origins=['http://localhost:3000', 'http://192.168.3.204:3000'])
 
@@ -429,9 +444,10 @@ def _verify_captcha(user_input):
 @app.route("/api/captcha")
 def api_captcha():
     """生成图形验证码"""
-    # 验证码接口速率限制: 每 IP 每 60 秒最多 10 次
+    # 验证码接口速率限制
     client_ip = request.remote_addr or "unknown"
-    if not rate_limiter.check((client_ip, "captcha"), max_requests=10, window=60):
+    _limit, _window = RATE_LIMITS["captcha"]
+    if not rate_limiter.check((client_ip, "captcha"), max_requests=_limit, window=_window):
         return jsonify({"error": "请求过于频繁"}), 429
 
     import random as _random
@@ -1025,16 +1041,18 @@ def login():
     if "csrf_token" not in session:
         session["csrf_token"] = os.urandom(32).hex()
 
-    # GET 请求频率限制（未登录用户每 60 秒最多 30 次）
+    # GET 请求频率限制（未登录用户）
     if request.method == "GET" and "username" not in session:
         client_ip = request.remote_addr or "unknown"
-        if not rate_limiter.check((client_ip, "login_page"), max_requests=30, window=60):
+        _limit, _window = RATE_LIMITS["login_page"]
+        if not rate_limiter.check((client_ip, "login_page"), max_requests=_limit, window=_window):
             return Response("请求过于频繁", status=429)
 
     if request.method == "POST":
-        # 登录速率限制: 每 IP 每 60 秒最多 5 次 POST
+        # 登录速率限制
         client_ip = request.remote_addr or "unknown"
-        if not rate_limiter.check((client_ip, "login"), max_requests=5, window=60):
+        _limit, _window = RATE_LIMITS["login"]
+        if not rate_limiter.check((client_ip, "login"), max_requests=_limit, window=_window):
             return Response("请求过于频繁", status=429)
 
         username = sanitize_input(request.form.get("username", ""), 50)
@@ -1129,9 +1147,10 @@ def register():
     if "csrf_token" not in session:
         session["csrf_token"] = os.urandom(32).hex()
     if request.method == "POST":
-        # 注册速率限制: 每 IP 每 60 秒最多 5 次
+        # 注册速率限制
         client_ip = request.remote_addr or "unknown"
-        if not rate_limiter.check((client_ip, "register"), max_requests=5, window=60):
+        _limit, _window = RATE_LIMITS["register"]
+        if not rate_limiter.check((client_ip, "register"), max_requests=_limit, window=_window):
             return Response("请求过于频繁", status=429)
 
         # 验证码校验
