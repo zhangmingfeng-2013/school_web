@@ -2,30 +2,30 @@
 {% block title %}关于作者{% endblock %}
 {% block content %}
 <style nonce="{{ csp_nonce }}">
-/* ===== 全局 ===== */
-:root {
-    --text: #f2f2f2;
-    --bgt: #222222d0;
-    --theme: #61ccff;
-    --sele: #61ccff60;
-    --bg: #090912;
-}
-*::selection { background: var(--sele); color: var(--text); }
-body { background: var(--bg) !important; overflow-x: hidden; transition: background .5s ease; }
-body.light {
-    --text: #1a1a2e;
-    --bgt: rgba(255,255,255,.88);
-    --theme: #2563eb;
-    --sele: #2563eb30;
-    --bg: #f0f2f5;
-}
-.container-main { max-width: 100% !important; padding: 0 !important; }
+/* ===== 页面 scoped 主题变量 ===== */
 .author-page {
+    --ap-text: #f2f2f2;
+    --ap-bgt: #222222d0;
+    --ap-theme: #61ccff;
+    --ap-sele: #61ccff60;
+    --ap-bg: #090912;
     position: relative;
-    color: var(--text);
+    color: var(--ap-text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
     transition: color .5s ease;
+    margin: -1.5rem;  /* 抵消 .container.py-4 的内边距 */
 }
+
+/* 亮色模式覆盖 */
+[data-bs-theme="light"] .author-page {
+    --ap-text: #1a1a2e;
+    --ap-bgt: rgba(255,255,255,.85);
+    --ap-theme: #2563eb;
+    --ap-sele: #2563eb30;
+    --ap-bg: #f0f2f5;
+}
+
+.author-page *::selection { background: var(--ap-sele); color: var(--ap-text); }
 
 /* ---- 星空背景 ---- */
 #starCanvas {
@@ -34,29 +34,23 @@ body.light {
     z-index: 0; pointer-events: none;
     transition: opacity .5s ease;
 }
-body.light #starCanvas { opacity: .25; }
+[data-bs-theme="light"] #starCanvas { opacity: .25; }
 
 /* ---- 加载遮罩 ---- */
 #loadingOverlay {
     position: fixed; inset: 0;
     z-index: 9999;
-    background: var(--bg);
+    background: var(--ap-bg);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     transition: opacity .8s ease, visibility .8s ease;
 }
-#loadingOverlay.hidden {
-    opacity: 0; visibility: hidden;
-    pointer-events: none;
-}
-#loadingOverlay p {
-    font-size: 1rem; color: rgba(255,255,255,.5);
-    letter-spacing: 6px; margin-top: 2rem;
-}
+#loadingOverlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+#loadingOverlay p { font-size: 1rem; color: rgba(255,255,255,.5); letter-spacing: 6px; margin-top: 2rem; }
 .loading-spinner {
     width: 48px; height: 48px;
     border: 3px solid rgba(255,255,255,.1);
-    border-top-color: var(--theme);
+    border-top-color: var(--ap-theme);
     border-radius: 50%;
     animation: lspin .8s linear infinite;
 }
@@ -78,17 +72,11 @@ body.light #starCanvas { opacity: .25; }
     opacity: 0; transform: translateY(40px);
     transition: opacity .8s ease, transform .8s ease;
 }
-.lay.visible {
-    opacity: 1; transform: translateY(0);
-}
+.lay.visible { opacity: 1; transform: translateY(0); }
 .lay.first { padding-top: 30vh; padding-bottom: 10vh; }
 
 /* ---- 诗/格言 ---- */
-.poem {
-    text-align: center;
-    line-height: 2;
-    margin-bottom: 3rem;
-}
+.poem { text-align: center; line-height: 2; margin-bottom: 3rem; }
 .poem p { margin: .3rem 0; font-weight: 300; }
 .poem .big { font-size: 1.8rem; }
 .poem .med { font-size: 1.4rem; }
@@ -96,12 +84,9 @@ body.light #starCanvas { opacity: .25; }
 .poem .right { text-align: right; margin-top: 1rem; opacity: .6; }
 
 /* ---- 卡片 ---- */
-.card-3d {
-    perspective: 1200px;
-    margin-bottom: 2rem;
-}
+.card-3d { perspective: 1200px; margin-bottom: 2rem; }
 .card-3d-inner {
-    background: var(--bgt);
+    background: var(--ap-bgt);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-radius: 16px;
@@ -111,20 +96,11 @@ body.light #starCanvas { opacity: .25; }
     transform-style: preserve-3d;
     will-change: transform;
 }
-.card-3d:hover .card-3d-inner {
-    box-shadow: 0 12px 50px rgba(0,0,0,.3);
-}
-.card-tit {
-    font-size: 1.8rem;
-    margin-bottom: 1.5rem;
-    display: flex; align-items: center; gap: 8px;
-}
+.card-3d:hover .card-3d-inner { box-shadow: 0 12px 50px rgba(0,0,0,.3); }
+.card-tit { font-size: 1.8rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px; }
 
 /* ---- 欢迎区 ---- */
-.greeting {
-    text-align: center;
-    margin-bottom: 3rem;
-}
+.greeting { text-align: center; margin-bottom: 3rem; }
 .greeting h1 {
     font-size: 3.5rem;
     margin-bottom: .5rem;
@@ -133,152 +109,65 @@ body.light #starCanvas { opacity: .25; }
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
-.greeting p {
-    font-size: 1.1rem;
-    opacity: .6;
-    line-height: 1.7;
-}
+.greeting p { font-size: 1.1rem; opacity: .6; line-height: 1.7; }
 
 /* ---- 信息表格 ---- */
-.info-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: .6rem 1rem;
-}
+.info-grid { display: grid; grid-template-columns: auto 1fr; gap: .6rem 1rem; }
 .info-grid .label { opacity: .5; font-size: .9rem; }
 .info-grid .value { font-weight: 500; }
-.info-grid hr {
-    grid-column: 1 / -1;
-    margin: .3rem 0;
-    opacity: .1;
-    border: none; height: 1px; background: var(--text);
-}
+.info-grid hr { grid-column: 1 / -1; margin: .3rem 0; opacity: .1; border: none; height: 1px; background: var(--ap-text); }
 
 /* ---- 技能条 ---- */
-.skill-bar {
-    margin-bottom: .8rem;
-}
-.skill-bar .skill-label {
-    display: flex; justify-content: space-between;
-    font-size: .9rem; margin-bottom: 4px;
-}
+.skill-bar { margin-bottom: .8rem; }
+.skill-bar .skill-label { display: flex; justify-content: space-between; font-size: .9rem; margin-bottom: 4px; }
 .skill-bar .skill-label .pct { opacity: .5; }
-.skill-bar .bar-track {
-    height: 10px;
-    background: rgba(255,255,255,.08);
-    border-radius: 10px;
-    overflow: hidden;
-}
-.skill-bar .bar-fill {
-    height: 100%;
-    border-radius: 10px;
-    width: 0;
-    transition: width 2.5s cubic-bezier(.22,.68,0,1);
-}
+.skill-bar .bar-track { height: 10px; background: rgba(255,255,255,.08); border-radius: 10px; overflow: hidden; }
+.skill-bar .bar-fill { height: 100%; border-radius: 10px; width: 0; transition: width 2s cubic-bezier(.22,.68,0,1); }
 
 /* ---- 荣誉 ---- */
-.honor-item {
-    display: flex; align-items: flex-start; gap: 1rem;
-    margin-bottom: 1rem;
-}
-.honor-icon {
-    flex-shrink: 0;
-    width: 36px; height: 36px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 10px;
-    background: rgba(255,255,255,.05);
-    border: 1px solid rgba(255,255,255,.06);
-    font-size: 1.1rem;
-}
+.honor-item { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+.honor-icon { flex-shrink: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06); font-size: 1.1rem; }
 .honor-body { flex: 1; min-width: 0; }
 .honor-name { font-weight: 600; font-size: .9rem; line-height: 1.4; }
 .honor-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
 .honor-date { font-size: .78rem; opacity: .4; }
-.honor-badge {
-    display: inline-block; padding: 1px 8px; border-radius: 20px;
-    font-size: .72rem; font-weight: 600;
-}
-.honor-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: .8rem;
-}
-.honor-mini {
-    text-align: center;
-    padding: 1rem;
-    background: var(--bgt); backdrop-filter: blur(20px);
-    border-radius: 12px; border: 1px solid rgba(255,255,255,.06);
-}
+.honor-badge { display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: .72rem; font-weight: 600; }
+.honor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .8rem; }
+.honor-mini { text-align: center; padding: 1rem; background: var(--ap-bgt); backdrop-filter: blur(20px); border-radius: 12px; border: 1px solid rgba(255,255,255,.06); }
 .honor-mini .star { font-size: 1.8rem; display: block; margin-bottom: 4px; }
 .honor-mini .name { font-weight: 600; font-size: .85rem; }
 .honor-mini .date { font-size: .72rem; opacity: .4; margin-top: 2px; }
 
 /* ---- 项目 ---- */
-.project-card {
-    display: flex; align-items: flex-start; gap: 1rem;
-    margin-bottom: 1rem;
-    padding: 1.2rem;
-    background: var(--bgt);
-    backdrop-filter: blur(20px);
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,.06);
-    transition: transform .2s, box-shadow .2s;
-}
-.project-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(0,0,0,.2);
-}
+.project-card { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; padding: 1.2rem; background: var(--ap-bgt); backdrop-filter: blur(20px); border-radius: 12px; border: 1px solid rgba(255,255,255,.06); transition: transform .2s, box-shadow .2s; }
+.project-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,.2); }
 .project-icon { flex-shrink: 0; font-size: 1.2rem; }
 .project-body { flex: 1; min-width: 0; }
 .project-name { font-weight: 600; font-size: .95rem; }
 .project-desc { font-size: .82rem; opacity: .5; margin-top: 3px; line-height: 1.5; }
-.project-lang {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 2px 8px; border-radius: 12px;
-    background: rgba(97,204,255,.12);
-    color: var(--theme); font-size: .72rem; font-weight: 600;
-    margin-top: 6px;
-}
-.project-lang .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--theme); }
+.project-lang { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; background: rgba(97,204,255,.12); color: var(--ap-theme); font-size: .72rem; font-weight: 600; margin-top: 6px; }
+.project-lang .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ap-theme); }
 
 /* ---- 链接 ---- */
-.a { color: var(--theme); text-decoration: none; cursor: pointer; }
+.a { color: var(--ap-theme); text-decoration: none; cursor: pointer; }
 .a:hover { opacity: .7; }
 
 /* ---- 按钮 ---- */
 .btn-start {
-    display: inline-block;
-    padding: .6rem 2rem;
-    border-radius: 30px;
-    border: 1px solid rgba(255,255,255,.15);
-    background: rgba(255,255,255,.04);
-    color: var(--text);
-    font-size: .9rem;
-    cursor: pointer;
-    transition: all .3s;
-    backdrop-filter: blur(10px);
-    letter-spacing: 2px;
-    margin-top: 1.5rem;
+    display: inline-block; padding: .6rem 2rem; border-radius: 30px;
+    border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.04);
+    color: var(--ap-text); font-size: .9rem; cursor: pointer; transition: all .3s;
+    backdrop-filter: blur(10px); letter-spacing: 2px; margin-top: 1.5rem;
 }
-.btn-start:hover {
-    background: rgba(97,204,255,.12);
-    border-color: var(--theme);
-    box-shadow: 0 0 20px rgba(97,204,255,.2);
-}
+.btn-start:hover { background: rgba(97,204,255,.12); border-color: var(--ap-theme); box-shadow: 0 0 20px rgba(97,204,255,.2); }
 
-/* ---- 主题切换 ---- */
-#themeBtn {
-    position: fixed; top: 80px; right: 16px;
-    z-index: 100; cursor: pointer;
-    width: 36px; height: 36px;
-    background: var(--bgt); backdrop-filter: blur(10px);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    border: 1px solid rgba(255,255,255,.1);
-    font-size: 1.1rem;
-    transition: transform .3s;
-}
-#themeBtn:hover { transform: scale(1.1); }
+/* ---- 亮色模式边界色 ---- */
+[data-bs-theme="light"] .card-3d-inner { border-color: rgba(0,0,0,.08); }
+[data-bs-theme="light"] .project-card { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
+[data-bs-theme="light"] .honor-mini { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
+[data-bs-theme="light"] .btn-start { color: #1a1a2e; border-color: rgba(0,0,0,.15); }
+[data-bs-theme="light"] .btn-start:hover { background: rgba(37,99,235,.08); border-color: #2563eb; }
+[data-bs-theme="light"] #loadingOverlay { background: #f0f2f5; }
 
 /* ---- 响应 ---- */
 @media (max-width: 600px) {
@@ -288,22 +177,6 @@ body.light #starCanvas { opacity: .25; }
     .lay { min-height: auto; padding: 2rem 0; }
     .honor-grid { grid-template-columns: repeat(2, 1fr); }
 }
-
-/* ---- 明亮主题 ---- */
-.author-page.light {
-    --text: #1a1a2e;
-    --bgt: rgba(255,255,255,.85);
-    --theme: #2563eb;
-    --sele: #2563eb30;
-    --bg: #f0f2f5;
-}
-.author-page.light .card-3d-inner { border-color: rgba(0,0,0,.08); }
-.author-page.light .project-card { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
-.author-page.light .honor-mini { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
-.author-page.light .btn-start { color: #1a1a2e; border-color: rgba(0,0,0,.15); }
-.author-page.light .btn-start:hover { background: rgba(37,99,235,.08); border-color: #2563eb; }
-.author-page.light #loadingOverlay { background: #f0f2f5; }
-.author-page.light #starCanvas { opacity: .3; }
 </style>
 
 <div class="author-page">
@@ -317,13 +190,13 @@ body.light #starCanvas { opacity: .25; }
 <!-- 星空 -->
 <canvas id="starCanvas"></canvas>
 
-<!-- 主题 -->
-<div id="themeBtn" data-csp-click="toggleTheme">🌙</div>
+<button class="btn-start" style="position:fixed;top:80px;right:16px;z-index:100;width:36px;height:36px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;letter-spacing:0;margin:0;"
+        id="authorThemeBtn">🌙</button>
 
 <div class="author-main">
 
 <!-- ===== Section 1: 诗词 ===== -->
-<section class="lay first" id="sec1">
+<section class="lay first visible" id="sec1">
     <div class="poem">
         <p class="big">沧桑再顾，沧海一粟，代码悠悠兮波起伏</p>
         <p class="med">字节起处，星辰一如，</p>
@@ -331,7 +204,7 @@ body.light #starCanvas { opacity: .25; }
         <p class="sm right">———《少年码农 · 铭》</p>
     </div>
     <div style="text-align:center;">
-        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec2"]\'>开始探索 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec2">开始探索 →</button>
     </div>
 </section>
 
@@ -339,7 +212,7 @@ body.light #starCanvas { opacity: .25; }
 <section class="lay" id="sec2">
     <div class="greeting">
         <div style="width:130px;height:130px;margin:0 auto 1.2rem;border-radius:50%;overflow:hidden;box-shadow:0 0 40px rgba(99,102,241,.25);">
-            <img src="/static/img/avatar_ming.png" alt="铭" style="width:100%;height:100%;object-fit:cover;">
+            <img src="/static/img/avatar_ming.png" alt="铭" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
         </div>
         <h1>张铭枫</h1>
         <p>少年编程爱好者 · 12 岁开发者<br>用代码构建未来，热爱创造与探索</p>
@@ -362,7 +235,7 @@ body.light #starCanvas { opacity: .25; }
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec3"]\'>查看技能 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec3">查看技能 →</button>
     </div>
 </section>
 
@@ -375,7 +248,7 @@ body.light #starCanvas { opacity: .25; }
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec4"]\'>查看荣誉 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec4">查看荣誉 →</button>
     </div>
 </section>
 
@@ -450,11 +323,11 @@ body.light #starCanvas { opacity: .25; }
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["sec5"]\'>查看项目 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec5">查看项目 →</button>
     </div>
 </section>
 
-<!-- ===== Section 5-8: 每个开源项目独立展示 ===== -->
+<!-- ===== Section 5-8: 开源项目 ===== -->
 {% set projs = [
     ("ToolBoxHub","zhang-mingfeng9773_admin_admin","tool-box-hub",
      "一个集合多种实用工具的开源项目，为普通人和开发者提供便捷、高效的一站式工具网站","Python/HTML/JS","🛠"),
@@ -467,7 +340,7 @@ body.light #starCanvas { opacity: .25; }
 ] %}
 {% for name,user,repo,desc,lang,emoji in projs %}
 {% set sec_id = 'sec' ~ (5 + loop.index0) %}
-{% set next_sec = 'sec' ~ (6 + loop.index0) if not loop.last else '' %}
+{% set next_sec = 'sec' ~ (6 + loop.index0) %}
 <section class="lay" id="{{ sec_id }}">
     <div class="card-3d">
         <div class="card-3d-inner" style="text-align:center;">
@@ -486,7 +359,7 @@ body.light #starCanvas { opacity: .25; }
     </div>
     {% if not loop.last %}
     <div style="text-align:center;margin-top:1.5rem;">
-        <button class="btn-start" data-csp-click="scrollToSection" data-csp-args=\'["{{ next_sec }}"]\'>下一个项目 ↓</button>
+        <button class="btn-start author-scroll-btn" data-target="{{ next_sec }}">下一个项目 ↓</button>
     </div>
     {% endif %}
 </section>
@@ -502,20 +375,21 @@ body.light #starCanvas { opacity: .25; }
 
 </div><!-- .author-main -->
 </div><!-- .author-page -->
-
+{% endblock %}
+{% block scripts %}
 <script nonce="{{ csp_nonce }}">
-/* ===== 1. 加载遮罩 ===== */
-window.addEventListener('load', () => {
-    setTimeout(() => {
+// ===== 1. 加载遮罩 =====
+window.addEventListener('load', function() {
+    setTimeout(function() {
         document.getElementById('loadingOverlay').classList.add('hidden');
     }, 800);
 });
 
-/* ===== 2. 星空 Canvas ===== */
+// ===== 2. 星空 Canvas =====
 (function() {
-    const c = document.getElementById('starCanvas');
-    const ctx = c.getContext('2d');
-    let W, H, stars = [];
+    var c = document.getElementById('starCanvas');
+    var ctx = c.getContext('2d');
+    var W, H, stars = [];
 
     function resize() {
         W = c.width = window.innerWidth;
@@ -524,24 +398,24 @@ window.addEventListener('load', () => {
     window.addEventListener('resize', resize);
     resize();
 
-    const COUNT = 120;
-    for (let i = 0; i < COUNT; i++) {
+    var COUNT = 120;
+    for (var i = 0; i < COUNT; i++) {
         stars.push({
             x: Math.random() * W, y: Math.random() * H,
-            r: Math.random() * 1.5 + .5,
-            a: Math.random() * .6 + .2,
-            s: Math.random() * .2 + .02
+            r: Math.random() * 1.5 + 0.5,
+            a: Math.random() * 0.6 + 0.2,
+            s: Math.random() * 0.2 + 0.02
         });
     }
 
     function draw() {
         ctx.clearRect(0, 0, W, H);
-        stars.forEach(st => {
-            st.a += (Math.random() - .5) * .02;
-            st.a = Math.max(.1, Math.min(.8, st.a));
+        stars.forEach(function(st) {
+            st.a += (Math.random() - 0.5) * 0.02;
+            st.a = Math.max(0.1, Math.min(0.8, st.a));
             ctx.beginPath();
             ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255,255,255,${st.a})`;
+            ctx.fillStyle = 'rgba(255,255,255,' + st.a + ')';
             ctx.fill();
         });
         requestAnimationFrame(draw);
@@ -549,48 +423,48 @@ window.addEventListener('load', () => {
     draw();
 })();
 
-/* ===== 3. 滚动显示 ===== */
+// ===== 3. 滚动按钮（class 事件委托） =====
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.author-scroll-btn');
+    if (!btn) return;
+    var targetId = btn.getAttribute('data-target');
+    if (!targetId) return;
+    var el = document.getElementById(targetId);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+});
+
+// ===== 4. 滚动显示动画（IntersectionObserver） =====
 (function() {
-    const lays = document.querySelectorAll('.lay');
-    const obs = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-            if (e.isIntersecting) {
-                e.target.classList.add('visible');
-            }
+    var lays = document.querySelectorAll('.lay');
+    var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) {
+            if (e.isIntersecting) e.target.classList.add('visible');
         });
-    }, { threshold: .1 });
-    lays.forEach(el => obs.observe(el));
-    // 显示第一屏
-    document.getElementById('sec1')?.classList.add('visible');
+    }, { threshold: 0.1 });
+    lays.forEach(function(el) { obs.observe(el); });
 })();
 
-/* ===== 4. 滚动到指定屏 ===== */
-function scrollToSection(id) {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
-}
-
-/* ===== 5. 3D 倾斜卡片 ===== */
+// ===== 5. 3D 倾斜卡片 =====
 (function() {
-    document.querySelectorAll('.card-3d').forEach(card => {
-        const inner = card.querySelector('.card-3d-inner');
+    document.querySelectorAll('.card-3d').forEach(function(card) {
+        var inner = card.querySelector('.card-3d-inner');
         if (!inner) return;
-        card.addEventListener('mousemove', e => {
-            const r = card.getBoundingClientRect();
-            const x = e.clientX - r.left, y = e.clientY - r.top;
-            const rx = ((y - r.height/2) / (r.height/2)) * -6;
-            const ry = ((x - r.width/2) / (r.width/2)) * 6;
-            inner.style.transform = `rotateX(${rx}deg) rotateY(${ry}deg) scale(1.01)`;
+        card.addEventListener('mousemove', function(e) {
+            var r = card.getBoundingClientRect();
+            var x = e.clientX - r.left, y = e.clientY - r.top;
+            var rx = ((y - r.height/2) / (r.height/2)) * -6;
+            var ry = ((x - r.width/2) / (r.width/2)) * 6;
+            inner.style.transform = 'rotateX(' + rx + 'deg) rotateY(' + ry + 'deg) scale(1.01)';
         });
-        card.addEventListener('mouseleave', () => {
+        card.addEventListener('mouseleave', function() {
             inner.style.transform = 'rotateX(0) rotateY(0) scale(1)';
         });
     });
 })();
 
-/* ===== 6. 技能条动画 ===== */
+// ===== 6. 技能条动画 =====
 (function() {
-    const skills = [
+    var skills = [
         { name: 'Scratch', pct: 95, color: '#4D97FF' },
         { name: 'Markdown', pct: 90, color: '#083fa1' },
         { name: 'Python', pct: 80, color: '#3776AB' },
@@ -599,47 +473,62 @@ function scrollToSection(id) {
         { name: 'Linux', pct: 25, color: '#FCC624' },
         { name: 'SQL', pct: 17, color: '#E38C00' },
         { name: 'Vue3', pct: 11, color: '#42b883' },
-        { name: 'JavaScript', pct: 10, color: '#F7DF1E' },
+        { name: 'JavaScript', pct: 10, color: '#F7DF1E' }
     ];
-    const container = document.getElementById('skillBars');
+    var container = document.getElementById('skillBars');
     if (!container) return;
 
-    container.innerHTML = skills.map(s => `
-        <div class="skill-bar">
-            <div class="skill-label">
-                <span>${s.name}</span>
-                <span class="pct">${s.pct}%</span>
-            </div>
-            <div class="bar-track">
-                <div class="bar-fill" data-pct="${Math.max(s.pct, 5)}" style="background:${s.color};"></div>
-            </div>
-        </div>
-    `).join('');
+    container.innerHTML = skills.map(function(s) {
+        return '<div class="skill-bar">' +
+            '<div class="skill-label"><span>' + s.name + '</span><span class="pct">' + s.pct + '%</span></div>' +
+            '<div class="bar-track"><div class="bar-fill" data-pct="' + Math.max(s.pct, 5) + '" style="background:' + s.color + ';"></div></div>' +
+            '</div>';
+    }).join('');
 
-    // 滚动时触发动画
-    const obs = new IntersectionObserver(entries => {
-        entries.forEach(e => {
+    var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) {
             if (e.isIntersecting) {
-                e.target.querySelectorAll('.bar-fill').forEach((bar, idx) => {
-                    setTimeout(() => {
-                        bar.style.width = bar.dataset.pct + '%';
+                var bars = e.target.querySelectorAll('.bar-fill');
+                bars.forEach(function(bar, idx) {
+                    setTimeout(function() {
+                        bar.style.width = bar.getAttribute('data-pct') + '%';
                     }, 150 + idx * 200);
                 });
                 obs.unobserve(e.target);
             }
         });
-    }, { threshold: .3 });
-    const el = container.closest('.card-3d') || container;
-    obs.observe(el);
+    }, { threshold: 0.3 });
+    obs.observe(container.closest('.card-3d') || container);
 })();
 
-/* ===== 7. 主题切换 ===== */
-function toggleTheme() {
-    const body = document.body;
-    const btn = document.getElementById('themeBtn');
-    const isDark = !body.classList.contains('light');
-    body.classList.toggle('light');
-    btn.textContent = isDark ? '☀️' : '🌙';
-}
+// ===== 7. 作者页主题切换（仅切换 ap-* 变量，不影响全局） =====
+(function() {
+    var btn = document.getElementById('authorThemeBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        var page = document.querySelector('.author-page');
+        if (!page) return;
+        var isLight = getComputedStyle(page).getPropertyValue('--ap-bg').trim() === '#f0f2f5';
+        if (isLight) {
+            page.style.setProperty('--ap-text', '#f2f2f2');
+            page.style.setProperty('--ap-bgt', '#222222d0');
+            page.style.setProperty('--ap-theme', '#61ccff');
+            page.style.setProperty('--ap-sele', '#61ccff60');
+            page.style.setProperty('--ap-bg', '#090912');
+            document.getElementById('starCanvas').style.opacity = '1';
+            document.getElementById('loadingOverlay').style.background = '#090912';
+            btn.textContent = '🌙';
+        } else {
+            page.style.setProperty('--ap-text', '#1a1a2e');
+            page.style.setProperty('--ap-bgt', 'rgba(255,255,255,.85)');
+            page.style.setProperty('--ap-theme', '#2563eb');
+            page.style.setProperty('--ap-sele', '#2563eb30');
+            page.style.setProperty('--ap-bg', '#f0f2f5');
+            document.getElementById('starCanvas').style.opacity = '0.25';
+            document.getElementById('loadingOverlay').style.background = '#f0f2f5';
+            btn.textContent = '☀️';
+        }
+    });
+})();
 </script>
 {% endblock %}

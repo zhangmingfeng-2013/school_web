@@ -64,18 +64,28 @@
             var a = this.dataset.action, v = this.dataset.value;
             if(a==='num'){
                 if(reset){expr='';reset=false}
-                if(v==='.' && expr.split(/[+\-×÷]/).pop().indexOf('.')!==-1) return;
+                if(v==='.' && expr.split(/[+\-−×÷]/).pop().indexOf('.')!==-1) return;
                 expr = expr==='0' && v!=='.' ? v : expr+v;
             }else if(a==='op'){
                 if(reset) reset=false;
                 if('+-×÷'.indexOf(expr.slice(-1))!==-1) expr=expr.slice(0,-1)+v;
                 else expr+=v;
             }else if(a==='equal'){
-                try{expr=String(eval(expr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-')));reset=true}
-                catch(e){expr='Error';reset=true}
+                try{
+                    var e = expr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
+                    if (!/^[0-9+\-*/.() ]+$/.test(e)) throw new Error('Invalid');
+                    var r = Function('"use strict";return ('+e+')')();
+                    expr = String(Math.round(r*1e12)/1e12); reset=true;
+                }catch(e){ expr='Error'; reset=true; sExpr=''; }
             }else if(a==='clear'){expr='0';reset=false}
             else if(a==='del'){expr=expr.length>1?expr.slice(0,-1):'0'}
-            else if(a==='percent'){try{expr=String(eval(expr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-'))/100);reset=true}catch(e){}}
+            else if(a==='percent'){
+                try{
+                    var ep = expr.replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
+                    if (!/^[0-9+\-*/.() ]+$/.test(ep)) throw new Error('Invalid');
+                    expr = String(Function('"use strict";return ('+ep+')')()/100); reset=true;
+                }catch(e){}
+            }
             update();
         });
     });
@@ -89,7 +99,7 @@
             if(k==='='&&b.dataset.action==='equal') t=b;
             if(k==='AC'&&b.dataset.action==='clear') t=b;
             if(k==='⌫'&&b.dataset.action==='del') t=b;
-            if('+-×÷'.indexOf(k)!==-1&&b.dataset.action==='op'&&b.dataset.value===k) t=b;
+            if('+−×÷'.indexOf(k)!==-1&&b.dataset.action==='op'&&b.dataset.value===k) t=b;
             if('0123456789.'.indexOf(k)!==-1&&b.dataset.action==='num'&&b.dataset.value===k) t=b;
             if(k==='%'&&b.dataset.action==='percent') t=b;
         }

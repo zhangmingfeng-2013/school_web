@@ -120,7 +120,7 @@
             var num;
             try{
                 if(reset){num=parseFloat(expr)||0}else{
-                    var p=expr.split(/([+\-×÷])/);num=parseFloat(p[p.length-1])||0;
+                    var p=expr.split(/([+\-−×÷])/);num=parseFloat(p[p.length-1])||0;
                 }
             }catch(e){num=0}
             var r;
@@ -149,7 +149,7 @@
             var a=this.dataset.action,v=this.dataset.value;
             if(a==='num'){
                 if(reset){expr='';reset=false}
-                if(v==='.'&&expr.split(/[+\-×÷]/).pop().indexOf('.')!==-1)return;
+                if(v==='.'&&expr.split(/[+\-−×÷]/).pop().indexOf('.')!==-1)return;
                 expr=expr==='0'&&v!=='.'?v:expr+v;
             }else if(a==='op'){
                 if(reset)reset=false;
@@ -192,7 +192,7 @@
             if(k==='='&&b.dataset.action==='equal')t=b;
             if(k==='AC'&&b.dataset.action==='clear')t=b;
             if(k==='⌫'&&b.dataset.action==='del')t=b;
-            if('+-×÷'.indexOf(k)!==-1&&b.dataset.action==='op'&&b.dataset.value===k)t=b;
+            if('+−×÷'.indexOf(k)!==-1&&b.dataset.action==='op'&&b.dataset.value===k)t=b;
             if('0123456789.'.indexOf(k)!==-1&&b.dataset.action==='num'&&b.dataset.value===k)t=b;
             if(k==='('&&b.dataset.action==='lp')t=b;
             if(k===')'&&b.dataset.action==='rp')t=b;

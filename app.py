@@ -706,7 +706,7 @@ def add_security_headers(response):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             # script-src：nonce 已覆盖所有 <script> 标签，unsafe-inline 暂保留以兼容 100+ 内联事件 handler（onclick 等），逐步迁移后可移除
-            f"script-src 'self' 'unsafe-inline'{nonce_directive} https://cdn.bootcdn.net https://unpkg.com https://cdn.jsdelivr.net; "
+            f"script-src 'self' 'unsafe-inline' 'unsafe-eval'{nonce_directive} https://cdn.bootcdn.net https://unpkg.com https://cdn.jsdelivr.net; "
             # style-src：所有内联 <style> 已加 nonce，移除了 unsafe-inline
             f"style-src 'self'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.bootcdn.net; "
@@ -6283,7 +6283,7 @@ if __name__ == "__main__":
     import atexit
     atexit.register(rate_limiter.shutdown)
 
-    print("=" * 50)
+    print("=" * 100)
     print("  多合一工具箱 Web 版启动")
     print(f"  本地访问: http://127.0.0.1:4444")
     # 自动检测本机局域网 IP
@@ -6296,7 +6296,7 @@ if __name__ == "__main__":
     except Exception:
         print(f"  局域网访问: http://192.168.3.160:5800")
     print(f"  调试模式: {'开启' if os.environ.get('FLASK_DEBUG') else '关闭'}")
-    print("=" * 50)
+    print("=" * 100)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     _init_plugins()
     # 不泄露服务器类型/版本（安全扫描要求隐藏 Server 头）
