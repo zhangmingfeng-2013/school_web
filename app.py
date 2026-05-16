@@ -5481,9 +5481,10 @@ def _create_vue_wrapper(plugin_dir, plugin_name, version="3"):
 
 @app.route("/api/admin/plugins/marketplace")
 @login_required
-@admin_required
 def api_admin_plugin_marketplace_list():
-    """获取插件市场列表（管理员视图，含上传者信息）"""
+    """获取插件市场列表（含管理标记：作者或管理员可编辑/删除）"""
+    username = session.get("username", "")
+    is_admin = session.get("is_admin", False)
     result = []
     conn = get_db()
     if conn:
@@ -5508,6 +5509,7 @@ def api_admin_plugin_marketplace_list():
                     "created_at": r["created_at"].strftime("%Y-%m-%d %H:%M") if r.get("created_at") else "",
                     "exists_on_disk": os.path.isdir(plugin_dir),
                     "preview_url": f"/plugin-market/{r['id']}",
+                    "can_manage": is_admin or (r["uploader"] == username),
                 })
             cursor.close()
             conn.close()
@@ -5548,19 +5550,25 @@ def api_admin_plugin_marketplace_list():
 
 @app.route("/api/admin/plugins/marketplace/<int:plugin_id>", methods=["DELETE"])
 @login_required
-@admin_required
 def api_admin_plugin_marketplace_delete(plugin_id):
-    """删除插件市场中的插件（数据库 + 文件）"""
+    """删除插件市场中的插件（数据库 + 文件）—— 作者或管理员"""
     conn = get_db()
+    username = session.get("username", "")
+    is_admin = session.get("is_admin", False)
     plugin_name = None
     if conn:
         try:
             cursor = conn.cursor(pymysql.cursors.DictCursor)
             cursor.execute(
-                "SELECT plugin_name FROM plugin_marketplace WHERE id=%s", (plugin_id,)
+                "SELECT plugin_name, uploader FROM plugin_marketplace WHERE id=%s", (plugin_id,)
             )
             row = cursor.fetchone()
             if row:
+                # 权限检查：管理员 或 插件作者
+                if not is_admin and row["uploader"] != username:
+                    cursor.close()
+                    conn.close()
+                    return jsonify({"ok": False, "error": "无权删除此插件"}), 403
                 plugin_name = row["plugin_name"]
                 cursor.execute("DELETE FROM plugin_marketplace WHERE id=%s", (plugin_id,))
                 conn.commit()
@@ -5579,6 +5587,150 @@ def api_admin_plugin_marketplace_delete(plugin_id):
         return jsonify({"ok": True, "message": f"插件 '{plugin_name}' 已删除"})
 
     return jsonify({"ok": False, "error": "未找到该插件"}), 404
+
+
+# ---------- 插件市场编辑（作者/管理员） ----------
+@app.route("/api/admin/plugins/marketplace/<int:plugin_id>", methods=["PUT"])
+@login_required
+def api_admin_plugin_marketplace_update(plugin_id):
+    """修改插件信息或替换文件 — 作者或管理员"""
+    username = session.get("username", "")
+    is_admin = session.get("is_admin", False)
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库不可用"}), 500
+
+    try:
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        cursor.execute(
+            "SELECT * FROM plugin_marketplace WHERE id=%s", (plugin_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({"ok": False, "error": "未找到该插件"}), 404
+
+        # 权限检查
+        if not is_admin and row["uploader"] != username:
+            cursor.close()
+            conn.close()
+            return jsonify({"ok": False, "error": "无权修改此插件"}), 403
+
+        plugin_name = row["plugin_name"]
+        plugin_dir = os.path.join(MARKETPLACE_DIR, plugin_name)
+
+        # 1. 更新元信息（manifest + DB）
+        display_name = (request.form.get("display_name") or row["display_name"]).strip()
+        description = (request.form.get("description") or row.get("description", "")).strip()
+        version = (request.form.get("version") or row["version"]).strip()
+        author = (request.form.get("author") or row.get("author", "")).strip()
+        icon = (request.form.get("icon") or row.get("icon", "🧩")).strip()
+
+        # 更新 manifest
+        manifest_path = os.path.join(plugin_dir, "plugin.json")
+        manifest = {}
+        if os.path.exists(manifest_path):
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+            except Exception:
+                pass
+        manifest["display_name"] = display_name
+        manifest["description"] = description
+        manifest["version"] = version
+        manifest["author"] = author
+        manifest["icon"] = icon
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+        # 更新数据库
+        cursor.execute("""
+            UPDATE plugin_marketplace
+            SET display_name=%s, description=%s, version=%s, author=%s, icon=%s, updated_at=CURRENT_TIMESTAMP
+            WHERE id=%s
+        """, (display_name, description, version, author, icon, plugin_id))
+        conn.commit()
+
+        # 2. 可选：替换文件
+        file_replaced = False
+        file = request.files.get("file")
+        if file and file.filename:
+            filename = file.filename
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in (".html", ".vue"):
+                cursor.close()
+                conn.close()
+                return jsonify({"ok": False, "error": "仅支持 .html 或 .vue 文件"}), 400
+
+            file.seek(0, 2)
+            size = file.tell()
+            file.seek(0)
+            if size > 5 * 1024 * 1024:
+                cursor.close()
+                conn.close()
+                return jsonify({"ok": False, "error": "文件不能超过 5MB"}), 400
+
+            content = file.read()
+            try:
+                content_str = content.decode("utf-8")
+            except UnicodeDecodeError:
+                cursor.close()
+                conn.close()
+                return jsonify({"ok": False, "error": "文件编码必须是 UTF-8"}), 400
+
+            # 安全扫描
+            for pattern in ("{{", "}}", "{%", "%}"):
+                if pattern in content_str:
+                    cursor.close()
+                    conn.close()
+                    return jsonify({"ok": False, "error": f"文件包含不安全的模板语法: {pattern}"}), 400
+
+            dest_path = os.path.join(plugin_dir, "index" + ext)
+            with open(dest_path, "wb") as f:
+                f.write(content)
+
+            # 文件类型变了？更新 DB
+            new_file_type = "html" if ext == ".html" else "vue"
+            if new_file_type != row["file_type"]:
+                cursor.execute(
+                    "UPDATE plugin_marketplace SET file_type=%s WHERE id=%s",
+                    (new_file_type, plugin_id)
+                )
+                conn.commit()
+
+            # Vue 文件需要重建 wrapper
+            if new_file_type == "vue":
+                _create_vue_wrapper(plugin_dir, plugin_name, version)
+
+            file_replaced = True
+
+        cursor.close()
+        conn.close()
+
+        log_msg = f"插件: {display_name}"
+        if file_replaced:
+            log_msg += " (已替换文件)"
+        write_log("插件市场编辑", f"{log_msg}, 操作者: {username}")
+
+        return jsonify({
+            "ok": True,
+            "message": "插件已更新" + ("（含文件）" if file_replaced else ""),
+            "plugin": {
+                "id": plugin_id,
+                "name": plugin_name,
+                "display_name": display_name,
+                "description": description,
+                "version": version,
+                "author": author,
+                "icon": icon,
+                "file_replaced": file_replaced,
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"更新失败: {str(e)}"}), 500
 
 
 # ---------- 插件市场沙箱渲染（安全隔离） ----------
@@ -5841,7 +5993,9 @@ def marketplace_browse():
 @app.route("/api/marketplace")
 @login_required
 def api_marketplace_public():
-    """公开 API：获取插件市场列表（不含管理员专属信息）"""
+    """公开 API：获取插件市场列表（作者和管理员可编辑/删除自己的插件）"""
+    username = session.get("username", "")
+    is_admin = session.get("is_admin", False)
     result = []
     conn = get_db()
     if conn:
@@ -5849,7 +6003,7 @@ def api_marketplace_public():
             cursor = conn.cursor(pymysql.cursors.DictCursor)
             cursor.execute(
                 "SELECT id, plugin_name, display_name, description, version, "
-                "author, file_type, icon, created_at "
+                "author, file_type, icon, uploader, created_at "
                 "FROM plugin_marketplace ORDER BY updated_at DESC"
             )
             rows = cursor.fetchall()
@@ -5863,8 +6017,10 @@ def api_marketplace_public():
                     "author": r.get("author", ""),
                     "file_type": r["file_type"],
                     "icon": r.get("icon", "🧩"),
+                    "uploader": r["uploader"],
                     "created_at": r["created_at"].strftime("%Y-%m-%d %H:%M") if r.get("created_at") else "",
                     "preview_url": f"/plugin-market/{r['id']}",
+                    "can_manage": is_admin or (r["uploader"] == username),
                 })
             cursor.close()
             conn.close()
