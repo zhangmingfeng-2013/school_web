@@ -197,7 +197,7 @@
     <div class="card mt-3" id="rateConfigCard" style="display:none">
         <div class="card-header bg-info bg-opacity-10">
             <span class="fw-bold">⚙️ 速率限制配置</span>
-            <button class="btn btn-sm btn-outline-info float-end" onclick="toggleRateConfig()">收起</button>
+            <button class="btn btn-sm btn-outline-info float-end" id="rateConfigCloseBtn">收起</button>
         </div>
         <div class="card-body">
             <div class="row g-2">
@@ -222,14 +222,14 @@
                     <input type="number" id="cfgExtend" class="form-control form-control-sm" min="30" step="10">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
-                    <button class="btn btn-sm btn-info w-100" onclick="saveRateConfig()">💾 保存</button>
+                    <button class="btn btn-sm btn-info w-100" id="saveRateConfigBtn">💾 保存</button>
                 </div>
             </div>
         </div>
     </div>
     <div class="text-muted small mt-2">
         <span id="ratePolicy">策略: 正在加载...</span>
-        <button class="btn btn-sm btn-outline-info ms-2" onclick="toggleRateConfig()">⚙️ 修改</button>
+        <button class="btn btn-sm btn-outline-info ms-2" id="toggleRateConfigBtn">⚙️ 修改</button>
     </div>
 </div>
 
@@ -237,7 +237,7 @@
 <div class="tab-pane fade" id="tab-server">
     <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="text-muted small">每 2 秒自动刷新</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="refreshServerStats()">🔄 手动刷新</button>
+        <button class="btn btn-sm btn-outline-secondary" id="refreshServerBtn">🔄 手动刷新</button>
     </div>
 
     <!-- CPU + 内存 -->
@@ -839,6 +839,18 @@ async function saveRateConfig() {
     document.getElementById('rateConfigCard').style.display = 'none';
     refreshIPStats();
 }
+
+// CSP-compliant event listeners (replacing blocked onclick attributes)
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtn = document.getElementById('toggleRateConfigBtn');
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleRateConfig);
+    const closeBtn = document.getElementById('rateConfigCloseBtn');
+    if (closeBtn) closeBtn.addEventListener('click', toggleRateConfig);
+    const saveBtn = document.getElementById('saveRateConfigBtn');
+    if (saveBtn) saveBtn.addEventListener('click', saveRateConfig);
+    const refreshBtn = document.getElementById('refreshServerBtn');
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshServerStats);
+});
 </script>
 
 <!-- Leaflet + 网络请求地图 Kaspersky 风格 -->
