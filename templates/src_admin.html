@@ -183,7 +183,7 @@ function renderReports(reports) {
         const sevLabel = severityLabels[r.severity] || r.severity;
         const stLabel = statusLabels[r.status] || r.status;
         const stBadge = getStatusBadge(r.status);
-        return `<div class="report-row" onclick="viewReport(${r.id})">
+        return `<div class="report-row" data-csp-click="viewReport" data-csp-args='[${r.id}]'>
             <div class="d-flex justify-content-between align-items-start">
                 <div style="flex:1;min-width:0;">
                     <div class="d-flex align-items-center gap-2 mb-1">
@@ -251,12 +251,12 @@ async function viewReport(id) {
         // 操作按钮
         const footerHtml = `
             <span class="text-muted small me-auto">更新状态:</span>
-            <button class="btn btn-sm btn-outline-warning" onclick="updateStatus('pending')">⏳ 待审核</button>
-            <button class="btn btn-sm btn-outline-primary" onclick="updateStatus('reviewing')">🔍 审核中</button>
-            <button class="btn btn-sm btn-outline-success" onclick="updateStatus('accepted')">✅ 已接受</button>
-            <button class="btn btn-sm btn-outline-info" onclick="updateStatus('resolved')">🔧 已修复</button>
-            <button class="btn btn-sm btn-outline-secondary" onclick="updateStatus('closed')">🚫 关闭</button>
-            <button class="btn btn-sm btn-outline-dark" onclick="updateStatus('duplicate')">📋 重复</button>
+            <button class="btn btn-sm btn-outline-warning" data-csp-click="updateStatus" data-csp-args='["pending"]'>⏳ 待审核</button>
+            <button class="btn btn-sm btn-outline-primary" data-csp-click="updateStatus" data-csp-args='["reviewing"]'>🔍 审核中</button>
+            <button class="btn btn-sm btn-outline-success" data-csp-click="updateStatus" data-csp-args='["accepted"]'>✅ 已接受</button>
+            <button class="btn btn-sm btn-outline-info" data-csp-click="updateStatus" data-csp-args='["resolved"]'>🔧 已修复</button>
+            <button class="btn btn-sm btn-outline-secondary" data-csp-click="updateStatus" data-csp-args='["closed"]'>🚫 关闭</button>
+            <button class="btn btn-sm btn-outline-dark" data-csp-click="updateStatus" data-csp-args='["duplicate"]'>📋 重复</button>
         `;
         document.getElementById('detailFooter').innerHTML = footerHtml;
 
