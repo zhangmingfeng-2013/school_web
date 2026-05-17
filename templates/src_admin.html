@@ -291,6 +291,10 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// 注册到 window 供 CSP 事件调度器使用（async function 不会自动挂载到 window）
+window.viewReport = viewReport;
+window.updateStatus = updateStatus;
+
 // 筛选
 document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', function() {
