@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/License-GPLv2-green.svg)
-![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-orange.svg)
+![Platform](https://img.shields.io/badge/Platform-macOS-orange.svg)
 ![Gitee Stars](https://gitee.com/zhang-mingfeng9773_admin_admin/tool-box-hub/badge/star.svg?theme=dark)
 ![Gitee Forks](https://gitee.com/zhang-mingfeng9773_admin_admin/tool-box-hub/badge/fork.svg?theme=dark)
 
@@ -1450,25 +1450,6 @@ server {
 - 捐赠页面
 - 个人资料页面
 
-### v1.1.0（计划中）
-
-- [ ] 添加更多网络工具
-- [ ] 优化系统监控界面
-- [ ] 添加数据导出功能
-- [ ] 支持多语言
-- [ ] 性能优化
-- [ ] 添加单元测试
-- [ ] 改进文档
-
-### v1.2.0（计划中）
-
-- [ ] 添加 API 限流功能
-- [ ] 支持 WebSocket 实时通讯
-- [ ] 添加邮件通知功能
-- [ ] 支持第三方登录
-- [ ] 添加数据备份功能
-- [ ] 优化前端性能
-
 ***
 
 ## 🤝 贡献指南
@@ -1541,25 +1522,6 @@ server {
 - [Pillow 文档](https://pillow.readthedocs.io/)
 - [Werkzeug 文档](https://werkzeug.palletsprojects.com/)
 - [GPLv2 许可证](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
-
-***
-
-## 📜 许可证
-
-本项目基于 GNU General Public License v2.0 许可证发布。
-
-```
-GNU GENERAL PUBLIC LICENSE
-Version 2, June 1991
-
-Copyright (C) 1989, 1991 Free Software Foundation, Inc.,
-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
-
-Everyone is permitted to copy and distribute verbatim copies
-of this license document, but changing it is not allowed.
-```
-
-完整许可证文本请查看 [LICENSE](file:///Users/zhangmingfeng/School_Web/LICENSE) 文件。
 
 ***
 
