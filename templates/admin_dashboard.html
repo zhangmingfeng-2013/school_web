@@ -685,7 +685,7 @@ async function refreshServerStats() {
             `物理 ${data.cpu.physical} 核 · 逻辑 ${data.cpu.logical} 核`;
         setGauge('cpuCircle', cpuPct, cpuPct > 80 ? '#dc3545' : '#0d6efd');
 
-        // 内存
+        // 内存 — 统一使用 psutil 的 memory.percent，与系统监控页一致
         const memPct = data.memory.percent;
         document.getElementById('memVal').textContent = memPct.toFixed(1) + '%';
         document.getElementById('memUsed').textContent =

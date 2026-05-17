@@ -4,13 +4,15 @@ FROM python:3.14-slim
 LABEL maintainer="Zhang Mingfeng"
 LABEL description="多合一工具箱 Web 版"
 
-# 安装系统依赖（Pillow 图片处理 + 中文字体 + MySQL 客户端）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 使用阿里云 Debian 镜像加速
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null; \
+    apt-get update && apt-get install -y --no-install-recommends \
     libjpeg62-turbo-dev \
     zlib1g-dev \
     libfreetype6-dev \
     fonts-wqy-zenhei \
     fonts-wqy-microhei \
+    fonts-dejavu-core \
     default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
@@ -28,7 +30,7 @@ RUN mkdir -p backups uploads /var/log && touch /var/log/app.log
 
 # 设置环境变量默认值
 ENV FLASK_DEBUG=0
-ENV DB_HOST=mysql
+ENV DB_HOST=host.docker.internal
 ENV DB_PORT=3306
 ENV DB_USER=root
 ENV DB_PASSWORD=root@123456
