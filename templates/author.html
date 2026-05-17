@@ -212,7 +212,7 @@
 <section class="lay" id="sec2">
     <div class="greeting">
         <div style="width:130px;height:130px;margin:0 auto 1.2rem;border-radius:50%;overflow:hidden;box-shadow:0 0 40px rgba(99,102,241,.25);">
-            <img src="/static/img/avatar_ming.png" alt="铭" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
+            <img src="/static/img/avatar_ming.png" alt="铭" style="width:100%;height:100%;object-fit:cover;" id="authorAvatar">
         </div>
         <h1>张铭枫</h1>
         <p>少年编程爱好者 · 12 岁开发者<br>用代码构建未来，热爱创造与探索</p>
@@ -384,6 +384,14 @@ window.addEventListener('load', function() {
         document.getElementById('loadingOverlay').classList.add('hidden');
     }, 800);
 });
+
+// 头像加载失败兜底（替代被 CSP 阻止的 onerror）
+(function() {
+    var av = document.getElementById('authorAvatar');
+    if (av) {
+        av.addEventListener('error', function() { this.style.display = 'none'; });
+    }
+})();
 
 // ===== 2. 星空 Canvas =====
 (function() {

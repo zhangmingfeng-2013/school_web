@@ -286,6 +286,28 @@
     </div>
 
     <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('src_submit') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(220,53,69,.3)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(220,53,69,.08)!important;"><span style="font-size:2rem;">🛡️</span></div>
+                <h5>安全响应中心</h5>
+                <p class="text-muted small">提交安全漏洞报告，帮助完善系统安全</p>
+            </div></div>
+        </a>
+    </div>
+
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('src_admin') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(13,110,253,.3)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(13,110,253,.08)!important;"><span style="font-size:2rem;">⚙️</span></div>
+                <h5>SRC 管理后台</h5>
+                <p class="text-muted small">审核漏洞报告，管理安全响应</p>
+            </div></div>
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="col-md-6 col-lg-4">
         <a href="/donate" class="text-decoration-none text-dark">
             <div class="card h-100" style="border:1px solid rgba(245,158,11,.3)"><div class="card-body text-center">
                 <div class="feature-icon mx-auto" style="background:rgba(245,158,11,.1)!important;"><span style="font-size:2rem;">❤️</span></div>

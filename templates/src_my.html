@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}我的漏洞报告 - 安全响应中心{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    .src-container { max-width: 1000px; margin: 0 auto; }
+    .src-header {
+        background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+        border-radius: 16px; padding: 2rem; margin-bottom: 2rem;
+        color: #fff; position: relative; overflow: hidden;
+    }
+    .src-header::before {
+        content: ''; position: absolute; top: -50%; left: -50%;
+        width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(0,198,255,.08) 0%, transparent 70%);
+        animation: srcPulse 8s ease-in-out infinite;
+    }
+    @keyframes srcPulse {
+        0%,100% { transform: translate(0,0); }
+        50% { transform: translate(20px,-20px); }
+    }
+    .src-header h1 { position: relative; font-size: 1.8rem; font-weight: 700; }
+    .src-header .nav-links { position: relative; margin-top: 1rem; }
+    .src-header .nav-links a {
+        color: rgba(255,255,255,.7); text-decoration: none;
+        padding: .4rem 1rem; border-radius: 20px;
+        border: 1px solid rgba(255,255,255,.15); font-size: .85rem;
+        margin-right: .5rem; transition: all .2s;
+    }
+    .src-header .nav-links a:hover, .src-header .nav-links a.active {
+        background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.3);
+    }
+    .report-card {
+        border: 1px solid var(--border-light);
+        border-radius: 12px; padding: 1.2rem 1.5rem;
+        margin-bottom: .8rem; cursor: pointer;
+        transition: all .2s; background: var(--bs-body-bg);
+    }
+    .report-card:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+    .report-card .badge { font-size: .75rem; }
+    .status-pending { background: #ffc107; color: #000; }
+    .status-reviewing { background: #0d6efd; color: #fff; }
+    .status-accepted { background: #198754; color: #fff; }
+    .status-resolved { background: #20c997; color: #fff; }
+    .status-closed { background: #6c757d; color: #fff; }
+    .status-duplicate { background: #adb5bd; color: #000; }
+    .sev-critical { color: #dc3545; }
+    .sev-high { color: #fd7e14; }
+    .sev-medium { color: #ffc107; }
+    .sev-low { color: #198754; }
+    .sev-info { color: #6c757d; }
+    .empty-state { text-align: center; padding: 4rem 2rem; }
+    .empty-state .icon { font-size: 4rem; margin-bottom: 1rem; }
+    .detail-modal .modal-body { max-height: 60vh; overflow-y: auto; }
+    .detail-label { font-size: .75rem; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+    .detail-value { font-size: .92rem; margin-bottom: 1rem; line-height: 1.6; }
+    .detail-value pre {
+        background: var(--code-bg); color: var(--code-color);
+        padding: .8rem; border-radius: 8px; font-size: .85rem;
+        white-space: pre-wrap; word-break: break-word;
+    }
+</style>
+
+<div class="src-container">
+    <div class="src-header">
+        <div style="position:relative;">
+            <h1>📋 我的漏洞报告</h1>
+            <div class="nav-links">
+                <a href="/src">📝 提交漏洞</a>
+                <a href="/src/my" class="active">📋 我的报告</a>
+                {% if permission == 'administrator' %}
+                <a href="/src/admin">⚙️ 管理后台</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态筛选 -->
+    <div class="d-flex gap-2 mb-3 flex-wrap" id="statusFilters">
+        <button class="btn btn-sm btn-outline-secondary active filter-btn" data-status="">全部</button>
+        <button class="btn btn-sm btn-outline-warning filter-btn" data-status="pending">待审核</button>
+        <button class="btn btn-sm btn-outline-primary filter-btn" data-status="reviewing">审核中</button>
+        <button class="btn btn-sm btn-outline-success filter-btn" data-status="accepted">已接受</button>
+        <button class="btn btn-sm btn-outline-info filter-btn" data-status="resolved">已修复</button>
+        <button class="btn btn-sm btn-outline-secondary filter-btn" data-status="closed">已关闭</button>
+    </div>
+
+    <!-- 报告列表 -->
+    <div id="reportsList">
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">加载中...</p></div>
+    </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal fade detail-modal" id="reportDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="detailTitle">漏洞详情</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="detailBody"></div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+const statusLabels = {{ status_labels|tojson }};
+const severityLabels = {{ severity_labels|tojson }};
+let currentFilter = '';
+
+async function loadReports(status) {
+    currentFilter = status || '';
+    const url = status ? `/api/src/reports?status=${status}` : '/api/src/reports';
+    try {
+        const resp = await fetch(url, { credentials: 'include' });
+        const data = await resp.json();
+        if (data.error) {
+            document.getElementById('reportsList').innerHTML =
+                `<div class="empty-state"><div class="icon">❌</div><h5>加载失败</h5><p class="text-muted">${data.error}</p></div>`;
+            return;
+        }
+        if (!data.reports || data.reports.length === 0) {
+            document.getElementById('reportsList').innerHTML =
+                `<div class="empty-state">
+                    <div class="icon">📭</div>
+                    <h5>暂无报告</h5>
+                    <p class="text-muted">您还没有提交过漏洞报告</p>
+                    <a href="/src" class="btn btn-primary mt-2">📝 提交第一个漏洞</a>
+                </div>`;
+            return;
+        }
+        renderReports(data.reports);
+    } catch(e) {
+        document.getElementById('reportsList').innerHTML =
+            `<div class="empty-state"><div class="icon">⚠️</div><h5>网络错误</h5></div>`;
+    }
+}
+
+function renderReports(reports) {
+    const html = reports.map(r => {
+        const sevClass = 'sev-' + r.severity;
+        const sevLabel = severityLabels[r.severity] || r.severity;
+        const stClass = 'status-' + r.status;
+        const stLabel = statusLabels[r.status] || r.status;
+        return `<div class="report-card" onclick="viewReport(${r.id})">
+            <div class="d-flex justify-content-between align-items-start">
+                <div style="flex:1;min-width:0;">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="${sevClass}" style="font-weight:700;">${sevLabel}</span>
+                        <span class="badge ${stClass}">${stLabel}</span>
+                        <span class="badge bg-light text-dark">${r.vuln_type}</span>
+                    </div>
+                    <h6 class="mb-1" style="font-weight:600;">${escapeHtml(r.title)}</h6>
+                    <small class="text-muted">#${r.id} · ${r.created_at.slice(0,16)}</small>
+                </div>
+                <span class="text-muted" style="font-size:1.2rem;">→</span>
+            </div>
+        </div>`;
+    }).join('');
+    document.getElementById('reportsList').innerHTML = html;
+}
+
+async function viewReport(id) {
+    try {
+        const resp = await fetch(`/api/src/report/${id}`, { credentials: 'include' });
+        const data = await resp.json();
+        if (data.error) { alert(data.error); return; }
+        const r = data.report;
+        const sevLabel = severityLabels[r.severity] || r.severity;
+        const stLabel = statusLabels[r.status] || r.status;
+        const stClass = 'status-' + r.status;
+
+        document.getElementById('detailTitle').textContent = `#${r.id} - ${r.title}`;
+        document.getElementById('detailBody').innerHTML = `
+            <div class="d-flex gap-2 mb-3">
+                <span class="badge ${stClass}">${stLabel}</span>
+                <span class="badge bg-light text-dark">${sevLabel}</span>
+                <span class="badge bg-light text-dark">${r.vuln_type}</span>
+            </div>
+            <div class="row g-3 mb-2">
+                <div class="col-6"><span class="detail-label">提交者</span><div class="detail-value">${escapeHtml(r.username)}</div></div>
+                <div class="col-6"><span class="detail-label">提交时间</span><div class="detail-value">${r.created_at ? r.created_at.slice(0,19) : '-'}</div></div>
+                ${r.affected_url ? `<div class="col-12"><span class="detail-label">受影响 URL</span><div class="detail-value"><code>${escapeHtml(r.affected_url)}</code></div></div>` : ''}
+            </div>
+            <span class="detail-label">漏洞描述</span>
+            <div class="detail-value"><pre>${escapeHtml(r.description || '-')}</pre></div>
+            ${r.steps_to_reproduce ? `<span class="detail-label">复现步骤</span><div class="detail-value"><pre>${escapeHtml(r.steps_to_reproduce)}</pre></div>` : ''}
+            ${r.impact ? `<span class="detail-label">影响范围</span><div class="detail-value"><pre>${escapeHtml(r.impact)}</pre></div>` : ''}
+            ${r.attachment ? `<span class="detail-label">附件</span><div class="detail-value"><a href="${escapeHtml(r.attachment)}" target="_blank">查看附件 →</a></div>` : ''}
+            ${r.admin_notes ? `<span class="detail-label">管理员备注</span><div class="detail-value"><pre style="background:rgba(13,110,253,.05);border-left:3px solid #0d6efd;">${escapeHtml(r.admin_notes)}</pre></div>` : ''}
+            ${r.reviewed_by ? `<div class="text-muted small mt-2">审核人: ${escapeHtml(r.reviewed_by)} · 更新时间: ${r.updated_at ? r.updated_at.slice(0,19) : '-'}</div>` : ''}
+        `;
+        new bootstrap.Modal(document.getElementById('reportDetailModal')).show();
+    } catch(e) { alert('加载失败'); }
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// 筛选按钮
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        loadReports(this.dataset.status);
+    });
+});
+
+// 初始加载
+loadReports();
+</script>
+{% endblock %}

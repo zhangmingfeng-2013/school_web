@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}安全响应中心 - 提交漏洞{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    .src-container { max-width: 900px; margin: 0 auto; }
+    .src-header {
+        background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        margin-bottom: 2rem;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+    .src-header::before {
+        content: '';
+        position: absolute;
+        top: -50%; left: -50%;
+        width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(0,198,255,.08) 0%, transparent 70%);
+        animation: srcPulse 8s ease-in-out infinite;
+    }
+    @keyframes srcPulse {
+        0%,100% { transform: translate(0,0); }
+        50% { transform: translate(20px,-20px); }
+    }
+    .src-header h1 { position: relative; font-size: 1.8rem; font-weight: 700; margin-bottom: .5rem; }
+    .src-header p { position: relative; opacity: .7; font-size: .95rem; }
+    .src-header .nav-links { position: relative; margin-top: 1rem; }
+    .src-header .nav-links a {
+        color: rgba(255,255,255,.7); text-decoration: none;
+        padding: .4rem 1rem; border-radius: 20px;
+        border: 1px solid rgba(255,255,255,.15);
+        font-size: .85rem; margin-right: .5rem; transition: all .2s;
+    }
+    .src-header .nav-links a:hover, .src-header .nav-links a.active {
+        background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.3);
+    }
+    .src-form-card {
+        background: var(--bs-body-bg);
+        border-radius: 16px;
+        border: 1px solid var(--border-light);
+        box-shadow: var(--card-shadow);
+        padding: 2rem;
+    }
+    .src-form-card .section-title {
+        font-size: 1rem; font-weight: 700; margin-bottom: 1.2rem;
+        padding-bottom: .6rem; border-bottom: 2px solid #0d6efd;
+        display: flex; align-items: center; gap: .5rem;
+    }
+    .src-form-card label { font-weight: 600; font-size: .85rem; margin-bottom: .3rem; }
+    .src-form-card .form-text { font-size: .75rem; }
+    .src-form-card textarea { font-family: 'SF Mono', monospace; font-size: .88rem; line-height: 1.6; }
+    .severity-radio { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .severity-radio input { display: none; }
+    .severity-radio label {
+        padding: .5rem 1rem; border-radius: 8px; border: 2px solid var(--border-light);
+        cursor: pointer; font-size: .85rem; font-weight: 500; transition: all .2s;
+        user-select: none;
+    }
+    .severity-radio input:checked + label { border-color: #0d6efd; background: rgba(13,110,253,.08); }
+    .severity-radio .sev-critical:checked + label { border-color: #dc3545; background: rgba(220,53,69,.08); }
+    .severity-radio .sev-high:checked + label { border-color: #fd7e14; background: rgba(253,126,20,.08); }
+    .severity-radio .sev-medium:checked + label { border-color: #ffc107; background: rgba(255,193,7,.08); }
+    .severity-radio .sev-low:checked + label { border-color: #198754; background: rgba(25,135,84,.08); }
+    .severity-radio .sev-info:checked + label { border-color: #6c757d; background: rgba(108,117,125,.08); }
+    .submit-btn {
+        padding: .8rem 2.5rem; font-size: 1rem; font-weight: 700;
+        border-radius: 10px; transition: all .2s;
+    }
+    .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(13,110,253,.3); }
+    .guidelines { font-size: .82rem; line-height: 1.7; }
+    .guidelines li { margin-bottom: .4rem; }
+    .result-toast {
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        padding: 1rem 1.5rem; border-radius: 12px; color: #fff;
+        font-weight: 600; animation: slideIn .3s ease; max-width: 400px;
+    }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .result-toast.success { background: #198754; }
+    .result-toast.error { background: #dc3545; }
+</style>
+
+<div class="src-container">
+    <!-- Header -->
+    <div class="src-header">
+        <div style="position:relative;">
+            <h1>🛡️ 安全响应中心</h1>
+            <p>发现安全漏洞？请在此提交，帮助我们让产品更安全</p>
+            <div class="nav-links">
+                <a href="/src" class="active">📝 提交漏洞</a>
+                <a href="/src/my">📋 我的报告</a>
+                {% if permission == 'administrator' %}
+                <a href="/src/admin">⚙️ 管理后台</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Submission Form -->
+    <div class="src-form-card">
+        <form id="srcForm" data-csp-submit="submitReport">
+            <!-- Section: 基本信息 -->
+            <div class="section-title">📌 基本信息</div>
+
+            <div class="mb-3">
+                <label for="srcTitle">漏洞标题 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="srcTitle"
+                       placeholder="简要描述漏洞，例如：登录页面存在 SQL 注入漏洞"
+                       maxlength="500" required>
+                <div class="form-text">请使用简洁明确的标题，不超过 500 字</div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label for="srcType">漏洞类型 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="srcType" required>
+                        <option value="">请选择漏洞类型</option>
+                        {% for t in vuln_types %}
+                        <option value="{{ t }}">{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label>危害等级 <span class="text-danger">*</span></label>
+                    <div class="severity-radio" id="severityGroup">
+                        <input type="radio" name="severity" value="critical" id="sev-critical" class="sev-critical">
+                        <label for="sev-critical">🔴 严重</label>
+                        <input type="radio" name="severity" value="high" id="sev-high" class="sev-high">
+                        <label for="sev-high">🟠 高危</label>
+                        <input type="radio" name="severity" value="medium" id="sev-medium" class="sev-medium" checked>
+                        <label for="sev-medium">🟡 中危</label>
+                        <input type="radio" name="severity" value="low" id="sev-low" class="sev-low">
+                        <label for="sev-low">🟢 低危</label>
+                        <input type="radio" name="severity" value="info" id="sev-info" class="sev-info">
+                        <label for="sev-info">ℹ️ 信息</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="srcUrl">受影响 URL / 模块</label>
+                <input type="text" class="form-control" id="srcUrl"
+                       placeholder="例如：https://example.com/login 或 /admin/dashboard"
+                       maxlength="500">
+                <div class="form-text">可选，填写漏洞影响的页面地址或功能模块</div>
+            </div>
+
+            <!-- Section: 漏洞详情 -->
+            <div class="section-title">🔍 漏洞详情</div>
+
+            <div class="mb-3">
+                <label for="srcDesc">漏洞描述 <span class="text-danger">*</span></label>
+                <textarea class="form-control" id="srcDesc" rows="5"
+                          placeholder="请详细描述漏洞：
+1. 漏洞的成因和原理
+2. 漏洞可能造成的危害
+3. 您是如何发现该漏洞的"
+                          required></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="srcSteps">复现步骤</label>
+                <textarea class="form-control" id="srcSteps" rows="4"
+                          placeholder="请提供详细的复现步骤：
+1. 访问 xxx 页面
+2. 输入 xxx
+3. 点击 xxx 按钮
+4. 观察到 xxx 异常行为"></textarea>
+                <div class="form-text">详细的复现步骤有助于快速定位和修复问题</div>
+            </div>
+
+            <div class="mb-4">
+                <label for="srcImpact">影响范围</label>
+                <textarea class="form-control" id="srcImpact" rows="3"
+                          placeholder="描述该漏洞可能影响的范围和用户群体"></textarea>
+            </div>
+
+            <!-- Section: 附件 -->
+            <div class="section-title">📎 附件信息</div>
+
+            <div class="mb-3">
+                <label for="srcAttachment">截图 / PoC 链接</label>
+                <input type="text" class="form-control" id="srcAttachment"
+                       placeholder="https:// 或 /static/ 开头的链接"
+                       maxlength="500">
+                <div class="form-text">可提供截图链接、PoC 视频链接等辅助材料</div>
+            </div>
+
+            <!-- 提交指南 -->
+            <div class="card bg-light mb-4">
+                <div class="card-body">
+                    <h6 class="mb-2">📖 提交指南</h6>
+                    <ul class="guidelines mb-0">
+                        <li>请确保漏洞真实存在，不要提交虚假报告</li>
+                        <li>提供详细的复现步骤有助于获得更高评级</li>
+                        <li>请勿在未授权的情况下利用漏洞获取他人数据</li>
+                        <li>提交后管理员会在 3 个工作日内审核</li>
+                        <li>同一漏洞以最先提交者为准</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <button type="submit" class="btn btn-primary submit-btn" id="submitBtn">
+                    🚀 提交漏洞报告
+                </button>
+                <span class="text-muted small">提交即表示您同意遵守安全响应中心规则</span>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// ===== CSP 事件绑定 =====
+document.getElementById('srcForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ 提交中...';
+
+    const severity = document.querySelector('input[name="severity"]:checked');
+    const data = {
+        title: document.getElementById('srcTitle').value.trim(),
+        vuln_type: document.getElementById('srcType').value,
+        severity: severity ? severity.value : 'medium',
+        affected_url: document.getElementById('srcUrl').value.trim(),
+        description: document.getElementById('srcDesc').value.trim(),
+        steps_to_reproduce: document.getElementById('srcSteps').value.trim(),
+        impact: document.getElementById('srcImpact').value.trim(),
+        attachment: document.getElementById('srcAttachment').value.trim()
+    };
+
+    try {
+        const resp = await fetch('/api/src/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await resp.json();
+
+        if (result.ok) {
+            showToast(result.message, 'success');
+            // 清空表单
+            document.getElementById('srcForm').reset();
+            document.querySelector('input[name="severity"][value="medium"]').checked = true;
+            // 滚动到顶部
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            btn.innerHTML = '✅ 提交成功！';
+            setTimeout(() => { btn.innerHTML = '🚀 提交漏洞报告'; btn.disabled = false; }, 3000);
+        } else {
+            showToast(result.error || '提交失败', 'error');
+            btn.innerHTML = '🚀 提交漏洞报告';
+            btn.disabled = false;
+        }
+    } catch(err) {
+        showToast('网络错误，请稍后重试', 'error');
+        btn.innerHTML = '🚀 提交漏洞报告';
+        btn.disabled = false;
+    }
+});
+
+function showToast(msg, type) {
+    const toast = document.createElement('div');
+    toast.className = 'result-toast ' + type;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 4000);
+}
+</script>
+{% endblock %}

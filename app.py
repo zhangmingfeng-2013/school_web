@@ -251,9 +251,10 @@ _db_init_done = False
 def _init_db_once():
     global _db_init_done
     if not _db_init_done:
-        _db_init_done = True
+        _init_db_done = True
         _init_reset_table()
         _init_marketplace_table()
+        _init_src_table()
 
 
 def _init_reset_table():
@@ -355,6 +356,41 @@ def _init_marketplace_table():
                 uploader VARCHAR(50) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError:
+        pass
+
+
+def _init_src_table():
+    """确保 src_reports 表存在 — 安全响应中心漏洞报告"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS src_reports (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                title VARCHAR(500) NOT NULL,
+                vuln_type VARCHAR(50) NOT NULL,
+                severity VARCHAR(20) NOT NULL DEFAULT 'medium',
+                affected_url VARCHAR(500),
+                description TEXT NOT NULL,
+                steps_to_reproduce TEXT,
+                impact TEXT,
+                attachment VARCHAR(500),
+                status VARCHAR(20) DEFAULT 'pending',
+                admin_notes TEXT,
+                reviewed_by VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_src_user (username),
+                INDEX idx_src_status (status)
             )
         """)
         conn.commit()
@@ -657,8 +693,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/")
 
 @app.before_request
 def check_global_captcha():
@@ -6522,6 +6558,273 @@ def _init_plugins():
             plugins.load_plugin(p["name"])
         except Exception:
             pass
+
+
+# ---------- 启动 ----------
+# ---------- 路由：安全响应中心（SRC） ----------
+
+# 漏洞类型列表
+VULN_TYPES = [
+    "SQL 注入", "XSS 跨站脚本", "CSRF 跨站请求伪造", "SSRF 服务端请求伪造",
+    "文件上传漏洞", "文件包含漏洞", "命令注入", "代码注入",
+    "权限绕过", "未授权访问", "敏感信息泄露", "逻辑漏洞",
+    "弱口令", "会话固定", "点击劫持", "CORS 配置错误",
+    "目录遍历", "XXE 外部实体注入", "反序列化漏洞", "其他"
+]
+
+SEVERITY_LEVELS = ["critical", "high", "medium", "low", "info"]
+SEVERITY_LABELS = {
+    "critical": "🔴 严重", "high": "🟠 高危", "medium": "🟡 中危",
+    "low": "🟢 低危", "info": "ℹ️ 信息"
+}
+STATUS_LABELS = {
+    "pending": "待审核", "reviewing": "审核中", "accepted": "已接受",
+    "resolved": "已修复", "closed": "已关闭", "duplicate": "重复报告"
+}
+
+
+@app.route("/src")
+@login_required
+def src_submit():
+    """安全响应中心 - 漏洞提交页面（任何登录用户可访问）"""
+    return render_template("src_submit.html",
+                           username=session["username"],
+                           permission=session["permission"],
+                           vuln_types=VULN_TYPES,
+                           severity_levels=SEVERITY_LEVELS,
+                           severity_labels=SEVERITY_LABELS)
+
+
+@app.route("/src/my")
+@login_required
+def src_my_reports():
+    """我的漏洞报告列表"""
+    return render_template("src_my.html",
+                           username=session["username"],
+                           permission=session["permission"],
+                           status_labels=STATUS_LABELS,
+                           severity_labels=SEVERITY_LABELS)
+
+
+@app.route("/src/admin")
+@login_required
+@admin_required
+def src_admin():
+    """安全响应中心管理后台（仅管理员）"""
+    return render_template("src_admin.html",
+                           username=session["username"],
+                           permission=session["permission"],
+                           vuln_types=VULN_TYPES,
+                           severity_levels=SEVERITY_LEVELS,
+                           severity_labels=SEVERITY_LABELS,
+                           status_labels=STATUS_LABELS)
+
+
+@app.route("/api/src/submit", methods=["POST"])
+@login_required
+def api_src_submit():
+    """提交漏洞报告"""
+    _init_db_once()
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    vuln_type = (data.get("vuln_type") or "").strip()
+    severity = (data.get("severity") or "medium").strip()
+    affected_url = (data.get("affected_url") or "").strip()
+    description = (data.get("description") or "").strip()
+    steps = (data.get("steps_to_reproduce") or "").strip()
+    impact = (data.get("impact") or "").strip()
+    attachment = (data.get("attachment") or "").strip()
+
+    # 校验必填字段
+    if not title or not description:
+        return jsonify({"error": "漏洞标题和描述为必填项"}), 400
+    if vuln_type not in VULN_TYPES:
+        return jsonify({"error": "无效的漏洞类型"}), 400
+    if severity not in SEVERITY_LEVELS:
+        return jsonify({"error": "无效的严重等级"}), 400
+    if len(title) > 500:
+        return jsonify({"error": "标题长度不能超过 500 字符"}), 400
+
+    # 附件 URL 白名单校验
+    if attachment:
+        if not attachment.startswith(("http://", "https://", "/static/", "/uploads/")):
+            return jsonify({"error": "附件链接格式无效"}), 400
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO src_reports (username, title, vuln_type, severity, affected_url,
+                                     description, steps_to_reproduce, impact, attachment)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (session["username"], title, vuln_type, severity, affected_url,
+              description, steps, impact, attachment or None))
+        conn.commit()
+        report_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True, "id": report_id, "message": "漏洞报告已提交，感谢您的贡献！"})
+    except Exception as e:
+        return jsonify({"error": f"提交失败: {str(e)}"}), 500
+
+
+@app.route("/api/src/reports")
+@login_required
+def api_src_reports():
+    """获取漏洞报告列表（管理员看全部，普通用户看自己的）"""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        is_admin = session.get("permission") == "administrator"
+        status_filter = request.args.get("status", "").strip()
+
+        if is_admin:
+            if status_filter and status_filter in STATUS_LABELS:
+                cursor.execute(
+                    "SELECT id, username, title, vuln_type, severity, status, created_at, updated_at "
+                    "FROM src_reports WHERE status=%s ORDER BY created_at DESC",
+                    (status_filter,)
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, username, title, vuln_type, severity, status, created_at, updated_at "
+                    "FROM src_reports ORDER BY created_at DESC"
+                )
+        else:
+            if status_filter and status_filter in STATUS_LABELS:
+                cursor.execute(
+                    "SELECT id, username, title, vuln_type, severity, status, created_at, updated_at "
+                    "FROM src_reports WHERE username=%s AND status=%s ORDER BY created_at DESC",
+                    (session["username"], status_filter)
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, username, title, vuln_type, severity, status, created_at, updated_at "
+                    "FROM src_reports WHERE username=%s ORDER BY created_at DESC",
+                    (session["username"],)
+                )
+
+        reports = []
+        for row in cursor.fetchall():
+            reports.append({
+                "id": row[0], "username": row[1], "title": row[2],
+                "vuln_type": row[3], "severity": row[4], "status": row[5],
+                "created_at": str(row[6]) if row[6] else "",
+                "updated_at": str(row[7]) if row[7] else "",
+            })
+        cursor.close()
+        conn.close()
+        return jsonify({"reports": reports, "is_admin": is_admin})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/src/report/<int:report_id>")
+@login_required
+def api_src_report_detail(report_id):
+    """获取单个漏洞报告详情"""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        is_admin = session.get("permission") == "administrator"
+        if is_admin:
+            cursor.execute(
+                "SELECT * FROM src_reports WHERE id=%s", (report_id,)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM src_reports WHERE id=%s AND username=%s",
+                (report_id, session["username"])
+            )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "报告不存在或无权查看"}), 404
+
+        cols = [d[0] for d in cursor.description]
+        r = dict(zip(cols, row))
+        # 转换 datetime
+        for k in ("created_at", "updated_at"):
+            if r.get(k):
+                r[k] = str(r[k])
+        cursor.close()
+        conn.close()
+        return jsonify({"report": r, "is_admin": is_admin})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/src/report/<int:report_id>/update", methods=["POST"])
+@login_required
+@admin_required
+def api_src_report_update(report_id):
+    """管理员更新报告状态/添加备注"""
+    data = request.get_json(silent=True) or {}
+    new_status = (data.get("status") or "").strip()
+    admin_notes = (data.get("admin_notes") or "").strip()
+
+    if new_status and new_status not in STATUS_LABELS:
+        return jsonify({"error": "无效的状态值"}), 400
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        updates = []
+        params = []
+        if new_status:
+            updates.append("status=%s")
+            params.append(new_status)
+        if admin_notes:
+            updates.append("admin_notes=%s")
+            params.append(admin_notes)
+        updates.append("reviewed_by=%s")
+        params.append(session["username"])
+        params.append(report_id)
+
+        sql = f"UPDATE src_reports SET {', '.join(updates)} WHERE id=%s"
+        cursor.execute(sql, params)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True, "message": "报告状态已更新"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/src/stats")
+@login_required
+@admin_required
+def api_src_stats():
+    """获取 SRC 统计数据（管理员）"""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM src_reports")
+        total = cursor.fetchone()[0]
+        cursor.execute("SELECT status, COUNT(*) FROM src_reports GROUP BY status")
+        by_status = {row[0]: row[1] for row in cursor.fetchall()}
+        cursor.execute("SELECT severity, COUNT(*) FROM src_reports GROUP BY severity")
+        by_severity = {row[0]: row[1] for row in cursor.fetchall()}
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "total": total,
+            "by_status": by_status,
+            "by_severity": by_severity,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ---------- 启动 ----------
