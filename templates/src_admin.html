@@ -237,6 +237,7 @@ async function viewReport(id) {
             ${r.steps_to_reproduce ? `<div class="detail-section"><span class="detail-label">复现步骤</span><div class="detail-value"><pre>${escapeHtml(r.steps_to_reproduce)}</pre></div></div>` : ''}
             ${r.impact ? `<div class="detail-section"><span class="detail-label">影响范围</span><div class="detail-value"><pre>${escapeHtml(r.impact)}</pre></div></div>` : ''}
             ${r.attachment ? `<div class="detail-section"><span class="detail-label">附件</span><div class="detail-value"><a href="${escapeHtml(r.attachment)}" target="_blank" rel="noopener">🔗 查看附件</a></div></div>` : ''}
+            ${r.wechat_contact ? `<div class="detail-section"><span class="detail-label">💰 微信联系方式</span><div class="detail-value" style="font-weight:600; color:#07c160;">${escapeHtml(r.wechat_contact)}</div></div>` : '<div class="detail-section"><span class="detail-label">💰 微信联系方式</span><div class="detail-value text-muted">未填写（无奖金联系方式）</div></div>'}
             <div class="detail-section">
                 <span class="detail-label">管理员备注</span>
                 <textarea class="form-control" id="adminNotes" rows="3" style="font-size:.85rem;"

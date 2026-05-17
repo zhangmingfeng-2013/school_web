@@ -139,11 +139,11 @@
             </div>
 
             <div class="mb-4">
-                <label for="srcUrl">受影响 URL / 模块</label>
+                <label for="srcUrl">受影响 URL / 模块 <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" id="srcUrl"
                        placeholder="例如：https://example.com/login 或 /admin/dashboard"
-                       maxlength="500">
-                <div class="form-text">可选，填写漏洞影响的页面地址或功能模块</div>
+                       maxlength="500" required>
+                <div class="form-text">填写漏洞影响的页面地址或功能模块</div>
             </div>
 
             <!-- Section: 漏洞详情 -->
@@ -185,6 +185,17 @@
                        placeholder="https:// 或 /static/ 开头的链接"
                        maxlength="500">
                 <div class="form-text">可提供截图链接、PoC 视频链接等辅助材料</div>
+            </div>
+
+            <!-- Section: 联系方式 -->
+            <div class="section-title">💰 联系方式（用于发放奖金）</div>
+
+            <div class="mb-3">
+                <label for="srcWechat">微信手机号 / 微信号</label>
+                <input type="text" class="form-control" id="srcWechat"
+                       placeholder="请输入微信绑定的手机号或微信号，管理员审核通过后将通过此联系方式发放奖金"
+                       maxlength="100">
+                <div class="form-text">🔒 仅管理员可见，请放心填写。精确的联系方式有助于奖金及时到账</div>
             </div>
 
             <!-- 提交指南 -->
@@ -230,7 +241,8 @@ document.getElementById('srcForm').addEventListener('submit', async function(e) 
         description: document.getElementById('srcDesc').value.trim(),
         steps_to_reproduce: document.getElementById('srcSteps').value.trim(),
         impact: document.getElementById('srcImpact').value.trim(),
-        attachment: document.getElementById('srcAttachment').value.trim()
+        attachment: document.getElementById('srcAttachment').value.trim(),
+        wechat_contact: document.getElementById('srcWechat').value.trim()
     };
 
     try {

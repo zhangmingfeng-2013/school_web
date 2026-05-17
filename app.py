@@ -251,10 +251,10 @@ _db_init_done = False
 def _init_db_once():
     global _db_init_done
     if not _db_init_done:
-        _init_db_done = True
         _init_reset_table()
         _init_marketplace_table()
         _init_src_table()
+        _init_db_done = True
 
 
 def _init_reset_table():
@@ -383,14 +383,15 @@ def _init_src_table():
                 description TEXT NOT NULL,
                 steps_to_reproduce TEXT,
                 impact TEXT,
-                attachment VARCHAR(500),
-                status VARCHAR(20) DEFAULT 'pending',
-                admin_notes TEXT,
-                reviewed_by VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_src_user (username),
-                INDEX idx_src_status (status)
+            attachment VARCHAR(500),
+            wechat_contact VARCHAR(100) DEFAULT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            admin_notes TEXT,
+            reviewed_by VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_src_user (username),
+            INDEX idx_src_status (status)
             )
         """)
         conn.commit()
@@ -6634,10 +6635,11 @@ def api_src_submit():
     steps = (data.get("steps_to_reproduce") or "").strip()
     impact = (data.get("impact") or "").strip()
     attachment = (data.get("attachment") or "").strip()
+    wechat_contact = (data.get("wechat_contact") or "").strip()
 
     # 校验必填字段
-    if not title or not description:
-        return jsonify({"error": "漏洞标题和描述为必填项"}), 400
+    if not title or not affected_url or not description:
+        return jsonify({"error": "漏洞标题、受影响URL和描述为必填项"}), 400
     if vuln_type not in VULN_TYPES:
         return jsonify({"error": "无效的漏洞类型"}), 400
     if severity not in SEVERITY_LEVELS:
@@ -6657,10 +6659,10 @@ def api_src_submit():
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO src_reports (username, title, vuln_type, severity, affected_url,
-                                     description, steps_to_reproduce, impact, attachment)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                                     description, steps_to_reproduce, impact, attachment, wechat_contact)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (session["username"], title, vuln_type, severity, affected_url,
-              description, steps, impact, attachment or None))
+              description, steps, impact, attachment or None, wechat_contact or None))
         conn.commit()
         report_id = cursor.lastrowid
         cursor.close()
