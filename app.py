@@ -492,50 +492,62 @@ def api_captcha():
     import random as _random
     code = _generate_captcha()  # 统一使用预生成函数，与表单 code 一致
 
-    # 创建验证码图片
-    width, height = 140, 50
-    img = Image.new("RGB", (width, height), (255, 255, 255))
+    # 创建验证码图片（加大尺寸，字体更大更清晰）
+    width, height = 200, 70
+    img = Image.new("RGB", (width, height), (248, 248, 248))
     draw = ImageDraw.Draw(img)
 
     # 轻量背景噪点
     for x in range(width):
         for y in range(height):
-            if _random.random() < 0.15:
+            if _random.random() < 0.12:
                 draw.point((x, y), fill=(_random.randint(220, 255), _random.randint(220, 255), _random.randint(220, 255)))
 
     # 1 条曲线干扰
     points = [(_random.randint(0, width), _random.randint(0, height)) for _ in range(4)]
     for j in range(len(points) - 1):
-        draw.line([points[j], points[j+1]], fill=(_random.randint(180, 230), _random.randint(180, 230), _random.randint(180, 230)), width=1)
+        draw.line([points[j], points[j+1]], fill=(_random.randint(180, 230), _random.randint(180, 230), _random.randint(180, 230)), width=2)
 
     # 3 条短直线
     for _ in range(3):
         x1, y1 = _random.randint(10, width - 10), _random.randint(5, height - 5)
-        x2, y2 = x1 + _random.randint(-30, 30), y1 + _random.randint(-15, 15)
+        x2, y2 = x1 + _random.randint(-40, 40), y1 + _random.randint(-20, 20)
         draw.line([(x1, y1), (x2, y2)], fill=(_random.randint(180, 230), _random.randint(180, 230), _random.randint(180, 230)), width=1)
 
     # 少量随机点
-    for _ in range(60):
+    for _ in range(80):
         x, y = _random.randint(0, width), _random.randint(0, height)
         draw.point((x, y), fill=(_random.randint(100, 200), _random.randint(100, 200), _random.randint(100, 200)))
 
-    # 绘制文字（扭曲）
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
-    except:
+    # 绘制文字 — 多个字体 fallback，字号加大到 44
+    font = None
+    font_size = 44
+    font_paths = [
+        "/System/Library/Fonts/Helvetica.ttc",           # macOS
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux/Docker
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",  # Docker 中文字体
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    ]
+    for fp in font_paths:
+        try:
+            font = ImageFont.truetype(fp, font_size)
+            break
+        except Exception:
+            continue
+    if font is None:
         font = ImageFont.load_default()
 
     for i, ch in enumerate(code):
         # 每个字符单独创建并旋转
-        char_img = Image.new("RGBA", (40, 48), (0, 0, 0, 0))
+        char_img = Image.new("RGBA", (52, 60), (0, 0, 0, 0))
         char_draw = ImageDraw.Draw(char_img)
-        color = (_random.randint(0, 60), _random.randint(0, 80), _random.randint(160, 255))
-        char_draw.text((4, 2), ch, font=font, fill=color)
+        color = (_random.randint(0, 50), _random.randint(0, 70), _random.randint(140, 240))
+        char_draw.text((6, 0), ch, font=font, fill=color)
         # 轻度旋转
-        angle = _random.randint(-15, 15)
+        angle = _random.randint(-18, 18)
         char_img = char_img.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
-        x = 10 + i * 30 + _random.randint(-4, 4)
-        y = _random.randint(2, 8)
+        x = 14 + i * 42 + _random.randint(-4, 4)
+        y = _random.randint(5, 14)
         img.paste(char_img, (x, y), char_img)
 
     # 轻微模糊
@@ -676,16 +688,18 @@ def check_global_captcha():
 
 # ---------- 配置 ----------
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "root@123456",
-    "database": "sample"
+    "host": os.environ.get("DB_HOST", "localhost"),
+    "port": int(os.environ.get("DB_PORT", "3306")),
+    "user": os.environ.get("DB_USER", "root"),
+    "password": os.environ.get("DB_PASSWORD", "root@123456"),
+    "database": os.environ.get("DB_NAME", "sample"),
 }
 ALBUM_DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "root@123456",
-    "database": "sample"
+    "host": os.environ.get("DB_HOST", "localhost"),
+    "port": int(os.environ.get("DB_PORT", "3306")),
+    "user": os.environ.get("DB_USER", "root"),
+    "password": os.environ.get("DB_PASSWORD", "root@123456"),
+    "database": os.environ.get("DB_NAME", "sample"),
 }
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "asdfghjkl;'")
 LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "app.log")
@@ -878,6 +892,27 @@ def _init_album_tables(conn):
             requester VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uk_pair (user1, user2)
+        )
+    """)
+    # AI 对话记录
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_conversations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            role VARCHAR(10) NOT NULL COMMENT 'user or assistant',
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user (username, created_at)
+        )
+    """)
+    # AI 配置
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_config (
+            username VARCHAR(50) PRIMARY KEY,
+            provider_url VARCHAR(500) NOT NULL,
+            api_key_encrypted VARCHAR(500) NOT NULL,
+            model_name VARCHAR(100) DEFAULT 'gpt-3.5-turbo',
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
@@ -3816,6 +3851,217 @@ def api_chat_recall(mid):
     return jsonify({"success": True})
 
 
+# ---------- AI 机器人 ----------
+
+def _ai_encrypt(text):
+    """简单加密 API Key（与 SECRET_KEY 异或 + Base64）"""
+    import base64
+    key = app.secret_key or "default_key"
+    key_bytes = (key * ((len(text.encode()) // len(key)) + 2)).encode()
+    xored = bytes(a ^ b for a, b in zip(text.encode(), key_bytes))
+    return base64.urlsafe_b64encode(xored).decode()
+
+def _ai_decrypt(encrypted):
+    """解密"""
+    import base64
+    key = app.secret_key or "default_key"
+    data = base64.urlsafe_b64decode(encrypted.encode())
+    key_bytes = (key * ((len(data) // len(key)) + 2)).encode()
+    return bytes(a ^ b for a, b in zip(data, key_bytes)).decode()
+
+
+@app.route("/api/chat/ai/config", methods=["GET", "POST"])
+@login_required
+def api_chat_ai_config():
+    """获取/保存 AI 配置"""
+    user = session["username"]
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+
+    if request.method == "GET":
+        cursor = conn.cursor()
+        cursor.execute("SELECT provider_url, model_name, api_key_encrypted FROM ai_config WHERE username=%s", (user,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if row:
+            return jsonify({
+                "provider_url": row[0],
+                "model_name": row[1],
+                "has_key": bool(row[2])
+            })
+        return jsonify({"provider_url": "", "model_name": "gpt-3.5-turbo", "has_key": False})
+
+    # POST: 保存配置
+    data = request.get_json() or {}
+    provider_url = sanitize_input(data.get("provider_url", ""), 500)
+    model_name = sanitize_input(data.get("model_name", "gpt-3.5-turbo"), 100)
+    api_key = data.get("api_key", "")
+
+    if not provider_url:
+        return jsonify({"error": "请填写 API 地址"}), 400
+    if not api_key:
+        return jsonify({"error": "请填写 API Key"}), 400
+
+    encrypted = _ai_encrypt(api_key)
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO ai_config (username, provider_url, api_key_encrypted, model_name)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE provider_url=VALUES(provider_url),
+                                api_key_encrypted=VALUES(api_key_encrypted),
+                                model_name=VALUES(model_name)
+    """, (user, provider_url, encrypted, model_name))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/chat/ai/messages")
+@login_required
+def api_chat_ai_messages():
+    """获取 AI 对话历史"""
+    user = session["username"]
+    limit = min(int(request.args.get("limit", 50)), 200)
+    conn = get_album_db()
+    if not conn:
+        return jsonify([])
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, role, content, created_at FROM ai_conversations WHERE username=%s ORDER BY id DESC LIMIT %s",
+        (user, limit)
+    )
+    cols = [d[0] for d in cursor.description]
+    rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+    for r in rows:
+        r["created_at"] = str(r["created_at"])
+    cursor.close()
+    conn.close()
+    rows.reverse()
+    return jsonify(rows)
+
+
+@app.route("/api/chat/ai/ask", methods=["POST"])
+@login_required
+def api_chat_ai_ask():
+    """向 AI 发送消息并获取回复"""
+    user = session["username"]
+    data = request.get_json() or {}
+    message = sanitize_input(data.get("message", ""), 4000)
+    if not message:
+        return jsonify({"error": "消息不能为空"}), 400
+
+    # 加载用户配置
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("SELECT provider_url, api_key_encrypted, model_name FROM ai_config WHERE username=%s", (user,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "请先配置 AI 机器人（点击侧边栏 ⚙️ 设置）"}), 400
+
+    provider_url, api_key_encrypted, model_name = row
+    try:
+        api_key = _ai_decrypt(api_key_encrypted)
+    except Exception:
+        return jsonify({"error": "API Key 解密失败，请重新设置"}), 500
+
+    # 获取最近对话历史作为上下文
+    conn = get_album_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT role, content FROM ai_conversations WHERE username=%s ORDER BY id DESC LIMIT 20",
+        (user,)
+    )
+    history = list(cursor.fetchall())
+    history.reverse()
+    cursor.close()
+    conn.close()
+
+    # 构建消息列表
+    system_prompt = "你是一个有用的 AI 助手，内置于多合一工具箱中。请用简洁、友好的方式回答问题。"
+    messages = [{"role": "system", "content": system_prompt}]
+    for role, content in history:
+        messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": message})
+
+    # 保存用户消息
+    conn = get_album_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO ai_conversations (username, role, content) VALUES (%s, %s, %s)",
+                   (user, "user", message))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    # 调用 AI 提供商 API
+    api_url = provider_url.rstrip("/")
+    if not api_url.endswith("/chat/completions"):
+        api_url += "/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 2000
+    }
+
+    try:
+        resp = requests.post(api_url, json=payload, headers=headers, timeout=60)
+        if resp.status_code != 200:
+            err_text = resp.text[:300]
+            return jsonify({"error": f"AI API 返回错误 ({resp.status_code}): {err_text}"}), 502
+
+        result = resp.json()
+        ai_reply = result["choices"][0]["message"]["content"]
+
+        # 保存 AI 回复
+        conn = get_album_db()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO ai_conversations (username, role, content) VALUES (%s, %s, %s)",
+                       (user, "assistant", ai_reply))
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({"reply": ai_reply})
+
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "AI API 请求超时（60秒）"}), 504
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": f"无法连接到 {provider_url}，请检查 API 地址"}), 502
+    except Exception as e:
+        return jsonify({"error": f"请求失败: {str(e)}"}), 500
+
+
+@app.route("/api/chat/ai/clear", methods=["POST"])
+@login_required
+def api_chat_ai_clear():
+    """清空当前用户的 AI 对话历史"""
+    user = session["username"]
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "DB"}), 500
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM ai_conversations WHERE username=%s", (user,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({"success": True})
+
+
 
 def _safe_realpath(path):
     """确保路径是真实路径且不包含 '..' 路径穿越"""
@@ -6303,4 +6549,4 @@ if __name__ == "__main__":
     import werkzeug.serving
     werkzeug.serving.WSGIRequestHandler.version_string = lambda self: ""
     werkzeug.serving.WSGIRequestHandler.sys_version = ''
-    app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
+    app.run(host="0.0.0.0", port=12343, debug=debug_mode, threaded=True)

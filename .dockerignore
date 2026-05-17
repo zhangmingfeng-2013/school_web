@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+env
+*.egg-info
+
+# PyInstaller
+build/
+dist/
+
+# Node
+frontend/node_modules
+frontend/.idea
+
+# macOS
+.DS_Store
+
+# Temp/Runtime
+*.log
+.secret_key
+rate_limiter.json
+.qoder
+.workflow
+
+# Docs (keep README)
+安全措施清单.md

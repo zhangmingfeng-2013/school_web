@@ -441,12 +441,12 @@ document.addEventListener('click', function(e) {
     if (!lays.length) return;
     var obs = new IntersectionObserver(function(entries) {
         entries.forEach(function(e) {
-            if (e.isIntersecting) {
+            if (e.isIntersecting && e.intersectionRatio > 0.25) {
                 e.target.classList.add('visible');
                 obs.unobserve(e.target);
             }
         });
-    }, { threshold: 0.05 });
+    }, { threshold: [0, 0.25] });
     lays.forEach(function(el) { obs.observe(el); });
     // 立即触发已可见的元素
     requestAnimationFrame(function() {
@@ -516,12 +516,12 @@ document.addEventListener('click', function(e) {
         });
     }
 
-    // IntersectionObserver 兜底
+    // IntersectionObserver 兜底 — 需要截面超过 40% 进入视口才开始动画
     var obs = new IntersectionObserver(function(entries) {
         entries.forEach(function(e) {
-            if (e.isIntersecting) { animateBars(); obs.unobserve(e.target); }
+            if (e.isIntersecting && e.intersectionRatio > 0.35) { animateBars(); obs.unobserve(e.target); }
         });
-    }, { threshold: 0.05 });
+    }, { threshold: [0, 0.35] });
     obs.observe(section);
 
     // 立即检测（防止 observer 已错过）

@@ -1,39 +1,93 @@
 {% extends "base.html" %}
 {% block title %}聊天 - 多合一工具箱{% endblock %}
 {% block content %}
-<div style="display:flex;height:calc(100vh - 120px);min-height:500px;border:1px solid #ddd;border-radius:10px;overflow:hidden;background:#fff">
-    <div id="sidebar" style="width:220px;background:#f8f9fa;border-right:1px solid #ddd;display:flex;flex-direction:column">
-        <div style="padding:12px;border-bottom:1px solid #ddd;font-weight:700">💬 聊天</div>
+<div class="chat-container">
+    <div id="sidebar" class="chat-sidebar">
+        <div class="chat-sidebar-title">
+            💬 聊天
+            <button data-csp-click="openAISettings" class="ai-settings-btn" title="AI 机器人设置">⚙️</button>
+        </div>
         <button data-csp-click="switchToWorld" id="worldBtn" class="ch-btn active">🌍 世界频道</button>
-        <div style="font-size:12px;color:#999;padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
-            好友 <button data-csp-click="toggleSearch" style="background:none;border:none;cursor:pointer">🔍</button>
+        <button data-csp-click="switchToAI" id="aiBtn" class="ch-btn">🤖 AI 助手</button>
+        <div class="chat-friends-header">
+            好友 <button data-csp-click="toggleSearch" class="chat-search-btn">🔍</button>
         </div>
-        <div id="searchBox" style="display:none;padding:4px 8px;position:relative">
-            <input id="searchQ" placeholder="搜索昵称..." style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:13px" data-csp-enter="doSearch">
-            <div id="searchResults" style="display:none;position:absolute;top:100%;left:8px;right:8px;background:#fff;border:1px solid #ddd;border-radius:6px;z-index:10;max-height:150px;overflow-y:auto"></div>
+        <div id="searchBox" class="chat-search-box">
+            <input id="searchQ" placeholder="搜索昵称..." class="chat-search-input" data-csp-enter="doSearch">
+            <div id="searchResults" class="chat-search-results"></div>
         </div>
-        <div id="friendReqs" style="font-size:11px;color:#f60;padding:4px 8px;display:none">好友请求</div>
+        <div id="friendReqs" class="chat-friend-reqs">好友请求</div>
         <div id="friendReqsList"></div>
-        <div id="friendList" style="flex:1;overflow-y:auto;padding:4px 8px"></div>
+        <div id="friendList" class="chat-friend-list"></div>
     </div>
 
-    <div style="flex:1;display:flex;flex-direction:column">
-        <div id="chatHeader" style="padding:10px 14px;border-bottom:1px solid #ddd;font-weight:700">🌍 世界频道</div>
-        <div id="messages" style="flex:1;overflow-y:auto;padding:14px;background:#fafafa">
-            <div style="text-align:center;color:#999;padding:60px">暂无消息，开始聊天吧！</div>
+    <div class="chat-main">
+        <div id="chatHeader" class="chat-header">
+            🌍 世界频道
+            <button id="aiClearBtn" data-csp-click="clearAIHistory" class="ai-clear-btn">🗑️ 清空对话</button>
         </div>
-        <div style="display:flex;gap:8px;padding:10px 14px;border-top:1px solid #ddd">
-            <input id="msgInput" placeholder="发消息..." maxlength="1000" style="flex:1;padding:8px 14px;border:1px solid #ddd;border-radius:20px;font-size:14px" data-csp-enter="sendMsg">
-            <button data-csp-click="sendMsg" style="padding:6px 20px;background:#04c;color:#fff;border:none;border-radius:20px;cursor:pointer;font-size:14px">发送</button>
+        <div id="messages" class="chat-messages">
+            <div class="chat-empty">暂无消息，开始聊天吧！</div>
+        </div>
+        <div class="chat-input-row">
+            <input id="msgInput" placeholder="发消息..." maxlength="4000" class="chat-input" data-csp-enter="sendMsg">
+            <button data-csp-click="sendMsg" class="chat-send-btn">发送</button>
         </div>
     </div>
 </div>
 
-<div id="ctxMenu" style="display:none;position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:1000">
-    <div data-csp-click="recallMsg" style="padding:8px 16px;cursor:pointer;font-size:13px">↩️ 撤回消息</div>
+<div id="ctxMenu" class="chat-ctx-menu">
+    <div data-csp-click="recallMsg" class="chat-ctx-item">↩️ 撤回消息</div>
+</div>
+
+<!-- AI 设置弹窗 -->
+<div id="aiSettingsOverlay" class="ai-modal-overlay">
+    <div class="ai-modal">
+        <div class="ai-modal-header">
+            🤖 AI 机器人设置
+            <button data-csp-click="closeAISettings" class="ai-modal-close">&times;</button>
+        </div>
+        <div class="ai-modal-body">
+            <label>API 地址</label>
+            <input id="aiProviderUrl" placeholder="https://api.openai.com/v1" class="ai-input">
+            <small>支持任何 OpenAI 兼容接口（如 DeepSeek、通义千问、智谱等）</small>
+
+            <label>模型名称</label>
+            <input id="aiModelName" placeholder="gpt-4o-mini" class="ai-input">
+            <small>例如 gpt-4o-mini, deepseek-chat, qwen-plus</small>
+
+            <label>API Key</label>
+            <input id="aiApiKey" type="password" placeholder="sk-..." class="ai-input">
+            <small>密钥已保存，重新输入才会更新。留空则使用已保存的密钥</small>
+        </div>
+        <div class="ai-modal-footer">
+            <button data-csp-click="closeAISettings" class="ai-btn-secondary">取消</button>
+            <button data-csp-click="saveAISettings" class="ai-btn-primary">保存</button>
+        </div>
+    </div>
 </div>
 
 <style nonce="{{ csp_nonce }}">
+/* ===== 聊天布局 ===== */
+.chat-container { display:flex; height:calc(100vh - 120px); min-height:500px; border:1px solid #ddd; border-radius:10px; overflow:hidden; background:#fff }
+.chat-sidebar { width:220px; background:#f8f9fa; border-right:1px solid #ddd; display:flex; flex-direction:column }
+.chat-main { flex:1; display:flex; flex-direction:column }
+.chat-header { padding:10px 14px; border-bottom:1px solid #ddd; font-weight:700; display:flex; justify-content:space-between; align-items:center }
+.chat-messages { flex:1; overflow-y:auto; padding:14px; background:#fafafa }
+.chat-input-row { display:flex; gap:8px; padding:10px 14px; border-top:1px solid #ddd }
+.chat-input { flex:1; padding:8px 14px; border:1px solid #ddd; border-radius:20px; font-size:14px }
+.chat-send-btn { padding:6px 20px; background:#04c; color:#fff; border:none; border-radius:20px; cursor:pointer; font-size:14px }
+.chat-sidebar-title { padding:12px; border-bottom:1px solid #ddd; font-weight:700; display:flex; justify-content:space-between; align-items:center }
+.chat-friends-header { font-size:12px; color:#999; padding:8px 12px; display:flex; justify-content:space-between; align-items:center }
+.chat-search-btn { background:none; border:none; cursor:pointer }
+.chat-search-box { display:none; padding:4px 8px; position:relative }
+.chat-search-input { width:100%; padding:6px; border:1px solid #ddd; border-radius:4px; font-size:13px }
+.chat-search-results { display:none; position:absolute; top:100%; left:8px; right:8px; background:#fff; border:1px solid #ddd; border-radius:6px; z-index:10; max-height:150px; overflow-y:auto }
+.chat-friend-reqs { font-size:11px; color:#f60; padding:4px 8px; display:none }
+.chat-friend-list { flex:1; overflow-y:auto; padding:4px 8px }
+.chat-empty { text-align:center; color:#999; padding:60px }
+.chat-ctx-menu { display:none; position:fixed; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.15); z-index:1000 }
+.chat-ctx-item { padding:8px 16px; cursor:pointer; font-size:13px }
 .ch-btn { padding:10px 12px;background:none;border:none;text-align:left;cursor:pointer;font-size:14px;border-bottom:1px solid #eee;width:100% }
 .ch-btn.active,.ch-btn:hover { background:#e8eeff }
 .fr-item { padding:6px 8px;cursor:pointer;border-radius:6px;font-size:13px;display:flex;justify-content:space-between;align-items:center }
@@ -48,16 +102,60 @@
 .msg .time { font-size:10px;color:#bbb;margin-top:2px }
 .msg.mine .time { text-align:right }
 .msg.recalled .bubble { background:#f5f5f5;color:#999;font-style:italic }
+.msg.bot .bubble { background:#f0f7ff; border:1px solid #d0e3ff }
+.msg.bot .sender { color:#6a0dad }
 .sr-item { padding:6px 8px;cursor:pointer;font-size:13px }
 .sr-item:hover { background:#e8eeff }
 .btn-xs { padding:2px 6px;font-size:11px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer }
 .btn-xs.primary { background:#04c;color:#fff;border-color:#04c }
 .btn-xs.danger { background:#dc3545;color:#fff;border-color:#dc3545 }
+
+/* AI 设置按钮 */
+.ai-settings-btn { background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;border-radius:4px }
+.ai-settings-btn:hover { background:#ddd }
+.ai-clear-btn { display:none;background:none;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:12px;padding:2px 8px;color:#999 }
+.ai-clear-btn:hover { background:#fee;color:#c00;border-color:#c00 }
+
+/* AI 设置弹窗 */
+.ai-modal-overlay { display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:2000;justify-content:center;align-items:center }
+.ai-modal-overlay.show { display:flex }
+.ai-modal { background:#fff;border-radius:12px;width:440px;max-width:90vw;box-shadow:0 8px 30px rgba(0,0,0,.2);overflow:hidden }
+.ai-modal-header { padding:16px 20px;font-size:16px;font-weight:700;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center }
+.ai-modal-close { background:none;border:none;font-size:22px;cursor:pointer;color:#999;line-height:1 }
+.ai-modal-close:hover { color:#333 }
+.ai-modal-body { padding:16px 20px }
+.ai-modal-body label { display:block;font-size:13px;font-weight:600;color:#555;margin:12px 0 4px }
+.ai-modal-body label:first-child { margin-top:0 }
+.ai-modal-body small { display:block;font-size:11px;color:#999;margin-top:2px }
+.ai-input { width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box }
+.ai-input:focus { border-color:#04c;outline:none }
+.ai-modal-footer { padding:12px 20px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:8px }
+.ai-btn-primary { padding:8px 20px;background:#04c;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px }
+.ai-btn-primary:hover { background:#038 }
+.ai-btn-secondary { padding:8px 20px;background:#f0f0f0;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:14px }
+.ai-btn-secondary:hover { background:#e0e0e0 }
+
+/* AI 正在输入动画 */
+.ai-typing { display:flex;gap:4px;padding:8px 14px;align-items:center }
+.ai-typing span { width:8px;height:8px;background:#bbb;border-radius:50%;animation:ai-bounce 1.2s infinite }
+.ai-typing span:nth-child(2) { animation-delay:0.2s }
+.ai-typing span:nth-child(3) { animation-delay:0.4s }
+@keyframes ai-bounce { 0%,80%,100%{transform:scale(0.6);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+
+/* 响应式：小屏时 sidebar 缩小 */
+@media (max-width: 768px) {
+    .chat-sidebar { width:160px }
+}
+@media (max-width: 480px) {
+    .chat-container { min-height:400px; height:auto }
+    .chat-sidebar { width:100%; max-height:120px }
+}
 </style>
 
 <script nonce="{{ csp_nonce }}">
 var channel='world', dmUser='', currentUser='', friends=[], recallId=null, polling=null;
 var myUsername = '{{ username }}';
+var aiMode = false;  // 是否在 AI 聊天模式
 
 function ajax(url, opts) {
     if(!opts) opts = {};
@@ -65,19 +163,77 @@ function ajax(url, opts) {
     return fetch(url, opts).then(r => r.json());
 }
 
-function switchToWorld() { channel='world'; dmUser=''; document.getElementById('worldBtn').classList.add('active'); document.getElementById('chatHeader').textContent='🌍 世界频道'; loadMsgs() }
-function switchDM(user) { channel='dm'; dmUser=user; document.getElementById('worldBtn').classList.remove('active'); document.getElementById('chatHeader').textContent='💬 '+user; loadMsgs() }
+// ===== 频道切换 =====
+function switchToWorld() {
+    channel='world'; dmUser=''; aiMode=false;
+    document.getElementById('worldBtn').classList.add('active');
+    document.getElementById('aiBtn').classList.remove('active');
+    document.getElementById('chatHeader').innerHTML = '🌍 世界频道';
+    document.getElementById('aiClearBtn').style.display = 'none';
+    document.getElementById('msgInput').placeholder = '发消息...';
+    document.getElementById('msgInput').maxLength = 1000;
+    loadMsgs();
+}
+function switchDM(user) {
+    channel='dm'; dmUser=user; aiMode=false;
+    document.getElementById('worldBtn').classList.remove('active');
+    document.getElementById('aiBtn').classList.remove('active');
+    document.getElementById('chatHeader').innerHTML = '💬 '+user;
+    document.getElementById('aiClearBtn').style.display = 'none';
+    document.getElementById('msgInput').placeholder = '发消息...';
+    document.getElementById('msgInput').maxLength = 1000;
+    loadMsgs();
+}
+function switchToAI() {
+    channel='ai'; dmUser=''; aiMode=true;
+    document.getElementById('worldBtn').classList.remove('active');
+    document.getElementById('aiBtn').classList.add('active');
+    document.getElementById('chatHeader').innerHTML = '🤖 AI 助手 <span id="aiModelBadge" style="font-size:11px;color:#999;font-weight:400"></span>';
+    document.getElementById('aiClearBtn').style.display = 'inline-block';
+    document.getElementById('msgInput').placeholder = '向 AI 提问...';
+    document.getElementById('msgInput').maxLength = 4000;
+    loadAIMsgs();
+    loadAIModelBadge();
+}
 
+// ===== 加载 AI 模型名称徽章 =====
+async function loadAIModelBadge() {
+    try {
+        var cfg = await ajax('/api/chat/ai/config');
+        var badge = document.getElementById('aiModelBadge');
+        if (badge && cfg.model_name) badge.textContent = '(' + cfg.model_name + ')';
+    } catch(e) {}
+}
+
+// ===== 加载消息 =====
 async function loadMsgs() {
+    if (aiMode) { loadAIMsgs(); return; }
     var url = '/api/chat/messages?channel=' + channel;
     if(channel==='dm') url += '&with=' + dmUser;
     var msgs = await ajax(url) || [];
-    var html = msgs.length===0 ? '<div style="text-align:center;color:#999;padding:60px">暂无消息</div>' :
+    var html = msgs.length===0 ? '<div class="chat-empty">暂无消息</div>' :
         msgs.map(function(m){
             var cls = 'msg' + (m.sender===myUsername?' mine':'') + (m.content==='[消息已撤回]'?' recalled':'');
             return '<div class="'+cls+'" data-id="'+m.id+'" oncontextmenu="showMenu(event,'+m.id+',\''+m.sender+'\',\''+encodeURIComponent(m.content)+'\')">'
                 + '<div class="sender">'+m.sender+'</div>'
                 + '<div class="bubble">'+m.content+'</div>'
+                + '<div class="time">'+(m.created_at||'').slice(5,16)+'</div></div>';
+        }).join('');
+    var box = document.getElementById('messages');
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+}
+
+// ===== 加载 AI 对话历史 =====
+async function loadAIMsgs() {
+    var msgs = await ajax('/api/chat/ai/messages') || [];
+    var html = msgs.length===0 ? '<div class="chat-empty">你好！我是 AI 助手，有什么可以帮你的？</div>' :
+        msgs.map(function(m){
+            var isMe = m.role === 'user';
+            var cls = 'msg' + (isMe?' mine':' bot');
+            return '<div class="'+cls+'">'
+                + '<div class="sender">'+(isMe?myUsername:'🤖 AI 助手')+'</div>'
+                + '<div class="bubble">'+m.content.replace(/\n/g,'<br>')+'</div>'
                 + '<div class="time">'+(m.created_at||'').slice(5,16)+'</div></div>';
         }).join('');
     var box = document.getElementById('messages');
@@ -101,14 +257,116 @@ async function recallMsg() {
     loadMsgs();
 }
 
+// ===== 发送消息 =====
 async function sendMsg() {
     var inp = document.getElementById('msgInput');
     var text = inp.value.trim();
     if(!text) return;
-    await ajax('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({channel:channel,content:text,recipient:dmUser||undefined})});
-    inp.value = ''; loadMsgs();
+    inp.value = '';
+
+    if (aiMode) {
+        await sendAIMsg(text);
+    } else {
+        await ajax('/api/chat/send', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({channel:channel,content:text,recipient:dmUser||undefined})});
+        loadMsgs();
+    }
 }
 
+// ===== AI 消息发送 =====
+async function sendAIMsg(text) {
+    var box = document.getElementById('messages');
+    // 暂停轮询，避免刷新覆盖输入提示
+    var savedPoll = polling;
+    if (polling) { clearInterval(polling); polling = null; }
+
+    // 显示用户消息
+    var userHtml = '<div class="msg mine"><div class="sender">'+myUsername+'</div><div class="bubble">'+text+'</div><div class="time">刚刚</div></div>';
+    // 显示输入中动画
+    var typingHtml = '<div class="msg bot" id="aiTyping"><div class="sender">🤖 AI 助手</div><div class="bubble"><div class="ai-typing"><span></span><span></span><span></span></div></div></div>';
+    box.innerHTML += userHtml + typingHtml;
+    box.scrollTop = box.scrollHeight;
+
+    try {
+        var resp = await ajax('/api/chat/ai/ask', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({message:text})
+        });
+
+        // 移除输入中动画
+        var typingEl = document.getElementById('aiTyping');
+        if (typingEl) typingEl.remove();
+
+        if (resp.error) {
+            box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble" style="color:#c00">❌ '+resp.error+'</div></div>';
+        } else {
+            box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble">'+resp.reply.replace(/\n/g,'<br>')+'</div><div class="time">刚刚</div></div>';
+        }
+    } catch(e) {
+        var typingEl = document.getElementById('aiTyping');
+        if (typingEl) typingEl.remove();
+        box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble" style="color:#c00">❌ 请求失败: '+e.message+'</div></div>';
+    }
+
+    box.scrollTop = box.scrollHeight;
+    // 恢复轮询
+    if (savedPoll) polling = setInterval(function(){ if (!aiMode) { loadMsgs(); loadFriends(); } }, 3000);
+}
+
+// ===== 清空 AI 历史 =====
+async function clearAIHistory() {
+    if (!confirm('确定清空所有 AI 对话历史？')) return;
+    await ajax('/api/chat/ai/clear', {method:'POST'});
+    document.getElementById('messages').innerHTML = '<div class="chat-empty">对话已清空，开始新的对话吧！</div>';
+}
+
+// ===== AI 设置弹窗 =====
+async function openAISettings() {
+    // 加载已保存配置
+    try {
+        var cfg = await ajax('/api/chat/ai/config');
+        document.getElementById('aiProviderUrl').value = cfg.provider_url || '';
+        document.getElementById('aiModelName').value = cfg.model_name || 'gpt-3.5-turbo';
+        document.getElementById('aiApiKey').value = '';  // 不显示已保存的 key
+        if (cfg.has_key) {
+            document.getElementById('aiApiKey').placeholder = '已保存 (留空则不更新)';
+        }
+    } catch(e) {}
+    document.getElementById('aiSettingsOverlay').classList.add('show');
+}
+function closeAISettings() {
+    document.getElementById('aiSettingsOverlay').classList.remove('show');
+}
+async function saveAISettings() {
+    var providerUrl = document.getElementById('aiProviderUrl').value.trim();
+    var modelName = document.getElementById('aiModelName').value.trim();
+    var apiKey = document.getElementById('aiApiKey').value.trim();
+
+    if (!providerUrl) { alert('请填写 API 地址'); return; }
+    if (!apiKey && !document.getElementById('aiApiKey').placeholder.includes('已保存')) {
+        alert('请填写 API Key');
+        return;
+    }
+
+    var payload = { provider_url: providerUrl, model_name: modelName || 'gpt-3.5-turbo' };
+    if (apiKey) payload.api_key = apiKey;
+
+    var resp = await ajax('/api/chat/ai/config', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+    });
+
+    if (resp.success) {
+        closeAISettings();
+        alert('AI 设置已保存！现在可以点击 🤖 AI 助手 开始对话');
+        if (aiMode) loadAIModelBadge();
+    } else {
+        alert('保存失败: ' + (resp.error || '未知错误'));
+    }
+}
+
+// ===== 好友操作 =====
 async function loadFriends() {
     var fs = await ajax('/api/chat/friends') || [];
     friends = fs;
@@ -178,9 +436,12 @@ document.addEventListener('click', function(e) {
     // Del friend request
     el = e.target.closest('.chat-delfriend-btn');
     if (el) { delFriend(el.getAttribute('data-chat-user')); return; }
+    // Close AI settings when clicking overlay
+    if (e.target.id === 'aiSettingsOverlay') { closeAISettings(); }
 });
 
-setInterval(function(){ loadMsgs(); loadFriends(); }, 3000);
+// 轮询：世界/DM 每3秒刷新，AI 模式不轮询（手动刷新即可）
+polling = setInterval(function(){ loadMsgs(); loadFriends(); }, 3000);
 loadMsgs(); loadFriends();
 
 document.addEventListener('click', function(e){
