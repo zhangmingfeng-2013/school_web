@@ -423,25 +423,40 @@ window.addEventListener('load', function() {
     draw();
 })();
 
-// ===== 3. 滚动按钮（class 事件委托） =====
+// ===== 3. 滚动按钮 — 添加 ID 直接绑定 =====
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.author-scroll-btn');
     if (!btn) return;
     var targetId = btn.getAttribute('data-target');
     if (!targetId) return;
     var el = document.getElementById(targetId);
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 });
 
 // ===== 4. 滚动显示动画（IntersectionObserver） =====
 (function() {
     var lays = document.querySelectorAll('.lay');
+    if (!lays.length) return;
     var obs = new IntersectionObserver(function(entries) {
         entries.forEach(function(e) {
-            if (e.isIntersecting) e.target.classList.add('visible');
+            if (e.isIntersecting) {
+                e.target.classList.add('visible');
+                obs.unobserve(e.target);
+            }
         });
-    }, { threshold: 0.1 });
+    }, { threshold: 0.05 });
     lays.forEach(function(el) { obs.observe(el); });
+    // 立即触发已可见的元素
+    requestAnimationFrame(function() {
+        lays.forEach(function(el) {
+            var rect = el.getBoundingClientRect();
+            if (rect.top < window.innerHeight && rect.bottom > 0) {
+                el.classList.add('visible');
+            }
+        });
+    });
 })();
 
 // ===== 5. 3D 倾斜卡片 =====
@@ -485,20 +500,37 @@ document.addEventListener('click', function(e) {
             '</div>';
     }).join('');
 
+    // 观察整个 section（id="sec3"）而不是嵌套的 .card-3d
+    var section = document.getElementById('sec3');
+    if (!section) return;
+
+    var animated = false;
+    function animateBars() {
+        if (animated) return;
+        animated = true;
+        var bars = container.querySelectorAll('.bar-fill');
+        bars.forEach(function(bar, idx) {
+            setTimeout(function() {
+                bar.style.width = bar.getAttribute('data-pct') + '%';
+            }, 200 + idx * 200);
+        });
+    }
+
+    // IntersectionObserver 兜底
     var obs = new IntersectionObserver(function(entries) {
         entries.forEach(function(e) {
-            if (e.isIntersecting) {
-                var bars = e.target.querySelectorAll('.bar-fill');
-                bars.forEach(function(bar, idx) {
-                    setTimeout(function() {
-                        bar.style.width = bar.getAttribute('data-pct') + '%';
-                    }, 150 + idx * 200);
-                });
-                obs.unobserve(e.target);
-            }
+            if (e.isIntersecting) { animateBars(); obs.unobserve(e.target); }
         });
-    }, { threshold: 0.3 });
-    obs.observe(container.closest('.card-3d') || container);
+    }, { threshold: 0.05 });
+    obs.observe(section);
+
+    // 立即检测（防止 observer 已错过）
+    requestAnimationFrame(function() {
+        var rect = section.getBoundingClientRect();
+        if (rect.top < window.innerHeight && rect.bottom > 0) {
+            animateBars();
+        }
+    });
 })();
 
 // ===== 7. 作者页主题切换（仅切换 ap-* 变量，不影响全局） =====
