@@ -176,14 +176,27 @@ function startConvert() {
                 reader.readAsText(result.blob);
             }
         } else if (result.type === 'json') {
-            // Backend returned JSON with download URL or content
-            if (result.data.url) {
-                downloadBtn.href = result.data.url;
+            // Backend returned JSON with base64 data
+            if (result.data.data) {
+                var ext = (result.data.filename || '').split('.').pop().toLowerCase();
+                var mime = result.data.mime || 'application/octet-stream';
+                var dataUri = 'data:' + mime + ';base64,' + result.data.data;
+                downloadBtn.href = dataUri;
                 downloadBtn.download = result.data.filename || getOutputFilename(target);
                 downloadBtn.style.display = '';
-            }
-            if (result.data.preview) {
-                contentDiv.innerHTML = '<div class="result-text">' + escapeHtml(result.data.preview) + '</div>';
+
+                // Image preview
+                if (['jpg','jpeg','png','webp','gif','bmp'].indexOf(ext) !== -1) {
+                    var img = document.createElement('img');
+                    img.src = dataUri;
+                    img.className = 'result-preview';
+                    contentDiv.innerHTML = '';
+                    contentDiv.appendChild(img);
+                } else {
+                    // Text preview (CSV/JSON)
+                    var decoded = atob(result.data.data);
+                    contentDiv.innerHTML = '<div class="result-text">' + escapeHtml(decoded.substring(0, 2000)) + '</div>';
+                }
             }
         }
     }).catch(function(err) {

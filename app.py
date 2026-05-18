@@ -6930,6 +6930,7 @@ def api_weather():
 @app.route("/expenses")
 @login_required
 def expenses_page():
+    _init_life_tables()
     return render_template("expenses.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 @app.route("/api/expenses", methods=["GET", "POST"])
@@ -6990,6 +6991,7 @@ def api_expenses_stats():
 @app.route("/habits")
 @login_required
 def habits_page():
+    _init_life_tables()
     return render_template("habits.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 @app.route("/api/habits", methods=["GET", "POST"])
@@ -7017,8 +7019,10 @@ def api_habits():
         color = data.get("color", "#3b82f6")
         cursor = conn.cursor()
         cursor.execute("INSERT INTO habits (username, name, icon, color) VALUES (%s,%s,%s,%s)", (username, name, icon, color))
-        conn.commit(); cursor.close(); conn.close()
-        return jsonify({"ok": True, "id": cursor.lastrowid if hasattr(cursor, 'lastrowid') else 0})
+        conn.commit()
+        hid = cursor.lastrowid
+        cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": hid})
 
 @app.route("/api/habits/<int:hid>", methods=["PUT", "DELETE"])
 @login_required
@@ -7062,6 +7066,7 @@ def pomodoro_page():
 @app.route("/bookmarks")
 @login_required
 def bookmarks_page():
+    _init_life_tables()
     return render_template("bookmarks.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 @app.route("/api/bookmarks", methods=["GET", "POST"])
@@ -7187,6 +7192,7 @@ def api_converter():
 @app.route("/rss")
 @login_required
 def rss_page():
+    _init_life_tables()
     return render_template("rss_reader.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 @app.route("/api/rss/fetch", methods=["POST"])
@@ -7315,15 +7321,21 @@ def qrcode_page():
 def api_qrcode():
     data = request.get_json() or {}
     text = data.get("text", "").strip()
+    size = int(data.get("size", 300))
     if not text:
         return jsonify({"ok": False, "error": "内容不能为空"}), 400
     try:
         import qrcode as _qr
-        img = _qr.make(text)
+        qr = _qr.QRCode(box_size=max(4, min(20, size // 25)), border=2)
+        qr.add_data(text)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        # Resize to exact requested pixel size
+        img = img.resize((size, size), Image.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         import base64 as _b64
-        return jsonify({"ok": True, "image": "data:image/png;base64," + _b64.b64encode(buf.getvalue()).decode()})
+        return jsonify({"ok": True, "qrcode": _b64.b64encode(buf.getvalue()).decode()})
     except ImportError:
         return jsonify({"ok": False, "error": "qrcode 库未安装"}), 500
 
@@ -7342,7 +7354,9 @@ def api_image_compress():
     quality = int(request.form.get("quality", 70))
     max_width = int(request.form.get("max_width", 1920))
     try:
-        img = Image.open(io.BytesIO(file.read()))
+        file_data = file.read()
+        original_size = len(file_data)
+        img = Image.open(io.BytesIO(file_data))
         # 缩放
         w, h = img.size
         if w > max_width:
@@ -7357,16 +7371,14 @@ def api_image_compress():
             img = img.convert("RGB")
             img.save(buf, format="JPEG", quality=quality, optimize=True)
         compressed = buf.getvalue()
-        original_size = len(file.read()) if hasattr(file, 'tell') else 0
-        # 重新读取原始大小
-        file.seek(0)
-        original_size = len(file.read())
         import base64 as _b64
+        mime_type = "image/png" if fmt == "PNG" else "image/jpeg"
         return jsonify({
             "ok": True,
             "original_size": original_size,
             "compressed_size": len(compressed),
-            "image": "data:image/jpeg;base64," + _b64.b64encode(compressed).decode(),
+            "compressed": _b64.b64encode(compressed).decode(),
+            "mime_type": mime_type,
             "ratio": round((1 - len(compressed)/max(original_size,1)) * 100, 1)
         })
     except Exception as e:

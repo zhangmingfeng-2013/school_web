@@ -310,6 +310,138 @@
     </div>
     {% endif %}
 
+    <!-- ====== 🔵 生活实用类 ====== -->
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🔵 生活实用</h5></div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('weather_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span style="font-size:2rem;">🌤️</span></div>
+                <h5>天气预报</h5>
+                <p class="text-muted small">全球城市天气查询，未来预报</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('expenses_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon bg-success bg-opacity-10 mx-auto"><span style="font-size:2rem;">💰</span></div>
+                <h5>记账本</h5>
+                <p class="text-muted small">收支记录，分类统计，月度汇总</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('habits_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(16,185,129,.1)!important;"><span style="font-size:2rem;">✅</span></div>
+                <h5>习惯追踪</h5>
+                <p class="text-muted small">每日打卡，习惯养成，进度可视化</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('pomodoro_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span style="font-size:2rem;">🍅</span></div>
+                <h5>番茄钟</h5>
+                <p class="text-muted small">专注计时，工作休息循环，提升效率</p>
+            </div></div>
+        </a>
+    </div>
+
+    <!-- ====== 🟢 办公效率类 ====== -->
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟢 办公效率</h5></div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('bookmarks_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔖</span></div>
+                <h5>书签管理</h5>
+                <p class="text-muted small">分类收藏网址，快速访问常用站点</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('converter_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔄</span></div>
+                <h5>文件格式转换</h5>
+                <p class="text-muted small">图片格式互转，CSV/JSON 数据转换</p>
+            </div></div>
+        </a>
+    </div>
+
+    <!-- ====== 🟣 娱乐/资讯类 ====== -->
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟣 娱乐 · 资讯</h5></div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('rss_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(249,115,22,.1)!important;"><span style="font-size:2rem;">📡</span></div>
+                <h5>RSS 阅读器</h5>
+                <p class="text-muted small">订阅博客和新闻源，聚合阅读</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('daily_quote_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(102,126,234,.15),rgba(118,75,162,.15))!important;"><span style="font-size:2rem;">💬</span></div>
+                <h5>每日一言</h5>
+                <p class="text-muted small">精美语录卡片，一键复制分享</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('games_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(139,92,246,.1)!important;"><span style="font-size:2rem;">🎮</span></div>
+                <h5>小游戏</h5>
+                <p class="text-muted small">猜数字 · 2048 · 贪吃蛇，休闲放松</p>
+            </div></div>
+        </a>
+    </div>
+
+    <!-- ====== 🟠 工具增强类 ====== -->
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟠 工具增强</h5></div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('qrcode_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon bg-dark bg-opacity-10 mx-auto"><span style="font-size:2rem;">📱</span></div>
+                <h5>二维码生成</h5>
+                <p class="text-muted small">文本/链接生成二维码，多尺寸下载</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('image_compress_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(59,130,246,.08)!important;"><span style="font-size:2rem;">🖼️</span></div>
+                <h5>图片压缩</h5>
+                <p class="text-muted small">智能压缩，可调质量，前后对比</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('api_tester_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(14,203,139,.1)!important;"><span style="font-size:2rem;">🧪</span></div>
+                <h5>API 测试器</h5>
+                <p class="text-muted small">自定义请求，查看响应，调试接口</p>
+            </div></div>
+        </a>
+    </div>
+
     <div class="col-md-6 col-lg-4">
         <a href="/donate" class="text-decoration-none text-dark">
             <div class="card h-100" style="border:1px solid rgba(245,158,11,.3)"><div class="card-body text-center">
