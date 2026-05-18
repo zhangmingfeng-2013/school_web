@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% block title %}小游戏 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.game-tabs .nav-link { font-weight: 500; }
+.game-container { min-height: 400px; }
+/* 猜数字 */
+.guess-input { font-size: 1.5rem; text-align: center; max-width: 160px; }
+.guess-hint { font-size: 1.1rem; font-weight: 600; margin-top: .75rem; }
+.guess-attempts { font-size: .9rem; color: var(--text-muted); }
+/* 2048 */
+.game-2048-wrap { display: flex; flex-direction: column; align-items: center; }
+.game-2048-header { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 340px; margin-bottom: 1rem; }
+.game-2048-score { background: var(--bs-tertiary-bg); padding: .4rem 1rem; border-radius: 8px; font-weight: 700; font-size: 1.1rem; }
+.game-2048-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; background: #bbada0; padding: 8px; border-radius: 12px; width: 340px; height: 340px; }
+.game-2048-cell { background: #cdc1b4; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 700; color: #776e65; transition: all .15s; aspect-ratio: 1; }
+.game-2048-cell[data-value="2"] { background: #eee4da; }
+.game-2048-cell[data-value="4"] { background: #ede0c8; }
+.game-2048-cell[data-value="8"] { background: #f2b179; color: #fff; }
+.game-2048-cell[data-value="16"] { background: #f59563; color: #fff; }
+.game-2048-cell[data-value="32"] { background: #f67c5f; color: #fff; }
+.game-2048-cell[data-value="64"] { background: #f65e3b; color: #fff; }
+.game-2048-cell[data-value="128"] { background: #edcf72; color: #fff; font-size: 1.3rem; }
+.game-2048-cell[data-value="256"] { background: #edcc61; color: #fff; font-size: 1.3rem; }
+.game-2048-cell[data-value="512"] { background: #edc850; color: #fff; font-size: 1.3rem; }
+.game-2048-cell[data-value="1024"] { background: #edc53f; color: #fff; font-size: 1.1rem; }
+.game-2048-cell[data-value="2048"] { background: #edc22e; color: #fff; font-size: 1.1rem; }
+.game-2048-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,.7); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; flex-direction: column; }
+/* 贪吃蛇 */
+.snake-wrap { display: flex; flex-direction: column; align-items: center; }
+.snake-canvas { border: 2px solid var(--border-light); border-radius: 8px; background: #1a1a2e; }
+.snake-score { font-size: 1.2rem; font-weight: 600; margin-bottom: .75rem; }
+.snake-controls { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 4px; margin-top: 1rem; }
+.snake-controls button { border-radius: 10px; border: 1px solid var(--border-light); background: var(--bs-body-bg); font-size: 1.3rem; cursor: pointer; color: var(--text-body); }
+.snake-controls button:active { background: var(--bg-card-hover); }
+@media (max-width: 400px) {
+    .game-2048-board { width: 300px; height: 300px; gap: 6px; padding: 6px; }
+    .game-2048-cell { font-size: 1.3rem; }
+}
+</style>
+
+<h2 class="mb-4">🎮 小游戏</h2>
+
+<ul class="nav nav-tabs game-tabs mb-4" id="gameTabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#guessGame">🔢 猜数字</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#game2048">🟫 2048</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#snakeGame">🐍 贪吃蛇</button></li>
+</ul>
+
+<div class="tab-content">
+    <!-- 猜数字 -->
+    <div class="tab-pane fade show active" id="guessGame">
+        <div class="card"><div class="card-body text-center game-container">
+            <h4>猜数字 (1-100)</h4>
+            <p class="text-muted">我想了一个 1 到 100 之间的数字，猜猜看！</p>
+            <div class="my-3">
+                <input type="number" id="guessInput" class="form-control guess-input mx-auto" min="1" max="100" placeholder="?" data-csp-enter="submitGuess">
+                <button class="btn btn-primary mt-3" data-csp-click="submitGuess">猜！</button>
+            </div>
+            <div class="guess-hint" id="guessHint"></div>
+            <div class="guess-attempts mt-2" id="guessAttempts">已猜 0 次</div>
+            <button class="btn btn-outline-secondary btn-sm mt-3" data-csp-click="resetGuess" id="resetGuessBtn">🔄 重新开始</button>
+            <div class="mt-3" id="guessHistory"></div>
+        </div></div>
+    </div>
+
+    <!-- 2048 -->
+    <div class="tab-pane fade" id="game2048">
+        <div class="card"><div class="card-body game-container d-flex justify-content-center">
+            <div class="game-2048-wrap" id="game2048Wrap">
+                <div class="game-2048-header">
+                    <span><strong>2048</strong></span>
+                    <span class="game-2048-score">分数: <span id="score2048">0</span></span>
+                    <button class="btn btn-outline-secondary btn-sm" data-csp-click="reset2048">🔄</button>
+                </div>
+                <div style="position:relative;">
+                    <div class="game-2048-board" id="board2048"></div>
+                </div>
+                <p class="text-muted mt-2" style="font-size:.8rem;">使用方向键 ← ↑ → ↓ 移动方块</p>
+            </div>
+        </div></div>
+    </div>
+
+    <!-- 贪吃蛇 -->
+    <div class="tab-pane fade" id="snakeGame">
+        <div class="card"><div class="card-body game-container d-flex justify-content-center">
+            <div class="snake-wrap">
+                <div class="snake-score">得分: <span id="snakeScore">0</span></div>
+                <canvas id="snakeCanvas" class="snake-canvas" width="400" height="400"></canvas>
+                <div class="snake-controls mt-3">
+                    <div></div>
+                    <button data-csp-click="snakeDir" data-csp-args='["up"]'>▲</button>
+                    <div></div>
+                    <button data-csp-click="snakeDir" data-csp-args='["left"]'>◀</button>
+                    <button class="btn btn-primary btn-sm" data-csp-click="resetSnake" style="font-size:.8rem;">开始</button>
+                    <button data-csp-click="snakeDir" data-csp-args='["right"]'>▶</button>
+                    <div></div>
+                    <button data-csp-click="snakeDir" data-csp-args='["down"]'>▼</button>
+                    <div></div>
+                </div>
+                <p class="text-muted mt-1" style="font-size:.8rem;">使用方向键或屏幕按钮控制</p>
+            </div>
+        </div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// ========== 猜数字 ==========
+var targetNumber, guessCount;
+function initGuess() {
+    targetNumber = Math.floor(Math.random() * 100) + 1;
+    guessCount = 0;
+    document.getElementById('guessInput').value = '';
+    document.getElementById('guessHint').textContent = '';
+    document.getElementById('guessAttempts').textContent = '已猜 0 次';
+    document.getElementById('guessHistory').innerHTML = '';
+    document.getElementById('guessInput').focus();
+}
+function submitGuess() {
+    var input = document.getElementById('guessInput');
+    var guess = parseInt(input.value);
+    if (isNaN(guess) || guess < 1 || guess > 100) {
+        document.getElementById('guessHint').textContent = '请输入 1-100 之间的数字';
+        document.getElementById('guessHint').style.color = '#dc3545';
+        return;
+    }
+    guessCount++;
+    document.getElementById('guessAttempts').textContent = '已猜 ' + guessCount + ' 次';
+    var hint = document.getElementById('guessHint');
+    if (guess === targetNumber) {
+        hint.textContent = '🎉 恭喜！你猜对了！答案是 ' + targetNumber + '！用了 ' + guessCount + ' 次';
+        hint.style.color = '#198754';
+    } else if (guess > targetNumber) {
+        hint.textContent = '📉 太大了，往小猜！';
+        hint.style.color = '#dc3545';
+    } else {
+        hint.textContent = '📈 太小了，往大猜！';
+        hint.style.color = '#0d6efd';
+    }
+    var hist = document.getElementById('guessHistory');
+    var span = document.createElement('span');
+    span.className = 'badge ' + (guess > targetNumber ? 'bg-danger' : guess < targetNumber ? 'bg-primary' : 'bg-success') + ' me-1 mb-1';
+    span.textContent = guess;
+    hist.appendChild(span);
+    input.value = '';
+    input.focus();
+}
+function resetGuess() { initGuess(); }
+
+// ========== 2048 ==========
+var board2048, score2048, boardEl, scoreEl;
+function init2048() {
+    board2048 = [
+        [0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]
+    ];
+    score2048 = 0;
+    boardEl = document.getElementById('board2048');
+    scoreEl = document.getElementById('score2048');
+    addRandomTile();
+    addRandomTile();
+    render2048();
+}
+function addRandomTile() {
+    var empty = [];
+    for (var r = 0; r < 4; r++)
+        for (var c = 0; c < 4; c++)
+            if (board2048[r][c] === 0) empty.push([r,c]);
+    if (empty.length === 0) return;
+    var pos = empty[Math.floor(Math.random() * empty.length)];
+    board2048[pos[0]][pos[1]] = Math.random() < 0.9 ? 2 : 4;
+}
+function render2048() {
+    scoreEl.textContent = score2048;
+    var html = '';
+    for (var r = 0; r < 4; r++) {
+        for (var c = 0; c < 4; c++) {
+            var val = board2048[r][c];
+            html += '<div class="game-2048-cell"' + (val > 0 ? ' data-value="' + val + '"' : '') + '>' + (val > 0 ? val : '') + '</div>';
+        }
+    }
+    boardEl.innerHTML = html;
+}
+function move2048(dir) {
+    var moved = false;
+    var old = board2048.map(function(row) { return row.slice(); });
+    
+    function slide(row) {
+        var arr = row.filter(function(v) { return v !== 0; });
+        for (var i = 0; i < arr.length - 1; i++) {
+            if (arr[i] === arr[i+1]) { arr[i] *= 2; score2048 += arr[i]; arr.splice(i+1, 1); }
+        }
+        while (arr.length < 4) arr.push(0);
+        return arr;
+    }
+    
+    for (var i = 0; i < 4; i++) {
+        var row = [];
+        for (var j = 0; j < 4; j++) {
+            if (dir === 'left') row.push(board2048[i][j]);
+            else if (dir === 'right') row.push(board2048[i][3-j]);
+            else if (dir === 'up') row.push(board2048[j][i]);
+            else if (dir === 'down') row.push(board2048[3-j][i]);
+        }
+        var newRow = slide(row);
+        if (dir === 'right') newRow.reverse();
+        for (var j = 0; j < 4; j++) {
+            if (dir === 'left') board2048[i][j] = newRow[j];
+            else if (dir === 'right') board2048[i][3-j] = newRow[j];
+            else if (dir === 'up') board2048[j][i] = newRow[j];
+            else if (dir === 'down') board2048[3-j][i] = newRow[j];
+        }
+    }
+    
+    for (var r = 0; r < 4; r++)
+        for (var c = 0; c < 4; c++)
+            if (board2048[r][c] !== old[r][c]) moved = true;
+    
+    if (moved) { addRandomTile(); render2048(); }
+    if (isGameOver()) { setTimeout(function() { alert('游戏结束！得分: ' + score2048); }, 200); }
+}
+function isGameOver() {
+    for (var r = 0; r < 4; r++)
+        for (var c = 0; c < 4; c++) {
+            if (board2048[r][c] === 0) return false;
+            if (c < 3 && board2048[r][c] === board2048[r][c+1]) return false;
+            if (r < 3 && board2048[r][c] === board2048[r+1][c]) return false;
+        }
+    return true;
+}
+function reset2048() { init2048(); }
+
+document.addEventListener('keydown', function(e) {
+    var activeTab = document.querySelector('#game2048.activ, #game2048.show');
+    if (!activeTab) {
+        var tabBtn = document.querySelector('[data-bs-target="#game2048"]');
+        if (tabBtn && tabBtn.classList.contains('active')) activeTab = document.getElementById('game2048');
+    }
+    if (activeTab && activeTab.classList.contains('active')) {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); move2048('left'); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); move2048('right'); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); move2048('up'); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); move2048('down'); }
+    }
+});
+
+// ========== 贪吃蛇 ==========
+var snakeCanvas, snakeCtx, snake, snakeDir, snakeNextDir, snakeFood, snakeScoreVal, snakeInterval, snakeRunning;
+function initSnake() {
+    snakeCanvas = document.getElementById('snakeCanvas');
+    snakeCtx = snakeCanvas.getContext('2d');
+    resetSnake();
+}
+function resetSnake() {
+    if (snakeInterval) clearInterval(snakeInterval);
+    snake = [{x:10, y:10}, {x:9, y:10}, {x:8, y:10}];
+    snakeDir = 'right';
+    snakeNextDir = 'right';
+    snakeScoreVal = 0;
+    snakeRunning = true;
+    document.getElementById('snakeScore').textContent = '0';
+    spawnFood();
+    snakeInterval = setInterval(snakeTick, 120);
+    drawSnake();
+}
+function spawnFood() {
+    var x, y;
+    do {
+        x = Math.floor(Math.random() * 20);
+        y = Math.floor(Math.random() * 20);
+    } while (snake.some(function(s) { return s.x === x && s.y === y; }));
+    snakeFood = {x: x, y: y};
+}
+function snakeTick() {
+    if (!snakeRunning) return;
+    snakeDir = snakeNextDir;
+    var head = {x: snake[0].x, y: snake[0].y};
+    if (snakeDir === 'up') head.y--;
+    else if (snakeDir === 'down') head.y++;
+    else if (snakeDir === 'left') head.x--;
+    else if (snakeDir === 'right') head.x++;
+    
+    if (head.x < 0 || head.x >= 20 || head.y < 0 || head.y >= 20) { gameOverSnake(); return; }
+    if (snake.some(function(s) { return s.x === head.x && s.y === head.y; })) { gameOverSnake(); return; }
+    
+    snake.unshift(head);
+    if (head.x === snakeFood.x && head.y === snakeFood.y) {
+        snakeScoreVal += 10;
+        document.getElementById('snakeScore').textContent = snakeScoreVal;
+        spawnFood();
+    } else {
+        snake.pop();
+    }
+    drawSnake();
+}
+function gameOverSnake() {
+    snakeRunning = false;
+    clearInterval(snakeInterval);
+    snakeCtx.fillStyle = 'rgba(0,0,0,.6)';
+    snakeCtx.fillRect(0, 0, 400, 400);
+    snakeCtx.fillStyle = '#fff';
+    snakeCtx.font = '20px sans-serif';
+    snakeCtx.textAlign = 'center';
+    snakeCtx.fillText('游戏结束！得分: ' + snakeScoreVal, 200, 190);
+    snakeCtx.fillText('点击"开始"重新游戏', 200, 220);
+    snakeCtx.textAlign = 'start';
+}
+function drawSnake() {
+    snakeCtx.fillStyle = '#1a1a2e';
+    snakeCtx.fillRect(0, 0, 400, 400);
+    // Grid
+    snakeCtx.strokeStyle = 'rgba(255,255,255,.03)';
+    snakeCtx.lineWidth = .5;
+    for (var i = 0; i <= 20; i++) {
+        snakeCtx.beginPath(); snakeCtx.moveTo(i*20, 0); snakeCtx.lineTo(i*20, 400); snakeCtx.stroke();
+        snakeCtx.beginPath(); snakeCtx.moveTo(0, i*20); snakeCtx.lineTo(400, i*20); snakeCtx.stroke();
+    }
+    // Food
+    snakeCtx.fillStyle = '#ff6b6b';
+    snakeCtx.fillRect(snakeFood.x*20+2, snakeFood.y*20+2, 16, 16);
+    // Snake
+    snake.forEach(function(seg, i) {
+        snakeCtx.fillStyle = i === 0 ? '#4ecdc4' : '#45b7aa';
+        snakeCtx.fillRect(seg.x*20+1, seg.y*20+1, 18, 18);
+    });
+}
+function snakeDir(direction) {
+    var opposites = {up:'down', down:'up', left:'right', right:'left'};
+    if (opposites[direction] !== snakeDir) snakeNextDir = direction;
+}
+document.addEventListener('keydown', function(e) {
+    var activeTab = document.getElementById('snakeGame');
+    if (activeTab && activeTab.classList.contains('active') && snakeRunning) {
+        if (e.key === 'ArrowUp') { e.preventDefault(); snakeDir('up'); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); snakeDir('down'); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); snakeDir('left'); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); snakeDir('right'); }
+    }
+});
+
+// Init all
+initGuess();
+init2048();
+initSnake();
+
+// Stop snake when switching tabs
+document.getElementById('gameTabs').addEventListener('shown.bs.tab', function(e) {
+    if (e.target.getAttribute('data-bs-target') !== '#snakeGame') {
+        if (snakeInterval) { clearInterval(snakeInterval); snakeRunning = false; }
+    } else {
+        if (!snakeRunning) { snakeRunning = true; snakeInterval = setInterval(snakeTick, 120); }
+    }
+});
+</script>
+{% endblock %}

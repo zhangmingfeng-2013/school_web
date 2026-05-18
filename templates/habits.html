@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}习惯追踪 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.habits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+.habit-card { border: 1px solid var(--border-light); border-radius: 12px; padding: 1rem; background: var(--bs-body-bg); transition: box-shadow .2s; }
+.habit-card:hover { box-shadow: var(--card-shadow); }
+.habit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+.habit-name { font-weight: 600; font-size: 1.1rem; }
+.habit-days { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 0.5rem; }
+.habit-day { width: 24px; height: 24px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border-light); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; transition: all .15s; background: var(--bs-tertiary-bg); }
+.habit-day.checked { background: #10b981; color: #fff; border-color: #10b981; }
+.habit-day.today { border: 2px solid #3b82f6; }
+.progress { height: 8px; border-radius: 4px; }
+.progress-bar { border-radius: 4px; transition: width .3s; }
+.habit-actions { display: flex; gap: 4px; }
+.icon-picker-item { display: inline-block; width: 36px; height: 36px; line-height: 36px; text-align: center; border-radius: 8px; cursor: pointer; border: 2px solid transparent; font-size: 1.2rem; transition: all .15s; }
+.icon-picker-item:hover { border-color: #3b82f6; background: rgba(59,130,246,.1); }
+.icon-picker-item.selected { border-color: #3b82f6; background: rgba(59,130,246,.15); }
+.color-picker-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
+.color-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: all .15s; }
+.color-dot:hover { transform: scale(1.15); }
+.color-dot.selected { border-color: #3b82f6; transform: scale(1.1); }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h2 class="mb-0">✅ 习惯追踪</h2>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" data-csp-click="showAddHabit">➕ 新建习惯</button>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+    </div>
+</div>
+
+<!-- Add Habit Form -->
+<div class="card mb-4" id="addHabitCard" style="display:none;">
+    <div class="card-body">
+        <h5 class="card-title mb-3">新建习惯</h5>
+        <form id="habitForm" data-csp-submit="submitHabit">
+            <div class="mb-3">
+                <label class="form-label">习惯名称</label>
+                <input type="text" name="name" class="form-control" placeholder="例如：每天喝水" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">图标</label>
+                <div id="iconPicker">
+                    <span class="icon-picker-item selected" data-icon="✅">✅</span>
+                    <span class="icon-picker-item" data-icon="📚">📚</span>
+                    <span class="icon-picker-item" data-icon="🏃">🏃</span>
+                    <span class="icon-picker-item" data-icon="💧">💧</span>
+                    <span class="icon-picker-item" data-icon="🧘">🧘</span>
+                    <span class="icon-picker-item" data-icon="🎵">🎵</span>
+                    <span class="icon-picker-item" data-icon="✍️">✍️</span>
+                    <span class="icon-picker-item" data-icon="💤">💤</span>
+                </div>
+                <input type="hidden" name="icon" value="✅" id="selectedIcon">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">颜色</label>
+                <div class="color-picker-wrap" id="colorPicker">
+                    <span class="color-dot selected" data-color="#10b981" style="background:#10b981;"></span>
+                    <span class="color-dot" data-color="#3b82f6" style="background:#3b82f6;"></span>
+                    <span class="color-dot" data-color="#8b5cf6" style="background:#8b5cf6;"></span>
+                    <span class="color-dot" data-color="#ec4899" style="background:#ec4899;"></span>
+                    <span class="color-dot" data-color="#f59e0b" style="background:#f59e0b;"></span>
+                    <span class="color-dot" data-color="#ef4444" style="background:#ef4444;"></span>
+                    <span class="color-dot" data-color="#06b6d4" style="background:#06b6d4;"></span>
+                    <span class="color-dot" data-color="#84cc16" style="background:#84cc16;"></span>
+                </div>
+                <input type="hidden" name="color" value="#10b981" id="selectedColor">
+            </div>
+            <button type="submit" class="btn btn-success">💾 保存</button>
+            <button type="button" class="btn btn-outline-secondary" data-csp-click="hideAddHabit">取消</button>
+        </form>
+    </div>
+</div>
+
+<!-- Habits Grid -->
+<div class="habits-grid" id="habitsGrid">
+    <div class="text-center text-muted py-4" style="grid-column:1/-1;">加载中...</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var habitDaysCount = 30;
+
+function getLast30Days() {
+    var days = [];
+    var today = new Date();
+    for (var i = habitDaysCount - 1; i >= 0; i--) {
+        var d = new Date(today);
+        d.setDate(d.getDate() - i);
+        days.push(d.toISOString().split('T')[0]);
+    }
+    return days;
+}
+
+function showAddHabit() {
+    document.getElementById('addHabitCard').style.display = 'block';
+    document.querySelector('#habitForm input[name="name"]').focus();
+}
+
+function hideAddHabit() {
+    document.getElementById('addHabitCard').style.display = 'none';
+    document.getElementById('habitForm').reset();
+    document.getElementById('selectedIcon').value = '✅';
+    document.getElementById('selectedColor').value = '#10b981';
+}
+
+function submitHabit(e) {
+    var form = this;
+    var data = new FormData(form);
+    var body = {
+        name: data.get('name'),
+        icon: data.get('icon'),
+        color: data.get('color')
+    };
+    fetch('/api/habits', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok || d.id) { hideAddHabit(); loadHabits(); }
+    }).catch(function() { alert('保存失败'); });
+}
+
+function deleteHabit(id) {
+    if (!confirm('确定删除这个习惯吗？')) return;
+    fetch('/api/habits/' + id, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function() { loadHabits(); })
+        .catch(function() {});
+}
+
+function toggleHabitDay(logId, day, completed) {
+    var body = { date: day, completed: !completed };
+    // If we have a logId, update; otherwise it's a create
+    fetch('/api/habit_logs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); })
+    .then(function() { loadHabits(); })
+    .catch(function() {});
+}
+
+function renderHabits(habits) {
+    var grid = document.getElementById('habitsGrid');
+    var days = getLast30Days();
+    var today = new Date().toISOString().split('T')[0];
+
+    if (!habits || habits.length === 0) {
+        grid.innerHTML = '<div class="text-center text-muted py-4" style="grid-column:1/-1;">还没有习惯，点击上方按钮创建一个吧！</div>';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < habits.length; i++) {
+        var h = habits[i];
+        var logs = h.logs || {};
+        var completedCount = Object.keys(logs).filter(function(k) { return logs[k]; }).length;
+
+        html += '<div class="habit-card">';
+        html += '<div class="habit-header">';
+        html += '<span class="habit-name">' + (h.icon||'✅') + ' ' + (h.name||'未命名') + '</span>';
+        html += '<div class="habit-actions">';
+        html += '<button class="btn btn-outline-secondary btn-sm" data-csp-click="deleteHabit" data-csp-args="[' + (h.id||0) + ']">🗑</button>';
+        html += '</div>';
+        html += '</div>';
+
+        // Day checkboxes
+        html += '<div class="habit-days">';
+        for (var j = 0; j < days.length; j++) {
+            var d = days[j];
+            var checked = logs[d] ? ' checked' : '';
+            var todayClass = d === today ? ' today' : '';
+            var label = d.slice(5);
+            html += '<div class="habit-day' + checked + todayClass + '" data-csp-click="toggleHabitDayRaw" data-habit="' + (h.id||0) + '" data-day="' + d + '" data-completed="' + (logs[d] ? '1' : '0') + '" title="' + d + '">';
+            html += checked ? '✓' : label.slice(3);
+            html += '</div>';
+        }
+        html += '</div>';
+
+        // Progress bar
+        var pct = Math.round((completedCount / habitDaysCount) * 100);
+        html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+        html += '<span style="font-size:0.8rem;color:var(--text-muted);">' + completedCount + '/' + habitDaysCount + ' 天</span>';
+        html += '<span style="font-size:0.8rem;font-weight:600;color:' + (h.color||'#10b981') + ';">' + pct + '%</span>';
+        html += '</div>';
+        html += '<div class="progress"><div class="progress-bar" style="width:' + pct + '%;background:' + (h.color||'#10b981') + ';"></div></div>';
+
+        html += '</div>';
+    }
+    grid.innerHTML = html;
+}
+
+function loadHabits() {
+    fetch('/api/habits').then(function(r) { return r.json(); })
+    .then(function(data) {
+        renderHabits(data.habits || data || []);
+    }).catch(function() {
+        document.getElementById('habitsGrid').innerHTML = '<div class="text-center text-muted py-4" style="grid-column:1/-1;">加载失败</div>';
+    });
+}
+
+// icon picker
+(function() {
+    var icons = document.querySelectorAll('#iconPicker .icon-picker-item');
+    icons.forEach(function(el) {
+        el.addEventListener('click', function() {
+            icons.forEach(function(x) { x.classList.remove('selected'); });
+            this.classList.add('selected');
+            document.getElementById('selectedIcon').value = this.getAttribute('data-icon');
+        });
+    });
+
+    var colors = document.querySelectorAll('#colorPicker .color-dot');
+    colors.forEach(function(el) {
+        el.addEventListener('click', function() {
+            colors.forEach(function(x) { x.classList.remove('selected'); });
+            this.classList.add('selected');
+            document.getElementById('selectedColor').value = this.getAttribute('data-color');
+        });
+    });
+})();
+
+// day toggle via click
+document.addEventListener('click', function(e) {
+    var el = e.target.closest('.habit-day');
+    if (!el) return;
+    var day = el.getAttribute('data-day');
+    var completed = el.getAttribute('data-completed') === '1';
+    toggleHabitDay(null, day, completed);
+});
+
+loadHabits();
+</script>
+{% endblock %}

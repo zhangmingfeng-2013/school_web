@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}每日一言 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.quote-wrapper { display: flex; align-items: center; justify-content: center; min-height: 60vh; padding: 2rem; }
+.quote-card {
+    max-width: 650px; width: 100%; padding: 3rem 2.5rem; border-radius: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 10px 40px rgba(102,126,234,.3);
+    color: #fff; position: relative; overflow: hidden;
+    transition: opacity .4s ease, transform .4s ease;
+}
+.quote-card::before {
+    content: '\201C'; position: absolute; top: -20px; left: 20px;
+    font-size: 8rem; opacity: .1; font-family: Georgia, serif; line-height: 1;
+}
+.quote-card.fade-out { opacity: 0; transform: translateY(10px); }
+.quote-text { font-size: 1.5rem; line-height: 1.8; font-weight: 400; margin-bottom: 1.5rem; position: relative; z-index: 1; }
+.quote-author { font-size: 1rem; opacity: .85; text-align: right; font-style: italic; }
+.quote-source { font-size: .85rem; opacity: .65; text-align: right; margin-top: .25rem; }
+.quote-actions { display: flex; gap: .75rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; }
+.quote-actions .btn { border-radius: 25px; padding: .5rem 1.5rem; font-weight: 500; }
+.quote-loading { text-align: center; padding: 3rem; }
+.quote-error { text-align: center; padding: 2rem; }
+</style>
+
+<h2 class="mb-4">💬 每日一言</h2>
+
+<div class="quote-wrapper">
+    <div class="quote-card" id="quoteCard">
+        <div class="quote-loading" id="quoteLoading">
+            <div class="spinner-border" role="status"></div>
+            <p class="mt-2">正在获取...</p>
+        </div>
+        <div id="quoteContent" style="display:none;">
+            <div class="quote-text" id="quoteText"></div>
+            <div class="quote-author" id="quoteAuthor"></div>
+            <div class="quote-source" id="quoteSource"></div>
+        </div>
+        <div class="quote-error" id="quoteError" style="display:none;">
+            <p>加载失败，请稍后再试</p>
+        </div>
+    </div>
+</div>
+
+<div class="quote-actions">
+    <button class="btn btn-light" data-csp-click="refreshQuote">🔄 换一句</button>
+    <button class="btn btn-outline-light" data-csp-click="copyQuote">📋 复制</button>
+    <button class="btn btn-outline-light" data-csp-click="shareQuote">🔗 分享</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var currentQuote = { text: '', author: '', source: '' };
+
+function fetchQuote() {
+    var card = document.getElementById('quoteCard');
+    var loading = document.getElementById('quoteLoading');
+    var content = document.getElementById('quoteContent');
+    var error = document.getElementById('quoteError');
+    
+    card.classList.add('fade-out');
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    error.style.display = 'none';
+    
+    fetch('/api/daily_quote').then(function(r) { return r.json(); }).then(function(d) {
+        loading.style.display = 'none';
+        card.classList.remove('fade-out');
+        if (d.ok) {
+            currentQuote.text = d.text || '';
+            currentQuote.author = d.author || '佚名';
+            currentQuote.source = d.source || '';
+            document.getElementById('quoteText').textContent = currentQuote.text;
+            document.getElementById('quoteAuthor').textContent = '— ' + currentQuote.author;
+            document.getElementById('quoteSource').textContent = currentQuote.source;
+            content.style.display = 'block';
+        } else {
+            error.style.display = 'block';
+            document.getElementById('quoteError').querySelector('p').textContent = d.error || '加载失败';
+        }
+    }).catch(function(err) {
+        loading.style.display = 'none';
+        card.classList.remove('fade-out');
+        error.style.display = 'block';
+        document.getElementById('quoteError').querySelector('p').textContent = '网络错误: ' + err.message;
+    });
+}
+
+function refreshQuote() {
+    fetchQuote();
+}
+
+function copyQuote() {
+    var text = currentQuote.text + '\n— ' + currentQuote.author;
+    if (currentQuote.source) text += ' (' + currentQuote.source + ')';
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() {
+            showToast('已复制到剪贴板');
+        }).catch(function() {
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('已复制到剪贴板'); } catch(e) { alert('复制失败'); }
+    document.body.removeChild(ta);
+}
+
+function shareQuote() {
+    var text = currentQuote.text + '\n— ' + currentQuote.author;
+    if (currentQuote.source) text += ' (' + currentQuote.source + ')';
+    if (navigator.share) {
+        navigator.share({ title: '每日一言', text: text }).catch(function() {});
+    } else {
+        copyQuote();
+    }
+}
+
+function showToast(msg) {
+    var toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-success';
+    toast.style.zIndex = '9999';
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 2000);
+}
+
+fetchQuote();
+</script>
+{% endblock %}

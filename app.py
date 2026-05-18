@@ -254,6 +254,7 @@ def _init_db_once():
         _init_reset_table()
         _init_marketplace_table()
         _init_src_table()
+        _init_life_tables()
         _init_db_done = True
 
 
@@ -694,8 +695,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/")
 
 @app.before_request
 def check_global_captcha():
@@ -6827,6 +6828,585 @@ def api_src_stats():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
+# ========== 新功能模块：生活实用 / 办公效率 / 娱乐资讯 / 工具增强 ==========
+
+# ---------- 数据库初始化：生活实用模块 ----------
+def _init_life_tables():
+    """创建记账/习惯/书签表"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        # 记账表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                category VARCHAR(20) DEFAULT '其他',
+                note VARCHAR(200),
+                expense_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_exp_user (username),
+                INDEX idx_exp_date (expense_date)
+            )
+        """)
+        # 习惯表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS habits (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                icon VARCHAR(10) DEFAULT '✅',
+                color VARCHAR(7) DEFAULT '#3b82f6',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_hab_user (username)
+            )
+        """)
+        # 习惯日志表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS habit_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                habit_id INT NOT NULL,
+                log_date DATE NOT NULL,
+                completed TINYINT DEFAULT 0,
+                note VARCHAR(200),
+                UNIQUE KEY uk_habit_date (habit_id, log_date)
+            )
+        """)
+        # 书签表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bookmarks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                url VARCHAR(2000) NOT NULL,
+                favicon VARCHAR(2000),
+                category VARCHAR(50) DEFAULT '未分类',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_bm_user (username)
+            )
+        """)
+        # RSS 订阅表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rss_feeds (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                url VARCHAR(2000) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_rss_user (username)
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("  生活实用模块数据库表初始化完成")
+    except pymysql.MySQLError as e:
+        print(f"  生活实用模块数据库表初始化失败: {e}")
+
+
+# ---------- 天气 ----------
+@app.route("/weather")
+def weather_page():
+    _init_life_tables()
+    return render_template("weather.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/weather")
+def api_weather():
+    """代理 wttr.in API 获取天气"""
+    city = request.args.get("city", "Chongqing")
+    try:
+        resp = requests.get(f"https://wttr.in/{city}?format=j1", timeout=10)
+        return jsonify(resp.json())
+    except Exception:
+        return jsonify({"error": "天气数据获取失败"}), 500
+
+# ---------- 记账 ----------
+@app.route("/expenses")
+@login_required
+def expenses_page():
+    return render_template("expenses.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/expenses", methods=["GET", "POST"])
+@login_required
+def api_expenses():
+    username = session["username"]
+    conn = get_db()
+    if request.method == "GET":
+        month = request.args.get("month", datetime.date.today().strftime("%Y-%m"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, amount, category, note, expense_date FROM expenses WHERE username=%s AND DATE_FORMAT(expense_date, '%%Y-%%m')=%s ORDER BY expense_date DESC, id DESC", (username, month))
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        return jsonify({"expenses": [{"id": r[0], "amount": float(r[1]), "category": r[2], "note": r[3], "date": str(r[4])} for r in rows]})
+    else:
+        data = request.get_json() or {}
+        amount = data.get("amount")
+        category = data.get("category", "其他")
+        note = data.get("note", "")
+        date = data.get("date", datetime.date.today().isoformat())
+        if not amount:
+            return jsonify({"ok": False, "error": "金额不能为空"}), 400
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO expenses (username, amount, category, note, expense_date) VALUES (%s,%s,%s,%s,%s)", (username, amount, category, note, date))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+
+@app.route("/api/expenses/<int:eid>", methods=["PUT", "DELETE"])
+@login_required
+def api_expense_item(eid):
+    username = session["username"]
+    conn = get_db()
+    if request.method == "DELETE":
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM expenses WHERE id=%s AND username=%s", (eid, username))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+    else:
+        data = request.get_json() or {}
+        cursor = conn.cursor()
+        cursor.execute("UPDATE expenses SET amount=%s, category=%s, note=%s, expense_date=%s WHERE id=%s AND username=%s", (data.get("amount"), data.get("category"), data.get("note"), data.get("date"), eid, username))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+
+@app.route("/api/expenses/stats")
+@login_required
+def api_expenses_stats():
+    username = session["username"]
+    month = request.args.get("month", datetime.date.today().strftime("%Y-%m"))
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT category, SUM(amount) as total FROM expenses WHERE username=%s AND DATE_FORMAT(expense_date, '%%Y-%%m')=%s GROUP BY category", (username, month))
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+    return jsonify({"stats": [{"category": r[0], "total": float(r[1])} for r in rows]})
+
+# ---------- 习惯追踪 ----------
+@app.route("/habits")
+@login_required
+def habits_page():
+    return render_template("habits.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/habits", methods=["GET", "POST"])
+@login_required
+def api_habits():
+    username = session["username"]
+    conn = get_db()
+    if request.method == "GET":
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, icon, color FROM habits WHERE username=%s ORDER BY id", (username,))
+        rows = cursor.fetchall()
+        habits = []
+        for r in rows:
+            cursor.execute("SELECT log_date, completed FROM habit_logs WHERE habit_id=%s AND log_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) ORDER BY log_date", (r[0],))
+            logs = [{"date": str(l[0]), "completed": bool(l[1])} for l in cursor.fetchall()]
+            habits.append({"id": r[0], "name": r[1], "icon": r[2], "color": r[3], "logs": logs})
+        cursor.close(); conn.close()
+        return jsonify({"habits": habits})
+    else:
+        data = request.get_json() or {}
+        name = data.get("name", "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "名称不能为空"}), 400
+        icon = data.get("icon", "✅")
+        color = data.get("color", "#3b82f6")
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO habits (username, name, icon, color) VALUES (%s,%s,%s,%s)", (username, name, icon, color))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": cursor.lastrowid if hasattr(cursor, 'lastrowid') else 0})
+
+@app.route("/api/habits/<int:hid>", methods=["PUT", "DELETE"])
+@login_required
+def api_habit_item(hid):
+    username = session["username"]
+    conn = get_db()
+    if request.method == "DELETE":
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM habit_logs WHERE habit_id=%s", (hid,))
+        cursor.execute("DELETE FROM habits WHERE id=%s AND username=%s", (hid, username))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+    else:
+        data = request.get_json() or {}
+        cursor = conn.cursor()
+        cursor.execute("UPDATE habits SET name=%s, icon=%s, color=%s WHERE id=%s AND username=%s", (data.get("name"), data.get("icon"), data.get("color"), hid, username))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+
+@app.route("/api/habit_logs", methods=["POST"])
+@login_required
+def api_habit_logs():
+    data = request.get_json() or {}
+    habit_id = data.get("habit_id")
+    date = data.get("date", datetime.date.today().isoformat())
+    completed = data.get("completed", True)
+    if not habit_id:
+        return jsonify({"ok": False, "error": "缺少 habit_id"}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO habit_logs (habit_id, log_date, completed) VALUES (%s,%s,%s) ON DUPLICATE KEY UPDATE completed=VALUES(completed)", (habit_id, date, 1 if completed else 0))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+# ---------- 番茄钟 ----------
+@app.route("/pomodoro")
+def pomodoro_page():
+    return render_template("pomodoro.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 书签管理 ----------
+@app.route("/bookmarks")
+@login_required
+def bookmarks_page():
+    return render_template("bookmarks.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/bookmarks", methods=["GET", "POST"])
+@login_required
+def api_bookmarks():
+    username = session["username"]
+    conn = get_db()
+    if request.method == "GET":
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, url, favicon, category FROM bookmarks WHERE username=%s ORDER BY category, id", (username,))
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        return jsonify({"bookmarks": [{"id": r[0], "title": r[1], "url": r[2], "favicon": r[3], "category": r[4]} for r in rows]})
+    else:
+        data = request.get_json() or {}
+        title = data.get("title", "").strip()
+        url = data.get("url", "").strip()
+        if not title or not url:
+            return jsonify({"ok": False, "error": "标题和URL不能为空"}), 400
+        if not url.startswith("http"):
+            url = "https://" + url
+        category = data.get("category", "未分类")
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO bookmarks (username, title, url, category) VALUES (%s,%s,%s,%s)", (username, title, url, category))
+        conn.commit()
+        bid = cursor.lastrowid
+        cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": bid})
+
+@app.route("/api/bookmarks/<int:bid>", methods=["PUT", "DELETE"])
+@login_required
+def api_bookmark_item(bid):
+    username = session["username"]
+    conn = get_db()
+    if request.method == "DELETE":
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM bookmarks WHERE id=%s AND username=%s", (bid, username))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+    else:
+        data = request.get_json() or {}
+        cursor = conn.cursor()
+        cursor.execute("UPDATE bookmarks SET title=%s, url=%s, category=%s WHERE id=%s AND username=%s", (data.get("title"), data.get("url"), data.get("category"), bid, username))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+
+# ---------- 文件格式转换 ----------
+@app.route("/converter")
+@login_required
+def converter_page():
+    return render_template("converter.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/converter", methods=["POST"])
+@login_required
+def api_converter():
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "请上传文件"}), 400
+    file = request.files["file"]
+    target = request.form.get("target", "txt")
+    filename = file.filename or "untitled"
+    try:
+        content = file.read()
+        result = ""
+        result_name = ""
+        mime = "text/plain"
+        # 图片格式转换
+        if target in ("png", "jpg", "jpeg", "webp", "gif", "bmp"):
+            img = Image.open(io.BytesIO(content))
+            buf = io.BytesIO()
+            fmt = "JPEG" if target in ("jpg", "jpeg") else target.upper()
+            if fmt == "JPEG":
+                img = img.convert("RGB")
+            img.save(buf, format=fmt)
+            result = buf.getvalue()
+            base = os.path.splitext(filename)[0]
+            result_name = f"{base}.{target}"
+            mime_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif", "bmp": "image/bmp"}
+            mime = mime_map.get(target, "application/octet-stream")
+        # CSV → JSON
+        elif target == "json" and filename.lower().endswith(".csv"):
+            import csv as _csv
+            text = content.decode("utf-8", errors="replace")
+            reader = _csv.DictReader(io.StringIO(text))
+            result = json.dumps([row for row in reader], ensure_ascii=False, indent=2).encode("utf-8")
+            base = os.path.splitext(filename)[0]
+            result_name = f"{base}.json"
+            mime = "application/json"
+        # JSON → CSV
+        elif target == "csv" and filename.lower().endswith(".json"):
+            data = json.loads(content.decode("utf-8", errors="replace"))
+            if isinstance(data, dict):
+                data = [data]
+            if data:
+                import csv as _csv
+                buf = io.StringIO()
+                writer = _csv.DictWriter(buf, fieldnames=data[0].keys())
+                writer.writeheader()
+                writer.writerows(data)
+                result = buf.getvalue().encode("utf-8")
+                base = os.path.splitext(filename)[0]
+                result_name = f"{base}.csv"
+                mime = "text/csv"
+        # 文本 → 其他编码
+        elif target in ("utf8", "gbk", "gb2312"):
+            text = content.decode("utf-8", errors="replace")
+            result = text.encode(target if target != "utf8" else "utf-8")
+            result_name = filename + f".{target}"
+        else:
+            return jsonify({"ok": False, "error": f"不支持的转换类型: {target}"}), 400
+        
+        # 返回文件
+        import base64 as _b64
+        return jsonify({
+            "ok": True,
+            "filename": result_name,
+            "data": _b64.b64encode(result).decode(),
+            "mime": mime
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"转换失败: {str(e)}"}), 500
+
+# ---------- RSS 阅读器 ----------
+@app.route("/rss")
+@login_required
+def rss_page():
+    return render_template("rss_reader.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/rss/fetch", methods=["POST"])
+@login_required
+def api_rss_fetch():
+    data = request.get_json() or {}
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "URL不能为空"}), 400
+    try:
+        import feedparser
+        feed = feedparser.parse(url)
+        if feed.bozo and not feed.entries:
+            return jsonify({"ok": False, "error": "无法解析该RSS源"}), 400
+        entries = []
+        for e in feed.entries[:30]:
+            entries.append({
+                "title": e.get("title", ""),
+                "link": e.get("link", ""),
+                "summary": (e.get("summary", "") or e.get("description", ""))[:300],
+                "published": e.get("published", "") or e.get("updated", ""),
+            })
+        return jsonify({"ok": True, "feed_title": feed.feed.get("title", url), "entries": entries})
+    except ImportError:
+        # 无 feedparser 时用 xml.etree 简单解析
+        try:
+            import xml.etree.ElementTree as ET
+            resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            root = ET.fromstring(resp.content)
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            entries = []
+            # RSS 2.0
+            for item in root.iter("item"):
+                entries.append({
+                    "title": (item.findtext("title") or "").strip(),
+                    "link": (item.findtext("link") or "").strip(),
+                    "summary": ((item.findtext("description") or "")[:300]).strip(),
+                    "published": (item.findtext("pubDate") or "").strip(),
+                })
+            # Atom
+            if not entries:
+                for entry in root.findall(".//atom:entry", ns):
+                    entries.append({
+                        "title": (entry.findtext("atom:title", "", ns) or "").strip(),
+                        "link": (entry.find(".//atom:link[@rel='alternate']", ns) or entry.find("atom:link", ns) or {}).get("href", ""),
+                        "summary": ((entry.findtext("atom:summary", "", ns) or entry.findtext("atom:content", "", ns))[:300]).strip(),
+                        "published": (entry.findtext("atom:updated", "", ns) or entry.findtext("atom:published", "", ns) or "").strip(),
+                    })
+            feed_title = root.findtext(".//channel/title") or url
+            return jsonify({"ok": True, "feed_title": feed_title, "entries": entries[:30]})
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"解析失败: {str(e)}"}), 500
+
+@app.route("/api/rss/feeds", methods=["GET", "POST"])
+@login_required
+def api_rss_feeds():
+    username = session["username"]
+    conn = get_db()
+    if request.method == "GET":
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, url FROM rss_feeds WHERE username=%s ORDER BY id", (username,))
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        return jsonify({"feeds": [{"id": r[0], "title": r[1], "url": r[2]} for r in rows]})
+    else:
+        data = request.get_json() or {}
+        title = data.get("title", "").strip()
+        url = data.get("url", "").strip()
+        if not title or not url:
+            return jsonify({"ok": False, "error": "标题和URL不能为空"}), 400
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO rss_feeds (username, title, url) VALUES (%s,%s,%s)", (username, title, url))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+
+@app.route("/api/rss/feeds/<int:fid>", methods=["DELETE"])
+@login_required
+def api_rss_feed_item(fid):
+    username = session["username"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM rss_feeds WHERE id=%s AND username=%s", (fid, username))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+# ---------- 每日一言 ----------
+@app.route("/daily_quote")
+def daily_quote_page():
+    return render_template("daily_quote.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/daily_quote")
+def api_daily_quote():
+    try:
+        resp = requests.get("https://v1.hitokoto.cn/?c=a&c=b&c=c&c=d&c=e&c=f&c=g&c=h&c=i&c=j&c=k&c=l", timeout=5)
+        data = resp.json()
+        return jsonify({"quote": data.get("hitokoto", ""), "from": data.get("from", "")})
+    except Exception:
+        # 本地备用
+        quotes = [
+            {"quote": "路漫漫其修远兮，吾将上下而求索。", "from": "屈原《离骚》"},
+            {"quote": "天行健，君子以自强不息。", "from": "《周易》"},
+            {"quote": "长风破浪会有时，直挂云帆济沧海。", "from": "李白《行路难》"},
+            {"quote": "宝剑锋从磨砺出，梅花香自苦寒来。", "from": "《警世贤文》"},
+            {"quote": "人生自古谁无死，留取丹心照汗青。", "from": "文天祥《过零丁洋》"},
+            {"quote": "非淡泊无以明志，非宁静无以致远。", "from": "诸葛亮《诫子书》"},
+            {"quote": "海内存知己，天涯若比邻。", "from": "王勃《送杜少府之任蜀州》"},
+            {"quote": "会当凌绝顶，一览众山小。", "from": "杜甫《望岳》"},
+        ]
+        import random as _rand
+        q = _rand.choice(quotes)
+        return jsonify(q)
+
+# ---------- 小游戏 ----------
+@app.route("/games")
+def games_page():
+    return render_template("games.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 二维码生成 ----------
+@app.route("/qrcode")
+@login_required
+def qrcode_page():
+    return render_template("qrcode.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/qrcode", methods=["POST"])
+@login_required
+def api_qrcode():
+    data = request.get_json() or {}
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"ok": False, "error": "内容不能为空"}), 400
+    try:
+        import qrcode as _qr
+        img = _qr.make(text)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        import base64 as _b64
+        return jsonify({"ok": True, "image": "data:image/png;base64," + _b64.b64encode(buf.getvalue()).decode()})
+    except ImportError:
+        return jsonify({"ok": False, "error": "qrcode 库未安装"}), 500
+
+# ---------- 图片压缩 ----------
+@app.route("/image_compress")
+@login_required
+def image_compress_page():
+    return render_template("image_compress.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/image_compress", methods=["POST"])
+@login_required
+def api_image_compress():
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "请上传图片"}), 400
+    file = request.files["file"]
+    quality = int(request.form.get("quality", 70))
+    max_width = int(request.form.get("max_width", 1920))
+    try:
+        img = Image.open(io.BytesIO(file.read()))
+        # 缩放
+        w, h = img.size
+        if w > max_width:
+            ratio = max_width / w
+            img = img.resize((max_width, int(h * ratio)), Image.LANCZOS)
+        # 压缩
+        buf = io.BytesIO()
+        fmt = img.format or "JPEG"
+        if fmt == "PNG":
+            img.save(buf, format="PNG", optimize=True)
+        else:
+            img = img.convert("RGB")
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+        compressed = buf.getvalue()
+        original_size = len(file.read()) if hasattr(file, 'tell') else 0
+        # 重新读取原始大小
+        file.seek(0)
+        original_size = len(file.read())
+        import base64 as _b64
+        return jsonify({
+            "ok": True,
+            "original_size": original_size,
+            "compressed_size": len(compressed),
+            "image": "data:image/jpeg;base64," + _b64.b64encode(compressed).decode(),
+            "ratio": round((1 - len(compressed)/max(original_size,1)) * 100, 1)
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"压缩失败: {str(e)}"}), 500
+
+# ---------- API 测试器 ----------
+@app.route("/api_tester")
+@login_required
+def api_tester_page():
+    return render_template("api_tester.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+@app.route("/api/api_tester/proxy", methods=["POST"])
+@login_required
+def api_api_tester_proxy():
+    data = request.get_json() or {}
+    url = data.get("url", "").strip()
+    method = data.get("method", "GET").upper()
+    headers = data.get("headers", {})
+    body = data.get("body", "")
+    if not url:
+        return jsonify({"ok": False, "error": "URL不能为空"}), 400
+    if not url.startswith("http"):
+        url = "https://" + url
+    try:
+        req_headers = {"User-Agent": "Mozilla/5.0"}
+        if isinstance(headers, dict):
+            req_headers.update(headers)
+        kwargs = {"timeout": 15, "headers": req_headers, "allow_redirects": True}
+        if method in ("POST", "PUT", "PATCH"):
+            if body:
+                kwargs["data"] = body
+        resp = requests.request(method, url, **kwargs)
+        return jsonify({
+            "ok": True,
+            "status": resp.status_code,
+            "headers": dict(resp.headers),
+            "body": resp.text[:5000]
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"请求失败: {str(e)}"}), 500
 
 
 # ---------- 启动 ----------

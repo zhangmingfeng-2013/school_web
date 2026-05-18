@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}书签管理 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.bookmark-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+.bookmark-card { border: 1px solid var(--border-light); border-radius: 12px; padding: 1rem; background: var(--bs-body-bg); transition: all .2s; display: flex; align-items: center; gap: 0.75rem; }
+.bookmark-card:hover { box-shadow: var(--card-shadow); transform: translateY(-2px); }
+.bookmark-favicon { width: 36px; height: 36px; border-radius: 8px; background: var(--bs-tertiary-bg); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+.bookmark-info { flex: 1; min-width: 0; }
+.bookmark-title { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bookmark-url { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bookmark-cat { font-size: 0.7rem; padding: 1px 8px; border-radius: 10px; background: var(--bs-tertiary-bg); color: var(--text-muted); }
+.bookmark-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.cat-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 1rem; }
+.cat-tab { padding: 4px 14px; border-radius: 20px; border: 1px solid var(--border-light); cursor: pointer; background: var(--bs-body-bg); color: var(--text-muted); font-size: 0.85rem; transition: all .15s; }
+.cat-tab:hover { border-color: #3b82f6; color: #3b82f6; }
+.cat-tab.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+.edit-form-card { display: none; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0">🔖 书签管理</h2>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" data-csp-click="showAddBookmark">➕ 新建书签</button>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+    </div>
+</div>
+
+<!-- Add Bookmark Form -->
+<div class="card mb-3" id="addBookmarkCard" style="display:none;">
+    <div class="card-body">
+        <h5 class="card-title mb-3" id="bookmarkFormTitle">新建书签</h5>
+        <form id="bookmarkForm" data-csp-submit="submitBookmark">
+            <input type="hidden" name="editId" id="editBookmarkId" value="">
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">标题</label>
+                    <input type="text" name="title" class="form-control" placeholder="网站名称" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">URL</label>
+                    <input type="url" name="url" class="form-control" placeholder="https://..." required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">分类</label>
+                    <select name="category" class="form-select">
+                        <option value="工作">💼 工作</option>
+                        <option value="学习">📚 学习</option>
+                        <option value="娱乐">🎮 娱乐</option>
+                        <option value="工具">🔧 工具</option>
+                        <option value="社交">💬 社交</option>
+                        <option value="其他">📦 其他</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success" id="bookmarkSubmitBtn">💾 保存</button>
+            <button type="button" class="btn btn-outline-secondary" data-csp-click="hideAddBookmark">取消</button>
+        </form>
+    </div>
+</div>
+
+<!-- Category Filters -->
+<div class="cat-tabs" id="catTabs">
+    <span class="cat-tab active" data-csp-click="filterByCat" data-csp-args='["全部"]'>全部</span>
+    <span class="cat-tab" data-csp-click="filterByCat" data-csp-args='["工作"]'>💼 工作</span>
+    <span class="cat-tab" data-csp-click="filterByCat" data-csp-args='["学习"]'>📚 学习</span>
+    <span class="cat-tab" data-csp-click="filterByCat" data-csp-args='["娱乐"]'>🎮 娱乐</span>
+    <span class="cat-tab" data-csp-click="filterByCat" data-csp-args='["工具"]'>🔧 工具</span>
+    <span class="cat-tab" data-csp-click="filterByCat" data-csp-args='["社交"]'>💬 社交</span>
+    <span class="cat-tab" data-csp-click="filterByCat" data-csp-args='["其他"]'>📦 其他</span>
+</div>
+
+<!-- Bookmarks Grid -->
+<div class="bookmark-grid" id="bookmarkGrid">
+    <div class="text-center text-muted py-4" style="grid-column:1/-1;">加载中...</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var allBookmarks = [];
+var currentCat = '全部';
+
+function showAddBookmark() {
+    document.getElementById('addBookmarkCard').style.display = 'block';
+    document.getElementById('bookmarkFormTitle').textContent = '新建书签';
+    document.getElementById('bookmarkSubmitBtn').textContent = '💾 保存';
+    document.getElementById('editBookmarkId').value = '';
+    document.getElementById('bookmarkForm').reset();
+    document.querySelector('#bookmarkForm input[name="title"]').focus();
+}
+
+function hideAddBookmark() {
+    document.getElementById('addBookmarkCard').style.display = 'none';
+    document.getElementById('bookmarkForm').reset();
+    document.getElementById('editBookmarkId').value = '';
+}
+
+function editBookmark(id) {
+    var bm = null;
+    for (var i = 0; i < allBookmarks.length; i++) {
+        if (allBookmarks[i].id === id) { bm = allBookmarks[i]; break; }
+    }
+    if (!bm) return;
+    document.getElementById('addBookmarkCard').style.display = 'block';
+    document.getElementById('bookmarkFormTitle').textContent = '编辑书签';
+    document.getElementById('bookmarkSubmitBtn').textContent = '✏️ 更新';
+    document.getElementById('editBookmarkId').value = bm.id;
+    document.querySelector('#bookmarkForm input[name="title"]').value = bm.title || '';
+    document.querySelector('#bookmarkForm input[name="url"]').value = bm.url || '';
+    document.querySelector('#bookmarkForm select[name="category"]').value = bm.category || '其他';
+}
+
+function submitBookmark(e) {
+    var form = this;
+    var data = new FormData(form);
+    var editId = data.get('editId');
+    var body = {
+        title: data.get('title'),
+        url: data.get('url'),
+        category: data.get('category')
+    };
+
+    var method = editId ? 'PUT' : 'POST';
+    var url = editId ? '/api/bookmarks/' + editId : '/api/bookmarks';
+
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); })
+    .then(function() {
+        hideAddBookmark();
+        loadBookmarks();
+    }).catch(function() { alert('保存失败'); });
+}
+
+function deleteBookmark(id) {
+    if (!confirm('确定删除这个书签吗？')) return;
+    fetch('/api/bookmarks/' + id, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function() { loadBookmarks(); })
+        .catch(function() {});
+}
+
+function filterByCat(cat) {
+    currentCat = cat;
+    var tabs = document.querySelectorAll('#catTabs .cat-tab');
+    tabs.forEach(function(t) { t.classList.remove('active'); });
+    for (var i = 0; i < tabs.length; i++) {
+        if (tabs[i].textContent.indexOf(cat) !== -1) { tabs[i].classList.add('active'); break; }
+    }
+    renderBookmarks();
+}
+
+function getFavicon(url) {
+    try {
+        var host = new URL(url).hostname;
+        return 'https://www.google.com/s2/favicons?domain=' + host + '&sz=32';
+    } catch(e) { return ''; }
+}
+
+function renderBookmarks() {
+    var grid = document.getElementById('bookmarkGrid');
+    var filtered = currentCat === '全部' ? allBookmarks : allBookmarks.filter(function(b) { return b.category === currentCat; });
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="text-center text-muted py-4" style="grid-column:1/-1;">暂无书签</div>';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < filtered.length; i++) {
+        var b = filtered[i];
+        var faviconUrl = getFavicon(b.url);
+        html += '<div class="bookmark-card">';
+        html += '<div class="bookmark-favicon">';
+        if (faviconUrl) {
+            html += '<img src="' + faviconUrl + '" alt="" style="width:20px;height:20px;" onerror="this.style.display=\'none\'">';
+        }
+        html += '🔗</div>';
+        html += '<div class="bookmark-info">';
+        html += '<div class="bookmark-title"><a href="' + (b.url||'#') + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">' + (b.title||'未命名') + '</a></div>';
+        html += '<div class="bookmark-url">' + (b.url||'') + '</div>';
+        html += '<span class="bookmark-cat">' + (b.category||'其他') + '</span>';
+        html += '</div>';
+        html += '<div class="bookmark-actions">';
+        html += '<button class="btn btn-outline-secondary btn-sm" data-csp-click="editBookmark" data-csp-args="[' + (b.id||0) + ']" title="编辑">✏️</button>';
+        html += '<button class="btn btn-outline-danger btn-sm" data-csp-click="deleteBookmark" data-csp-args="[' + (b.id||0) + ']" title="删除">🗑</button>';
+        html += '</div>';
+        html += '</div>';
+    }
+    grid.innerHTML = html;
+}
+
+function loadBookmarks() {
+    fetch('/api/bookmarks').then(function(r) { return r.json(); })
+    .then(function(data) {
+        allBookmarks = data.bookmarks || data || [];
+        renderBookmarks();
+    }).catch(function() {
+        document.getElementById('bookmarkGrid').innerHTML = '<div class="text-center text-muted py-4" style="grid-column:1/-1;">加载失败</div>';
+    });
+}
+
+loadBookmarks();
+</script>
+{% endblock %}
