@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}天气预报 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.weather-current { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-radius: 16px; padding: 2rem; text-align: center; }
+.weather-current .temp { font-size: 4rem; font-weight: 700; line-height: 1; }
+.weather-current .desc { font-size: 1.3rem; opacity: 0.9; }
+.weather-current .detail { font-size: 0.95rem; opacity: 0.85; margin-top: 0.5rem; }
+.forecast-card { background: var(--bs-body-bg); border: 1px solid var(--border-light); border-radius: 12px; padding: 1rem; text-align: center; transition: transform .2s; }
+.forecast-card:hover { transform: translateY(-3px); box-shadow: var(--card-shadow); }
+.forecast-card .day { font-weight: 600; font-size: 0.9rem; color: var(--text-muted); }
+.forecast-card .icon { font-size: 2.5rem; margin: 0.5rem 0; }
+.forecast-card .temp-range { font-size: 1rem; }
+.forecast-card .temp-high { color: #e74c3c; font-weight: 600; }
+.forecast-card .temp-low { color: #3498db; font-weight: 600; }
+.weather-search { max-width: 400px; }
+.weather-loading { text-align: center; padding: 3rem; color: var(--text-muted); }
+.weather-error { background: rgba(220,53,69,.1); color: #dc3545; padding: 1rem; border-radius: 10px; text-align: center; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h2 class="mb-0">🌤️ 天气预报</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+</div>
+
+<div class="weather-search mx-auto mb-4">
+    <div class="input-group">
+        <span class="input-group-text">🏙️</span>
+        <input type="text" id="cityInput" class="form-control" placeholder="输入城市名..." value="重庆" data-csp-enter="searchWeather">
+        <button class="btn btn-primary" data-csp-click="searchWeather">🔍 查询</button>
+    </div>
+</div>
+
+<div id="weatherResult">
+    <div class="weather-loading">
+        <div class="spinner-border text-primary mb-2" role="status"></div>
+        <p>加载中...</p>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+function weatherEmoji(code) {
+    var map = {
+        '晴': '☀️', 'Sunny': '☀️', 'Clear': '☀️',
+        '多云': '⛅', 'Partly cloudy': '⛅', 'Partly Cloudy': '⛅',
+        '阴': '☁️', 'Cloudy': '☁️', 'Overcast': '☁️',
+        '小雨': '🌧️', 'Light rain': '🌧️', 'Patchy rain possible': '🌦️',
+        '中雨': '🌧️', 'Moderate rain': '🌧️',
+        '大雨': '⛈️', 'Heavy rain': '⛈️',
+        '雷阵雨': '⛈️', 'Thundery outbreaks possible': '⛈️',
+        '雪': '❄️', 'Snow': '❄️', 'Light snow': '🌨️',
+        '雾': '🌫️', 'Mist': '🌫️', 'Fog': '🌫️', 'Haze': '🌫️',
+        '风': '💨', 'Windy': '💨'
+    };
+    for (var k in map) {
+        if (code && code.indexOf(k) !== -1) return map[k];
+    }
+    return '🌤️';
+}
+
+function searchWeather() {
+    var city = document.getElementById('cityInput').value.trim() || '重庆';
+    var resultDiv = document.getElementById('weatherResult');
+    resultDiv.innerHTML = '<div class="weather-loading"><div class="spinner-border text-primary mb-2"></div><p>查询中...</p></div>';
+
+    fetch('/api/weather?city=' + encodeURIComponent(city))
+        .then(function(r) {
+            if (!r.ok) throw new Error('查询失败 (HTTP ' + r.status + ')');
+            return r.json();
+        })
+        .then(function(data) {
+            if (!data || !data.current) {
+                resultDiv.innerHTML = '<div class="weather-error">暂无该城市的天气数据</div>';
+                return;
+            }
+            var c = data.current;
+            var emoji = weatherEmoji(c.condition);
+            var forecasts = data.forecast || [];
+
+            var html = '';
+            // Current weather
+            html += '<div class="weather-current mb-4">';
+            html += '<div style="font-size:1.2rem;opacity:0.9;">' + (data.city || city) + '</div>';
+            html += '<div class="temp">' + c.temp + '°C</div>';
+            html += '<div class="desc">' + emoji + ' ' + (c.condition || '') + '</div>';
+            html += '<div class="detail">';
+            html += '💧 湿度 ' + (c.humidity || '--') + '% &nbsp;|&nbsp; ';
+            html += '💨 ' + (c.wind || '--') + ' km/h &nbsp;|&nbsp; ';
+            html += '🌡️ 体感 ' + (c.feelsLike || c.temp) + '°C';
+            html += '</div>';
+            html += '</div>';
+
+            // Forecast
+            if (forecasts.length > 0) {
+                html += '<h5 class="mb-3">📅 未来天气</h5>';
+                html += '<div class="row g-3">';
+                for (var i = 0; i < forecasts.length && i < 3; i++) {
+                    var f = forecasts[i];
+                    html += '<div class="col-md-4">';
+                    html += '<div class="forecast-card">';
+                    html += '<div class="day">' + (f.date || '') + '</div>';
+                    html += '<div class="icon">' + weatherEmoji(f.condition) + '</div>';
+                    html += '<div class="temp-range">';
+                    html += '<span class="temp-high">' + (f.high || '--') + '°</span> ';
+                    html += '<span class="temp-low">' + (f.low || '--') + '°</span>';
+                    html += '</div>';
+                    html += '<div style="font-size:0.85rem;color:var(--text-muted);">' + (f.condition || '') + '</div>';
+                    html += '</div></div>';
+                }
+                html += '</div>';
+            }
+
+            resultDiv.innerHTML = html;
+        })
+        .catch(function(err) {
+            resultDiv.innerHTML = '<div class="weather-error">⚠️ 查询失败: ' + (err.message || '网络错误') + '</div>';
+        });
+}
+
+// Load on page ready
+searchWeather();
+</script>
+{% endblock %}

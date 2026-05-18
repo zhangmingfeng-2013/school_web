@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}番茄钟 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.pomodoro-wrap { max-width: 420px; margin: 0 auto; text-align: center; }
+.timer-ring { position: relative; width: 260px; height: 260px; margin: 0 auto 2rem; }
+.timer-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+.timer-ring .bg-circle { fill: none; stroke: var(--bs-tertiary-bg); stroke-width: 8; }
+.timer-ring .progress-circle { fill: none; stroke: #ef4444; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.5s linear; }
+.timer-ring .time-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 3.5rem; font-weight: 700; color: var(--text-body); font-family: 'SF Mono', Consolas, monospace; }
+.timer-ring .mode-label { position: absolute; top: 65%; left: 50%; transform: translateX(-50%); font-size: 0.9rem; color: var(--text-muted); letter-spacing: 2px; }
+.timer-ring.break .progress-circle { stroke: #10b981; }
+.pomo-buttons { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+.pomo-btn { width: 70px; height: 70px; border-radius: 50%; border: none; font-size: 1.4rem; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; }
+.pomo-btn.start { background: #ef4444; color: #fff; }
+.pomo-btn.start:hover { background: #dc2626; transform: scale(1.05); }
+.pomo-btn.pause { background: #f59e0b; color: #fff; }
+.pomo-btn.pause:hover { background: #d97706; }
+.pomo-btn.reset { background: var(--bs-tertiary-bg); color: var(--text-body); border: 2px solid var(--border-light); }
+.pomo-btn.reset:hover { background: var(--bg-card-hover); }
+.session-counter { margin-top: 1.5rem; font-size: 0.95rem; color: var(--text-muted); }
+.session-counter .count { font-weight: 700; font-size: 1.5rem; color: #ef4444; }
+.pomo-presets { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1.5rem; }
+.preset-btn { padding: 4px 16px; border-radius: 20px; border: 1px solid var(--border-light); background: var(--bs-body-bg); color: var(--text-muted); cursor: pointer; font-size: 0.85rem; transition: all .15s; }
+.preset-btn:hover { border-color: #ef4444; color: #ef4444; }
+.preset-btn.active { background: #ef4444; color: #fff; border-color: #ef4444; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">🍅 番茄钟</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+</div>
+
+<div class="pomodoro-wrap">
+    <div class="pomo-presets">
+        <button class="preset-btn active" data-csp-click="setPreset" data-csp-args='[25]'>25 分钟</button>
+        <button class="preset-btn" data-csp-click="setPreset" data-csp-args='[45]'>45 分钟</button>
+        <button class="preset-btn" data-csp-click="setPreset" data-csp-args='[60]'>60 分钟</button>
+    </div>
+
+    <div class="timer-ring" id="timerRing">
+        <svg viewBox="0 0 100 100">
+            <circle class="bg-circle" cx="50" cy="50" r="44"/>
+            <circle class="progress-circle" id="progressCircle" cx="50" cy="50" r="44" stroke-dasharray="276.46" stroke-dashoffset="0"/>
+        </svg>
+        <div class="time-display" id="timeDisplay">25:00</div>
+        <div class="mode-label" id="modeLabel">专注</div>
+    </div>
+
+    <div class="pomo-buttons">
+        <button class="pomo-btn start" id="btnStart" data-csp-click="pomoStart" title="开始">▶</button>
+        <button class="pomo-btn pause" id="btnPause" data-csp-click="pomoPause" title="暂停" style="display:none;">⏸</button>
+        <button class="pomo-btn reset" data-csp-click="pomoReset" title="重置">↺</button>
+    </div>
+
+    <div class="session-counter">
+        已完成 <span class="count" id="sessionCount">0</span> 个番茄
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var WORK_TIME = 25 * 60;
+var BREAK_TIME = 5 * 60;
+var totalSeconds = WORK_TIME;
+var remaining = totalSeconds;
+var isBreak = false;
+var intervalId = null;
+var sessionCount = 0;
+var totalDash = 2 * Math.PI * 44; // ~276.46
+
+function formatTime(secs) {
+    var m = Math.floor(secs / 60);
+    var s = secs % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function updateDisplay() {
+    document.getElementById('timeDisplay').textContent = formatTime(remaining);
+    var offset = totalDash * (1 - remaining / totalSeconds);
+    document.getElementById('progressCircle').style.strokeDashoffset = offset;
+}
+
+function setPreset(mins) {
+    WORK_TIME = mins * 60;
+    pomoReset();
+    var btns = document.querySelectorAll('.pomo-presets .preset-btn');
+    btns.forEach(function(b) { b.classList.remove('active'); });
+    var target = document.querySelector('.preset-btn[data-csp-args=\'[' + mins + ']\']');
+    if (target) target.classList.add('active');
+}
+
+function pomoStart() {
+    if (intervalId) return;
+    var audioCtx = null;
+    intervalId = setInterval(function() {
+        remaining--;
+        updateDisplay();
+        if (remaining <= 0) {
+            clearInterval(intervalId);
+            intervalId = null;
+            // Play notification sound
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = 800;
+                gain.gain.value = 0.3;
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch(ee) {}
+
+            if (!isBreak) {
+                sessionCount++;
+                document.getElementById('sessionCount').textContent = sessionCount;
+                // Switch to break
+                isBreak = true;
+                totalSeconds = BREAK_TIME;
+                remaining = totalSeconds;
+                document.getElementById('modeLabel').textContent = '休息';
+                document.getElementById('timerRing').classList.add('break');
+                updateDisplay();
+                pomoStart();
+            } else {
+                // Break finished, switch back
+                isBreak = false;
+                totalSeconds = WORK_TIME;
+                remaining = totalSeconds;
+                document.getElementById('modeLabel').textContent = '专注';
+                document.getElementById('timerRing').classList.remove('break');
+                updateDisplay();
+                toggleButtons(false);
+            }
+        }
+    }, 1000);
+    toggleButtons(true);
+}
+
+function pomoPause() {
+    if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+    }
+    toggleButtons(false);
+}
+
+function pomoReset() {
+    if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+    }
+    isBreak = false;
+    totalSeconds = WORK_TIME;
+    remaining = totalSeconds;
+    document.getElementById('modeLabel').textContent = '专注';
+    document.getElementById('timerRing').classList.remove('break');
+    updateDisplay();
+    toggleButtons(false);
+}
+
+function toggleButtons(running) {
+    document.getElementById('btnStart').style.display = running ? 'none' : '';
+    document.getElementById('btnPause').style.display = running ? '' : 'none';
+}
+
+updateDisplay();
+</script>
+{% endblock %}

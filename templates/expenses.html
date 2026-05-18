@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}记账本 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.expense-total { font-size: 2.2rem; font-weight: 700; color: #3b82f6; }
+.expense-card { max-width: 900px; margin: 0 auto; }
+.expense-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-light); transition: background .15s; }
+.expense-item:hover { background: var(--bg-card-hover); }
+.expense-cat { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; }
+.cat-餐饮 { background: #fef3c7; color: #92400e; }
+.cat-交通 { background: #dbeafe; color: #1e40af; }
+.cat-购物 { background: #fce7f3; color: #9d174d; }
+.cat-娱乐 { background: #ede9fe; color: #5b21b6; }
+.cat-住房 { background: #d1fae5; color: #065f46; }
+.cat-医疗 { background: #fee2e2; color: #991b1b; }
+.cat-教育 { background: #e0e7ff; color: #3730a3; }
+.cat-其他 { background: #f3f4f6; color: #374151; }
+.pie-chart { width: 200px; height: 200px; border-radius: 50%; margin: 0 auto; position: relative; }
+.pie-legend { font-size: 0.85rem; }
+.pie-legend span { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+[data-bs-theme="dark"] .cat-餐饮 { background: rgba(251,191,36,.2); color: #fbbf24; }
+[data-bs-theme="dark"] .cat-交通 { background: rgba(59,130,246,.2); color: #60a5fa; }
+[data-bs-theme="dark"] .cat-购物 { background: rgba(236,72,153,.2); color: #f472b6; }
+[data-bs-theme="dark"] .cat-娱乐 { background: rgba(139,92,246,.2); color: #a78bfa; }
+[data-bs-theme="dark"] .cat-住房 { background: rgba(16,185,129,.2); color: #34d399; }
+[data-bs-theme="dark"] .cat-医疗 { background: rgba(239,68,68,.2); color: #f87171; }
+[data-bs-theme="dark"] .cat-教育 { background: rgba(99,102,241,.2); color: #818cf8; }
+[data-bs-theme="dark"] .cat-其他 { background: rgba(156,163,175,.2); color: #d1d5db; }
+</style>
+
+<h2 class="mb-3">💰 记账本</h2>
+<div class="d-flex gap-2 mb-4 flex-wrap align-items-center">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+    <input type="month" id="monthSelector" class="form-control form-control-sm" style="max-width:180px;" data-csp-change="loadExpenses">
+    <button class="btn btn-primary btn-sm" data-csp-click="showAddForm">➕ 记一笔</button>
+    <select id="catFilter" class="form-select form-select-sm" style="max-width:140px;" data-csp-change="loadExpenses">
+        <option value="">全部类别</option>
+        <option value="餐饮">餐饮</option>
+        <option value="交通">交通</option>
+        <option value="购物">购物</option>
+        <option value="娱乐">娱乐</option>
+        <option value="住房">住房</option>
+        <option value="医疗">医疗</option>
+        <option value="教育">教育</option>
+        <option value="其他">其他</option>
+    </select>
+</div>
+
+<!-- Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card"><div class="card-body text-center">
+            <div class="text-muted mb-1">本月支出</div>
+            <div class="expense-total" id="totalAmount">¥0.00</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card"><div class="card-body text-center">
+            <div class="text-muted mb-1">记录笔数</div>
+            <div class="expense-total" id="totalCount">0</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card"><div class="card-body">
+            <div class="text-muted mb-1 text-center">类别分布</div>
+            <div class="pie-chart" id="pieChart" style="background: conic-gradient(#e5e7eb 0% 100%);"></div>
+            <div class="pie-legend mt-2 text-center" id="pieLegend"></div>
+        </div></div>
+    </div>
+</div>
+
+<!-- Add Form (hidden by default) -->
+<div class="card mb-4" id="addFormCard" style="display:none;">
+    <div class="card-body">
+        <h5 class="card-title mb-3">记一笔账</h5>
+        <form id="expenseForm" data-csp-submit="submitExpense">
+            <div class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">金额 ¥</label>
+                    <input type="number" step="0.01" min="0.01" name="amount" class="form-control" placeholder="0.00" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">类别</label>
+                    <select name="category" class="form-select" required>
+                        <option value="">选择</option>
+                        <option value="餐饮">🍜 餐饮</option>
+                        <option value="交通">🚗 交通</option>
+                        <option value="购物">🛍️ 购物</option>
+                        <option value="娱乐">🎮 娱乐</option>
+                        <option value="住房">🏠 住房</option>
+                        <option value="医疗">🏥 医疗</option>
+                        <option value="教育">📚 教育</option>
+                        <option value="其他">📦 其他</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">日期</label>
+                    <input type="date" name="date" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">备注</label>
+                    <input type="text" name="note" class="form-control" placeholder="可选">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success">💾 保存</button>
+            <button type="button" class="btn btn-outline-secondary" data-csp-click="hideAddForm">取消</button>
+        </form>
+    </div>
+</div>
+
+<!-- Expense List -->
+<div class="card expense-card">
+    <div class="card-body p-0" id="expenseList">
+        <div class="text-center text-muted py-4">暂无记录</div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var catColors = {
+    '餐饮': '#f59e0b', '交通': '#3b82f6', '购物': '#ec4899', '娱乐': '#8b5cf6',
+    '住房': '#10b981', '医疗': '#ef4444', '教育': '#6366f1', '其他': '#6b7280'
+};
+
+function getMonth() {
+    return document.getElementById('monthSelector').value || (new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0'));
+}
+
+function showAddForm() {
+    document.getElementById('addFormCard').style.display = 'block';
+    document.querySelector('#expenseForm input[name="date"]').value = new Date().toISOString().split('T')[0];
+    document.querySelector('#expenseForm input[name="amount"]').focus();
+}
+
+function hideAddForm() {
+    document.getElementById('addFormCard').style.display = 'none';
+    document.getElementById('expenseForm').reset();
+}
+
+function submitExpense(e) {
+    var form = this;
+    var data = new FormData(form);
+    var body = {
+        amount: parseFloat(data.get('amount')),
+        category: data.get('category'),
+        date: data.get('date'),
+        note: data.get('note') || ''
+    };
+    fetch('/api/expenses', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok || d.id) {
+            hideAddForm();
+            loadExpenses();
+        }
+    }).catch(function(err) { alert('保存失败'); });
+}
+
+function deleteExpense(id) {
+    if (!confirm('确定删除这条记录吗？')) return;
+    fetch('/api/expenses/' + id, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function() { loadExpenses(); })
+        .catch(function() {});
+}
+
+function loadExpenses() {
+    var month = getMonth();
+    var cat = document.getElementById('catFilter').value;
+    var url = '/api/expenses?month=' + month;
+    if (cat) url += '&category=' + encodeURIComponent(cat);
+
+    fetch(url).then(function(r) { return r.json(); })
+    .then(function(data) {
+        var items = data.items || [];
+        var listDiv = document.getElementById('expenseList');
+
+        if (items.length === 0) {
+            listDiv.innerHTML = '<div class="text-center text-muted py-4">暂无记录</div>';
+            document.getElementById('totalAmount').textContent = '¥0.00';
+            document.getElementById('totalCount').textContent = '0';
+            updatePie({});
+            return;
+        }
+
+        var html = '';
+        var totalSum = 0;
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            totalSum += it.amount || 0;
+            html += '<div class="expense-item">';
+            html += '<div>';
+            html += '<span class="expense-cat cat-' + (it.category||'其他') + '">' + (it.category||'其他') + '</span> ';
+            html += '<span style="margin-left:8px;">' + (it.note || '') + '</span>';
+            html += '</div>';
+            html += '<div class="d-flex align-items-center gap-3">';
+            html += '<span style="font-size:0.85rem;color:var(--text-muted);">' + (it.date || '') + '</span>';
+            html += '<strong style="color:#3b82f6;">¥' + (it.amount||0).toFixed(2) + '</strong>';
+            html += '<button class="btn btn-outline-danger btn-sm" data-csp-click="deleteExpense" data-csp-args="[' + (it.id||0) + ']">✕</button>';
+            html += '</div>';
+            html += '</div>';
+        }
+        listDiv.innerHTML = html;
+        document.getElementById('totalAmount').textContent = '¥' + totalSum.toFixed(2);
+        document.getElementById('totalCount').textContent = items.length;
+
+        // Load stats for pie
+        fetch('/api/expenses/stats?month=' + month).then(function(r) { return r.json(); })
+        .then(function(stats) { updatePie(stats || {}); })
+        .catch(function() {});
+    }).catch(function() {
+        document.getElementById('expenseList').innerHTML = '<div class="text-center text-muted py-4">加载失败</div>';
+    });
+}
+
+function updatePie(stats) {
+    var pie = document.getElementById('pieChart');
+    var legend = document.getElementById('pieLegend');
+    var total = 0;
+    var cats = Object.keys(stats);
+    for (var i = 0; i < cats.length; i++) total += stats[cats[i]] || 0;
+
+    if (total === 0) {
+        pie.style.background = 'conic-gradient(#e5e7eb 0% 100%)';
+        legend.innerHTML = '<span style="color:var(--text-muted);">暂无数据</span>';
+        return;
+    }
+
+    var gradientParts = [];
+    var acc = 0;
+    var legendHtml = '';
+    for (var i = 0; i < cats.length; i++) {
+        var pct = (stats[cats[i]] / total) * 100;
+        var color = catColors[cats[i]] || '#6b7280';
+        gradientParts.push(color + ' ' + acc + '% ' + (acc + pct) + '%');
+        legendHtml += '<span style="background:' + color + ';width:12px;height:12px;display:inline-block;border-radius:3px;margin-right:4px;"></span>' + cats[i] + ' ' + pct.toFixed(0) + '% ';
+        acc += pct;
+    }
+    pie.style.background = 'conic-gradient(' + gradientParts.join(', ') + ')';
+    legend.innerHTML = legendHtml;
+}
+
+// Init
+(function() {
+    var now = new Date();
+    document.getElementById('monthSelector').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    loadExpenses();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}文件格式转换 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.converter-wrap { max-width: 700px; margin: 0 auto; }
+.drop-zone { border: 3px dashed var(--border-light); border-radius: 16px; padding: 3rem 2rem; text-align: center; cursor: pointer; transition: all .25s; background: var(--bs-tertiary-bg); }
+.drop-zone:hover, .drop-zone.dragover { border-color: #3b82f6; background: rgba(59,130,246,.05); }
+.drop-zone .icon { font-size: 3rem; margin-bottom: 0.5rem; }
+.drop-zone .text { color: var(--text-muted); font-size: 1rem; }
+.drop-zone .hint { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.25rem; }
+.file-info { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bs-tertiary-bg); border-radius: 12px; margin-top: 1rem; }
+.file-info .name { font-weight: 600; flex: 1; word-break: break-all; }
+.file-info .size { color: var(--text-muted); font-size: 0.85rem; white-space: nowrap; }
+.result-zone { text-align: center; padding: 2rem; background: rgba(16,185,129,.08); border-radius: 16px; margin-top: 1rem; }
+.result-zone .success-icon { font-size: 3rem; }
+.result-preview { max-width: 100%; max-height: 400px; border-radius: 12px; margin: 1rem 0; }
+.result-text { background: var(--code-bg); color: var(--code-color); padding: 1rem; border-radius: 8px; max-height: 300px; overflow-y: auto; font-family: 'SF Mono',Consolas,monospace; font-size: 0.85rem; text-align: left; white-space: pre-wrap; word-break: break-all; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">🔄 文件格式转换</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+</div>
+
+<div class="converter-wrap">
+    <!-- Format selector -->
+    <div class="mb-3">
+        <label class="form-label">目标格式</label>
+        <select id="targetFormat" class="form-select">
+            <option value="jpg">PNG → JPG</option>
+            <option value="png">JPG → PNG</option>
+            <option value="webp">PNG → WebP</option>
+            <option value="json">CSV → JSON</option>
+            <option value="csv">JSON → CSV</option>
+        </select>
+    </div>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone" data-csp-click="triggerFileInput">
+        <div class="icon">📁</div>
+        <div class="text">点击或拖拽文件到此处</div>
+        <div class="hint">支持 PNG, JPG, WebP, CSV, JSON 格式</div>
+    </div>
+    <input type="file" id="fileInput" style="display:none;" data-csp-change="onFileSelected">
+
+    <!-- File info -->
+    <div class="file-info" id="fileInfo" style="display:none;">
+        <span style="font-size:1.5rem;">📄</span>
+        <span class="name" id="fileName"></span>
+        <span class="size" id="fileSize"></span>
+        <button class="btn btn-outline-danger btn-sm" data-csp-click="clearFile">✕</button>
+    </div>
+
+    <!-- Convert button -->
+    <div class="text-center mt-3" id="convertBtnWrap" style="display:none;">
+        <button class="btn btn-primary btn-lg" id="convertBtn" data-csp-click="startConvert">
+            🔄 开始转换
+        </button>
+        <div class="spinner-border text-primary ms-2" id="convertSpinner" style="display:none;width:1.5rem;height:1.5rem;" role="status"></div>
+    </div>
+
+    <!-- Result -->
+    <div class="result-zone" id="resultZone" style="display:none;">
+        <div class="success-icon">✅</div>
+        <h5 class="mt-2">转换完成！</h5>
+        <div id="resultContent"></div>
+        <a class="btn btn-success mt-2" id="downloadBtn" href="#" download>📥 下载文件</a>
+    </div>
+
+    <!-- Error -->
+    <div class="text-center mt-3" id="errorMsg" style="display:none;">
+        <div class="alert alert-danger" id="errorText"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var selectedFile = null;
+
+function triggerFileInput() {
+    document.getElementById('fileInput').click();
+}
+
+function onFileSelected(e) {
+    var files = e.target.files || (e.dataTransfer && e.dataTransfer.files);
+    if (files && files.length > 0) {
+        selectedFile = files[0];
+        document.getElementById('fileName').textContent = selectedFile.name;
+        document.getElementById('fileSize').textContent = formatSize(selectedFile.size);
+        document.getElementById('fileInfo').style.display = 'flex';
+        document.getElementById('convertBtnWrap').style.display = '';
+        document.getElementById('resultZone').style.display = 'none';
+        document.getElementById('errorMsg').style.display = 'none';
+    }
+}
+
+function clearFile() {
+    selectedFile = null;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('convertBtnWrap').style.display = 'none';
+    document.getElementById('resultZone').style.display = 'none';
+    document.getElementById('errorMsg').style.display = 'none';
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function startConvert() {
+    if (!selectedFile) return;
+
+    var target = document.getElementById('targetFormat').value;
+    var formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('target', target);
+
+    var btn = document.getElementById('convertBtn');
+    var spinner = document.getElementById('convertSpinner');
+    var resultZone = document.getElementById('resultZone');
+    var errorMsg = document.getElementById('errorMsg');
+
+    btn.disabled = true;
+    spinner.style.display = '';
+    resultZone.style.display = 'none';
+    errorMsg.style.display = 'none';
+
+    fetch('/api/converter', {
+        method: 'POST',
+        body: formData
+    }).then(function(r) {
+        if (!r.ok) {
+            return r.json().then(function(d) { throw new Error(d.error || '转换失败 (' + r.status + ')'); });
+        }
+        // Check content type to decide how to handle
+        var ct = r.headers.get('Content-Type') || '';
+        if (ct.indexOf('application/json') !== -1) {
+            return r.json().then(function(d) {
+                if (d.error) throw new Error(d.error);
+                return { type: 'json', data: d };
+            });
+        }
+        return r.blob().then(function(blob) {
+            return { type: 'blob', blob: blob, filename: getOutputFilename(target) };
+        });
+    }).then(function(result) {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        resultZone.style.display = '';
+
+        var contentDiv = document.getElementById('resultContent');
+        var downloadBtn = document.getElementById('downloadBtn');
+
+        if (result.type === 'blob') {
+            var url = URL.createObjectURL(result.blob);
+            downloadBtn.href = url;
+            downloadBtn.download = result.filename;
+            downloadBtn.style.display = '';
+
+            // Image preview
+            if (['jpg','png','webp'].indexOf(target) !== -1) {
+                var img = document.createElement('img');
+                img.src = url;
+                img.className = 'result-preview';
+                img.onload = function() { URL.revokeObjectURL(url); };
+                contentDiv.innerHTML = '';
+                contentDiv.appendChild(img);
+            } else {
+                // Text preview
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    contentDiv.innerHTML = '<div class="result-text">' + escapeHtml(e.target.result.substring(0, 2000)) + '</div>';
+                };
+                reader.readAsText(result.blob);
+            }
+        } else if (result.type === 'json') {
+            // Backend returned JSON with download URL or content
+            if (result.data.url) {
+                downloadBtn.href = result.data.url;
+                downloadBtn.download = result.data.filename || getOutputFilename(target);
+                downloadBtn.style.display = '';
+            }
+            if (result.data.preview) {
+                contentDiv.innerHTML = '<div class="result-text">' + escapeHtml(result.data.preview) + '</div>';
+            }
+        }
+    }).catch(function(err) {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        document.getElementById('errorText').textContent = '⚠️ ' + (err.message || '转换失败，请检查文件格式');
+        document.getElementById('errorMsg').style.display = '';
+    });
+}
+
+function getOutputFilename(target) {
+    if (!selectedFile) return 'output.' + target;
+    var name = selectedFile.name.replace(/\.[^.]+$/, '');
+    return name + '.' + target;
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Drag and drop
+(function() {
+    var dz = document.getElementById('dropZone');
+    dz.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.add('dragover');
+    });
+    dz.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.remove('dragover');
+    });
+    dz.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            selectedFile = e.dataTransfer.files[0];
+            document.getElementById('fileName').textContent = selectedFile.name;
+            document.getElementById('fileSize').textContent = formatSize(selectedFile.size);
+            document.getElementById('fileInfo').style.display = 'flex';
+            document.getElementById('convertBtnWrap').style.display = '';
+            document.getElementById('resultZone').style.display = 'none';
+            document.getElementById('errorMsg').style.display = 'none';
+        }
+    });
+})();
+</script>
+{% endblock %}
