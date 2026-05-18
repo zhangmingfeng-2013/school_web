@@ -175,7 +175,7 @@ function loadExpenses() {
 
     fetch(url).then(function(r) { return r.json(); })
     .then(function(data) {
-        var items = data.items || [];
+        var items = data.expenses || [];
         var listDiv = document.getElementById('expenseList');
 
         if (items.length === 0) {
@@ -209,7 +209,11 @@ function loadExpenses() {
 
         // Load stats for pie
         fetch('/api/expenses/stats?month=' + month).then(function(r) { return r.json(); })
-        .then(function(stats) { updatePie(stats || {}); })
+        .then(function(data) {
+            var statsFlat = {};
+            (data.stats || []).forEach(function(s) { statsFlat[s.category] = s.total; });
+            updatePie(statsFlat);
+        })
         .catch(function() {});
     }).catch(function() {
         document.getElementById('expenseList').innerHTML = '<div class="text-center text-muted py-4">加载失败</div>';

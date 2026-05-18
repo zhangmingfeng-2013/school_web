@@ -6911,20 +6911,133 @@ def _init_life_tables():
 
 
 # ---------- 天气 ----------
+# 和风天气 API 配置
+QWEATHER_KEY = "0983383148ea4af799eb535dd1a03ca9"
+QWEATHER_HOST = "https://n478m2kuuf.re.qweatherapi.com"
+
+# 常用城市 -> Location ID 映射表（无需联网查询）
+QWEATHER_CITY_MAP = {
+    "北京": "101010100", "朝阳": "101010300", "海淀": "101010200", "丰台": "101010900",
+    "上海": "101020100", "浦东": "101020600", "闵行": "101020200",
+    "广州": "101280101", "深圳": "101280601",
+    "重庆": "101040100", "万州": "101041300", "永川": "101040200", "合川": "101040300",
+    "成都": "101270101", "绵阳": "101270401",
+    "杭州": "101210101", "宁波": "101210401", "温州": "101210701",
+    "南京": "101190101", "苏州": "101190401", "无锡": "101190201",
+    "武汉": "101200101", "宜昌": "101200901",
+    "西安": "101110101", "咸阳": "101110200",
+    "长沙": "101250101", "株洲": "101250301",
+    "天津": "101030100", "滨海": "101031100",
+    "郑州": "101180101", "洛阳": "101180901",
+    "济南": "101120101", "青岛": "101120201",
+    "合肥": "101220101", "芜湖": "101220301",
+    "福州": "101230101", "厦门": "101230201",
+    "沈阳": "101070101", "大连": "101070201",
+    "哈尔滨": "101050101", "齐齐哈尔": "101050201",
+    "长春": "101060101", "吉林": "101060201",
+    "石家庄": "101090101", "唐山": "101090501",
+    "太原": "101100101", "大同": "101100201",
+    "兰州": "101160101", "天水": "101160901",
+    "昆明": "101290101", "大理": "101290201",
+    "贵阳": "101260101", "遵义": "101260201",
+    "南宁": "101300101", "桂林": "101300501",
+    "海口": "101310101", "三亚": "101310201",
+    "拉萨": "101140101", "日喀则": "101140201",
+    "乌鲁木齐": "101130101", "克拉玛依": "101130201",
+    "西宁": "101150101", "银川": "101170101",
+    "呼和浩特": "101080101", "包头": "101080201",
+    "南昌": "101240101", "九江": "101240201",
+    "澳门": "101330101", "香港": "101320101",
+    "台北": "101340101", "高雄": "101340201",
+}
+
 @app.route("/weather")
 def weather_page():
     _init_life_tables()
     return render_template("weather.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
+def _qweather_get(endpoint, params):
+    """封装和风天气 API 请求"""
+    params["key"] = QWEATHER_KEY
+    try:
+        resp = requests.get(f"{QWEATHER_HOST}{endpoint}", params=params, timeout=8)
+        data = resp.json()
+        if data.get("code") == "200":
+            return data
+        return None
+    except Exception:
+        return None
+
+def _qweather_lookup(city_name):
+    """城市搜索 -> 返回 (location_id, city_name, adm2)"""
+    # 1. 先从本地映射表查找
+    stripped = city_name.strip()
+    if stripped in QWEATHER_CITY_MAP:
+        return QWEATHER_CITY_MAP[stripped], stripped, ""
+
+    # 2. 尝试 API 城市搜索
+    data = _qweather_get("/v2/city/lookup", {"location": stripped})
+    if data and data.get("location"):
+        loc = data["location"][0]
+        return loc["id"], loc["name"], loc.get("adm2", "")
+    return None, stripped, ""
+
 @app.route("/api/weather")
 def api_weather():
-    """代理 wttr.in API 获取天气"""
-    city = request.args.get("city", "Chongqing")
+    """和风天气 API 获取天气"""
+    city = request.args.get("city", "重庆")
     try:
-        resp = requests.get(f"https://wttr.in/{city}?format=j1", timeout=10)
-        return jsonify(resp.json())
-    except Exception:
-        return jsonify({"error": "天气数据获取失败"}), 500
+        # 1. 城市搜索
+        loc_id, city_name, adm2 = _qweather_lookup(city)
+        if not loc_id:
+            return jsonify({"error": f"未找到城市「{city}」"}), 404
+
+        # 2. 获取实时天气 + 3天预报
+        now_data = _qweather_get("/v7/weather/now", {"location": loc_id})
+        forecast_data = _qweather_get("/v7/weather/3d", {"location": loc_id})
+
+        if not now_data or not now_data.get("now"):
+            return jsonify({"error": "天气数据获取失败"}), 500
+
+        now = now_data["now"]
+
+        # 3. 组装前端期望的格式
+        result = {
+            "city": adm2 if adm2 else city_name,
+            "current": {
+                "temp": now.get("temp", "--"),
+                "condition": now.get("text", ""),
+                "humidity": now.get("humidity", "--"),
+                "wind": now.get("windSpeed", "--"),
+                "feelsLike": now.get("feelsLike", now.get("temp", "--")),
+                "icon": now.get("icon", "100"),
+                "windDir": now.get("windDir", ""),
+                "windScale": now.get("windScale", ""),
+                "vis": now.get("vis", ""),
+                "pressure": now.get("pressure", ""),
+                "precip": now.get("precip", "0.0"),
+            },
+            "forecast": [],
+        }
+
+        if forecast_data and forecast_data.get("daily"):
+            for day in forecast_data["daily"]:
+                result["forecast"].append({
+                    "date": day.get("fxDate", ""),
+                    "condition": day.get("textDay", ""),
+                    "high": day.get("tempMax", "--"),
+                    "low": day.get("tempMin", "--"),
+                    "iconDay": day.get("iconDay", ""),
+                    "iconNight": day.get("iconNight", ""),
+                    "sunrise": day.get("sunrise", ""),
+                    "sunset": day.get("sunset", ""),
+                    "moonPhase": day.get("moonPhase", ""),
+                })
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": f"天气数据获取失败: {str(e)}"}), 500
 
 # ---------- 记账 ----------
 @app.route("/expenses")
@@ -7288,22 +7401,22 @@ def api_daily_quote():
     try:
         resp = requests.get("https://v1.hitokoto.cn/?c=a&c=b&c=c&c=d&c=e&c=f&c=g&c=h&c=i&c=j&c=k&c=l", timeout=5)
         data = resp.json()
-        return jsonify({"quote": data.get("hitokoto", ""), "from": data.get("from", "")})
+        return jsonify({"ok": True, "text": data.get("hitokoto", ""), "author": data.get("from_who") or "佚名", "source": data.get("from", "")})
     except Exception:
         # 本地备用
         quotes = [
-            {"quote": "路漫漫其修远兮，吾将上下而求索。", "from": "屈原《离骚》"},
-            {"quote": "天行健，君子以自强不息。", "from": "《周易》"},
-            {"quote": "长风破浪会有时，直挂云帆济沧海。", "from": "李白《行路难》"},
-            {"quote": "宝剑锋从磨砺出，梅花香自苦寒来。", "from": "《警世贤文》"},
-            {"quote": "人生自古谁无死，留取丹心照汗青。", "from": "文天祥《过零丁洋》"},
-            {"quote": "非淡泊无以明志，非宁静无以致远。", "from": "诸葛亮《诫子书》"},
-            {"quote": "海内存知己，天涯若比邻。", "from": "王勃《送杜少府之任蜀州》"},
-            {"quote": "会当凌绝顶，一览众山小。", "from": "杜甫《望岳》"},
+            {"text": "路漫漫其修远兮，吾将上下而求索。", "author": "屈原", "source": "《离骚》"},
+            {"text": "天行健，君子以自强不息。", "author": "佚名", "source": "《周易》"},
+            {"text": "长风破浪会有时，直挂云帆济沧海。", "author": "李白", "source": "《行路难》"},
+            {"text": "宝剑锋从磨砺出，梅花香自苦寒来。", "author": "佚名", "source": "《警世贤文》"},
+            {"text": "人生自古谁无死，留取丹心照汗青。", "author": "文天祥", "source": "《过零丁洋》"},
+            {"text": "非淡泊无以明志，非宁静无以致远。", "author": "诸葛亮", "source": "《诫子书》"},
+            {"text": "海内存知己，天涯若比邻。", "author": "王勃", "source": "《送杜少府之任蜀州》"},
+            {"text": "会当凌绝顶，一览众山小。", "author": "杜甫", "source": "《望岳》"},
         ]
         import random as _rand
         q = _rand.choice(quotes)
-        return jsonify(q)
+        return jsonify({"ok": True, **q})
 
 # ---------- 小游戏 ----------
 @app.route("/games")
@@ -7357,6 +7470,8 @@ def api_image_compress():
         file_data = file.read()
         original_size = len(file_data)
         img = Image.open(io.BytesIO(file_data))
+        # 保存原始格式（resize 后会丢失）
+        original_format = img.format or "JPEG"
         # 缩放
         w, h = img.size
         if w > max_width:
@@ -7364,15 +7479,18 @@ def api_image_compress():
             img = img.resize((max_width, int(h * ratio)), Image.LANCZOS)
         # 压缩
         buf = io.BytesIO()
-        fmt = img.format or "JPEG"
-        if fmt == "PNG":
+        if original_format == "PNG":
             img.save(buf, format="PNG", optimize=True)
         else:
-            img = img.convert("RGB")
-            img.save(buf, format="JPEG", quality=quality, optimize=True)
+            if img.mode in ("RGBA", "LA", "P"):
+                img = img.convert("RGBA")
+                img.save(buf, format="PNG", optimize=True)
+            else:
+                img = img.convert("RGB")
+                img.save(buf, format="JPEG", quality=quality, optimize=True)
         compressed = buf.getvalue()
         import base64 as _b64
-        mime_type = "image/png" if fmt == "PNG" else "image/jpeg"
+        mime_type = "image/png" if original_format == "PNG" or img.mode in ("RGBA", "LA", "P") else "image/jpeg"
         return jsonify({
             "ok": True,
             "original_size": original_size,
@@ -7442,8 +7560,8 @@ if __name__ == "__main__":
     print("=" * 100)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     _init_plugins()
-    # 不泄露服务器类型/版本（安全扫描要求隐藏 Server 头）
+    # 不泄露服务器类型/版本
     import werkzeug.serving
     werkzeug.serving.WSGIRequestHandler.version_string = lambda self: ""
     werkzeug.serving.WSGIRequestHandler.sys_version = ''
-    app.run(host="0.0.0.0", port=12343, debug=debug_mode, threaded=True)
+    app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
