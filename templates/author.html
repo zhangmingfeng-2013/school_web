@@ -110,6 +110,7 @@
 /* ---- 信息表格 ---- */
 .info-grid { display: grid; grid-template-columns: auto 1fr; gap: .6rem 1rem; }
 .info-grid .label { opacity: .5; font-size: .9rem; }
+.info-grid .label small { display: block; font-size: .65rem; opacity: .6; font-weight: 400; }
 .info-grid .value { font-weight: 500; }
 .info-grid hr { grid-column: 1 / -1; margin: .3rem 0; opacity: .1; border: none; height: 1px; background: var(--ap-text); }
 
@@ -183,6 +184,12 @@
     --ap-bg: #f0f2f5 !important;
 }
 .author-page.force-light #starCanvas { opacity: .25; }
+.author-page.force-light .btn-start { color: #1a1a2e; border-color: rgba(0,0,0,.15); }
+.author-page.force-light .btn-start:hover { background: rgba(37,99,235,.08); border-color: #2563eb; }
+.author-page.force-light .card-3d-inner { border-color: rgba(0,0,0,.08); }
+.author-page.force-light .project-card { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
+.author-page.force-light .honor-mini { border-color: rgba(0,0,0,.06); background: rgba(255,255,255,.85); }
+.author-page.force-light .skill-bar .bar-track { background: rgba(0,0,0,.08); }
 .author-page.force-dark {
     --ap-text: #f2f2f2 !important;
     --ap-bgt: #222222d0 !important;
@@ -191,6 +198,12 @@
     --ap-bg: #090912 !important;
 }
 .author-page.force-dark #starCanvas { opacity: 1; }
+.author-page.force-dark .btn-start { color: var(--ap-text); border-color: rgba(255,255,255,.15); }
+.author-page.force-dark .btn-start:hover { background: rgba(97,204,255,.12); border-color: var(--ap-theme); }
+.author-page.force-dark .card-3d-inner { border-color: rgba(255,255,255,.08); }
+.author-page.force-dark .project-card { border-color: rgba(255,255,255,.06); background: var(--ap-bgt); }
+.author-page.force-dark .honor-mini { border-color: rgba(255,255,255,.06); background: var(--ap-bgt); }
+.author-page.force-dark .skill-bar .bar-track { background: rgba(255,255,255,.08); }
 
 /* ---- 响应 ---- */
 @media (max-width: 600px) {
@@ -207,7 +220,7 @@
 <!-- 加载遮罩 -->
 <div id="loadingOverlay">
     <div class="loading-spinner"></div>
-    <p>正在加载</p>
+    <p>正在加载 / Loading...</p>
 </div>
 
 <!-- 星空 -->
@@ -226,7 +239,7 @@
         <p class="sm right">———《少年码农 · 铭》</p>
     </div>
     <div style="text-align:center;">
-        <button class="btn-start author-scroll-btn" data-target="sec2">开始探索 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec2">开始探索 / Explore →</button>
     </div>
 </section>
 
@@ -241,23 +254,23 @@
     </div>
     <div class="card-3d">
         <div class="card-3d-inner">
-            <div class="card-tit">📋 基本信息</div>
+            <div class="card-tit">📋 基本信息 · Basic Info</div>
             <div class="info-grid">
-                <span class="label">性别</span><span class="value">男</span>
-                <span class="label">生日</span><span class="value">2013年5月26日</span>
-                <span class="label">民族</span><span class="value">蒙古族</span>
-                <span class="label">学校</span><span class="value">重庆大学城人民小学</span>
-                <span class="label">特长</span><span class="value">💻 编程</span>
-                <span class="label">住址</span><span class="value">重庆市高新区富力城书香里</span>
+                <span class="label">性别<br><small>Gender</small></span><span class="value">男</span>
+                <span class="label">生日<br><small>Birthday</small></span><span class="value">2013年5月26日</span>
+                <span class="label">民族<br><small>Ethnicity</small></span><span class="value">蒙古族</span>
+                <span class="label">学校<br><small>School</small></span><span class="value">重庆大学城人民小学</span>
+                <span class="label">特长<br><small>Specialty</small></span><span class="value">💻 编程</span>
+                <span class="label">住址<br><small>Address</small></span><span class="value">重庆市高新区富力城书香里</span>
                 <hr>
-                <span class="label">经验</span><span class="value">2 年编程</span>
-                <span class="label">语言</span><span class="value">9 门</span>
-                <span class="label">荣誉</span><span class="value">12 项</span>
+                <span class="label">经验<br><small>Experience</small></span><span class="value">2 年编程</span>
+                <span class="label">语言<br><small>Languages</small></span><span class="value">9 门</span>
+                <span class="label">荣誉<br><small>Honors</small></span><span class="value">12 项</span>
             </div>
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start author-scroll-btn" data-target="sec3">查看技能 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec3">查看技能 / Skills →</button>
     </div>
 </section>
 
@@ -265,12 +278,12 @@
 <section class="lay" id="sec3">
     <div class="card-3d">
         <div class="card-3d-inner">
-            <div class="card-tit">💻 编程语言技能</div>
+            <div class="card-tit">💻 编程语言技能 · Programming Skills</div>
             <div id="skillBars"></div>
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start author-scroll-btn" data-target="sec4">查看荣誉 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec4">查看荣誉 / Honors →</button>
     </div>
 </section>
 
@@ -278,9 +291,9 @@
 <section class="lay" id="sec4">
     <div class="card-3d">
         <div class="card-3d-inner">
-            <div class="card-tit">🏆 荣誉奖项</div>
+            <div class="card-tit">🏆 荣誉奖项 · Honors & Awards</div>
 
-            <div style="font-size:.85rem;opacity:.5;margin-bottom:1rem;">🎖 市级荣誉</div>
+            <div style="font-size:.85rem;opacity:.5;margin-bottom:1rem;">🎖 市级荣誉 · City-level</div>
             {% set h = [
                 ("全国青少年信息素养大赛西南赛区（重庆）编程挑战赛","2024年7月","bg-warning text-dark","二等奖"),
                 ("全国学生信息素养提升实践活动重庆市级选拔活动","2024年6月","bg-warning text-dark","二等奖"),
@@ -298,7 +311,7 @@
             </div>
             {% endfor %}
 
-            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🥇 区级荣誉</div>
+            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🥇 区级荣誉 · District-level</div>
             {% set h = [
                 ("重庆高新区第二十六届全国学生信息素养提升实践活动","2025年5月","一等奖"),
                 ("重庆高新区第二十五届全国学生信息素养提升实践活动","2024年5月","一等奖"),
@@ -316,7 +329,7 @@
             </div>
             {% endfor %}
 
-            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">📜 考级荣誉</div>
+            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">📜 考级荣誉 · Certification</div>
             {% set h = [("青少年软件编程等级考试","2025年9月","Level-3 G"),("青少年软件编程等级考试","2025年6月","Level-2 E"),("青少年软件编程等级考试","2024年10月","Level-1 E")] %}
             {% for n,d,b in h %}
             <div class="honor-item">
@@ -331,7 +344,7 @@
             </div>
             {% endfor %}
 
-            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🌟 校内荣誉</div>
+            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🌟 校内荣誉 · School</div>
             <div class="honor-grid">
                 {% set h = [("进步之星","2025年6月"),("数学之星","2025年1月"),("学习小标兵","2022年6月"),("学习小明星","2022年1月")] %}
                 {% for n,d in h %}
@@ -345,7 +358,7 @@
         </div>
     </div>
     <div style="text-align:center;margin-top:1rem;">
-        <button class="btn-start author-scroll-btn" data-target="sec5">查看项目 →</button>
+        <button class="btn-start author-scroll-btn" data-target="sec5">查看项目 / Projects →</button>
     </div>
 </section>
 
@@ -375,13 +388,13 @@
                 <span class="project-lang"><span class="dot"></span>{{ lang }}</span>
             </div>
             <div style="margin-top:1.5rem;">
-                <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" class="btn-start">在 Gitee 上查看 →</a>
+                <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" class="btn-start">在 Gitee 上查看 / View on Gitee →</a>
             </div>
         </div>
     </div>
     {% if not loop.last %}
     <div style="text-align:center;margin-top:1.5rem;">
-        <button class="btn-start author-scroll-btn" data-target="{{ next_sec }}">下一个项目 ↓</button>
+        <button class="btn-start author-scroll-btn" data-target="{{ next_sec }}">下一个项目 / Next ↓</button>
     </div>
     {% endif %}
 </section>
@@ -390,7 +403,7 @@
 <!-- ===== 结尾 ===== -->
 <section class="lay" id="sec{{ 5 + projs|length }}">
     <div style="text-align:center;padding:3rem 1.5rem;">
-        <p style="font-size:1.2rem;opacity:.5;margin-bottom:1rem;">感谢你花时间了解我 ❤️</p>
+        <p style="font-size:1.2rem;opacity:.5;margin-bottom:1rem;">感谢你花时间了解我 ❤️<br><small>Thanks for taking the time to know me</small></p>
         <a href="https://gitee.com/organizations/zhang-mingfeng9773_admin/projects" target="_blank" class="a" style="font-size:.85rem;opacity:.35;">在 Gitee 上查看全部项目 →</a>
     </div>
 </section>
