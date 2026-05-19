@@ -69,10 +69,10 @@
     display: flex; flex-direction: column;
     justify-content: center;
     padding: 3rem 0;
-    opacity: 0; transform: translateY(40px);
+    transform: translateY(40px);
     transition: opacity .8s ease, transform .8s ease;
 }
-.lay.visible { opacity: 1; transform: translateY(0); }
+.lay.visible { transform: translateY(0); }
 .lay.first { padding-top: 30vh; padding-bottom: 10vh; }
 
 /* ---- 诗/格言 ---- */
@@ -87,14 +87,10 @@
 .card-3d { perspective: 1200px; margin-bottom: 2rem; }
 .card-3d-inner {
     background: var(--ap-bgt);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
     border-radius: 16px;
     padding: 2rem;
     border: 1px solid rgba(255,255,255,.08);
     transition: transform .3s ease, box-shadow .3s ease;
-    transform-style: preserve-3d;
-    will-change: transform;
 }
 .card-3d:hover .card-3d-inner { box-shadow: 0 12px 50px rgba(0,0,0,.3); }
 .card-tit { font-size: 1.8rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px; }
@@ -121,8 +117,8 @@
 .skill-bar { margin-bottom: .8rem; }
 .skill-bar .skill-label { display: flex; justify-content: space-between; font-size: .9rem; margin-bottom: 4px; }
 .skill-bar .skill-label .pct { opacity: .5; }
-.skill-bar .bar-track { height: 10px; background: rgba(255,255,255,.08); border-radius: 10px; overflow: hidden; }
-.skill-bar .bar-fill { height: 100%; border-radius: 10px; width: 0; transition: width 2s cubic-bezier(.22,.68,0,1); }
+.skill-bar .bar-track { height: 10px; background: rgba(255,255,255,.08); border-radius: 10px; overflow: hidden; transform: translateZ(0); }
+.skill-bar .bar-fill { height: 100%; border-radius: 10px; width: 0; opacity: 0; transition: width 2s cubic-bezier(.22,.68,0,1), opacity .4s ease; }
 
 /* ---- 荣誉 ---- */
 .honor-item { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
@@ -168,6 +164,33 @@
 [data-bs-theme="light"] .btn-start { color: #1a1a2e; border-color: rgba(0,0,0,.15); }
 [data-bs-theme="light"] .btn-start:hover { background: rgba(37,99,235,.08); border-color: #2563eb; }
 [data-bs-theme="light"] #loadingOverlay { background: #f0f2f5; }
+[data-bs-theme="light"] .skill-bar .bar-track { background: rgba(0,0,0,.08); }
+
+/* ---- 作者页主题切换按钮 ---- */
+#authorThemeBtn {
+    position: fixed; top: 80px; right: 16px; z-index: 100;
+    width: 36px; height: 36px; border-radius: 50%; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; letter-spacing: 0; margin: 0;
+}
+
+/* ---- 作者页强制主题（覆盖全局 data-bs-theme） ---- */
+.author-page.force-light {
+    --ap-text: #1a1a2e !important;
+    --ap-bgt: rgba(255,255,255,.85) !important;
+    --ap-theme: #2563eb !important;
+    --ap-sele: #2563eb30 !important;
+    --ap-bg: #f0f2f5 !important;
+}
+.author-page.force-light #starCanvas { opacity: .25; }
+.author-page.force-dark {
+    --ap-text: #f2f2f2 !important;
+    --ap-bgt: #222222d0 !important;
+    --ap-theme: #61ccff !important;
+    --ap-sele: #61ccff60 !important;
+    --ap-bg: #090912 !important;
+}
+.author-page.force-dark #starCanvas { opacity: 1; }
 
 /* ---- 响应 ---- */
 @media (max-width: 600px) {
@@ -190,8 +213,7 @@
 <!-- 星空 -->
 <canvas id="starCanvas"></canvas>
 
-<button class="btn-start" style="position:fixed;top:80px;right:16px;z-index:100;width:36px;height:36px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;letter-spacing:0;margin:0;"
-        id="authorThemeBtn">🌙</button>
+<button class="btn-start" id="authorThemeBtn">🌙</button>
 
 <div class="author-main">
 
@@ -396,7 +418,9 @@ window.addEventListener('load', function() {
 // ===== 2. 星空 Canvas =====
 (function() {
     var c = document.getElementById('starCanvas');
+    if (!c) return;
     var ctx = c.getContext('2d');
+    if (!ctx) return;
     var W, H, stars = [];
 
     function resize() {
@@ -485,7 +509,7 @@ document.addEventListener('click', function(e) {
     });
 })();
 
-// ===== 6. 技能条动画 =====
+// ===== 6. 技能条 =====
 (function() {
     var skills = [
         { name: 'Scratch', pct: 95, color: '#4D97FF' },
@@ -501,30 +525,42 @@ document.addEventListener('click', function(e) {
     var container = document.getElementById('skillBars');
     if (!container) return;
 
+    // 生成 HTML（不带行内样式，绕过 CSP style-src 限制）
     container.innerHTML = skills.map(function(s) {
         return '<div class="skill-bar">' +
             '<div class="skill-label"><span>' + s.name + '</span><span class="pct">' + s.pct + '%</span></div>' +
-            '<div class="bar-track"><div class="bar-fill" data-pct="' + Math.max(s.pct, 5) + '" style="background:' + s.color + ';"></div></div>' +
+            '<div class="bar-track"><div class="bar-fill" data-pct="' + Math.max(s.pct, 5) + '"></div></div>' +
             '</div>';
     }).join('');
 
-    // 观察整个 section（id="sec3"）而不是嵌套的 .card-3d
+    // JS DOM 直接设样式（不受 CSP style-src 限制）
+    var bars = container.querySelectorAll('.bar-fill');
+    bars.forEach(function(bar, idx) {
+        bar.style.width = (skills[idx].pct || 5) + '%';
+        bar.style.background = skills[idx].color;
+        bar.style.opacity = '1';
+    });
+
     var section = document.getElementById('sec3');
     if (!section) return;
-
     var animated = false;
+
     function animateBars() {
         if (animated) return;
         animated = true;
-        var bars = container.querySelectorAll('.bar-fill');
         bars.forEach(function(bar, idx) {
+            bar.style.transition = 'none';
+            bar.style.width = '0';
+            bar.style.opacity = '0';
+            void bar.offsetHeight;
+            bar.style.transition = '';
             setTimeout(function() {
-                bar.style.width = bar.getAttribute('data-pct') + '%';
+                bar.style.width = (bar.getAttribute('data-pct') || '5') + '%';
+                bar.style.opacity = '1';
             }, 200 + idx * 200);
         });
     }
 
-    // IntersectionObserver 兜底 — 需要截面超过 40% 进入视口才开始动画
     var obs = new IntersectionObserver(function(entries) {
         entries.forEach(function(e) {
             if (e.isIntersecting && e.intersectionRatio > 0.35) { animateBars(); obs.unobserve(e.target); }
@@ -532,7 +568,6 @@ document.addEventListener('click', function(e) {
     }, { threshold: [0, 0.35] });
     obs.observe(section);
 
-    // 立即检测（防止 observer 已错过）
     requestAnimationFrame(function() {
         var rect = section.getBoundingClientRect();
         if (rect.top < window.innerHeight && rect.bottom > 0) {
@@ -541,34 +576,39 @@ document.addEventListener('click', function(e) {
     });
 })();
 
-// ===== 7. 作者页主题切换（仅切换 ap-* 变量，不影响全局） =====
+// ===== 7. 作者页主题切换（class 驱动，不影响全局） =====
 (function() {
     var btn = document.getElementById('authorThemeBtn');
     if (!btn) return;
+    var page = document.querySelector('.author-page');
+    if (!page) return;
+
+    function getIsLight() {
+        if (page.classList.contains('force-light')) return true;
+        if (page.classList.contains('force-dark')) return false;
+        return document.documentElement.getAttribute('data-bs-theme') === 'light';
+    }
+
+    function updateBtn() {
+        var isLight = getIsLight();
+        btn.textContent = isLight ? '🌙' : '☀️';
+        btn.title = isLight ? '切换暗色主题' : '切换亮色主题';
+    }
+
     btn.addEventListener('click', function() {
-        var page = document.querySelector('.author-page');
-        if (!page) return;
-        var isLight = getComputedStyle(page).getPropertyValue('--ap-bg').trim() === '#f0f2f5';
-        if (isLight) {
-            page.style.setProperty('--ap-text', '#f2f2f2');
-            page.style.setProperty('--ap-bgt', '#222222d0');
-            page.style.setProperty('--ap-theme', '#61ccff');
-            page.style.setProperty('--ap-sele', '#61ccff60');
-            page.style.setProperty('--ap-bg', '#090912');
-            document.getElementById('starCanvas').style.opacity = '1';
-            document.getElementById('loadingOverlay').style.background = '#090912';
-            btn.textContent = '🌙';
-        } else {
-            page.style.setProperty('--ap-text', '#1a1a2e');
-            page.style.setProperty('--ap-bgt', 'rgba(255,255,255,.85)');
-            page.style.setProperty('--ap-theme', '#2563eb');
-            page.style.setProperty('--ap-sele', '#2563eb30');
-            page.style.setProperty('--ap-bg', '#f0f2f5');
-            document.getElementById('starCanvas').style.opacity = '0.25';
-            document.getElementById('loadingOverlay').style.background = '#f0f2f5';
-            btn.textContent = '☀️';
-        }
+        var isLight = getIsLight();
+        page.classList.remove('force-light', 'force-dark');
+        page.classList.add(isLight ? 'force-dark' : 'force-light');
+        updateBtn();
     });
+
+    // 双击重置：跟随全局主题
+    btn.addEventListener('dblclick', function() {
+        page.classList.remove('force-light', 'force-dark');
+        updateBtn();
+    });
+
+    updateBtn();
 })();
 </script>
 {% endblock %}
