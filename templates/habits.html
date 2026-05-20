@@ -21,6 +21,21 @@
 .color-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: all .15s; }
 .color-dot:hover { transform: scale(1.15); }
 .color-dot.selected { border-color: #3b82f6; transform: scale(1.1); }
+.checkin-btn { display:block;width:100%;padding:10px 16px;border-radius:10px;font-weight:700;font-size:1rem;cursor:pointer;border:2px dashed #10b981;background:rgba(16,185,129,.08);color:#10b981;transition:all .2s;margin-bottom:.75rem }
+.checkin-btn:hover { border-style:solid;background:rgba(16,185,129,.18);transform:scale(1.02) }
+.checkin-btn.done { border-color:#d1d5db;background:#f9fafb;color:#6b7280;border-style:solid;cursor:default }
+.checkin-btn.done:hover { transform:none;background:#f9fafb }
+.habit-day.today-big { width:36px;height:36px;border-radius:6px;font-size:.85rem;font-weight:700;border-width:3px;border-color:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,.25) }
+.habit-day.today-big.checked { background:#10b981;color:#fff;border-color:#10b981;box-shadow:0 0 12px rgba(16,185,129,.35) }
+.streak-badge { display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:600 }
+.streak-fire { color:#f59e0b }
+.overview-card { background:linear-gradient(135deg,rgba(59,130,246,.05),rgba(16,185,129,.05));border:1px solid var(--border-light);border-radius:12px;padding:1rem;margin-bottom:1.5rem }
+.overview-stats { display:flex;gap:1.5rem;flex-wrap:wrap }
+.overview-stat { text-align:center;min-width:70px }
+.overview-stat-val { font-size:1.8rem;font-weight:700 }
+.overview-stat-label { font-size:.75rem;color:var(--text-muted);margin-top:2px }
+.confetti { position:fixed;z-index:9999;pointer-events:none;animation:confettiFall 1s ease-out forwards }
+@keyframes confettiFall { 0%{opacity:1;transform:translateY(0) rotate(0deg)} 100%{opacity:0;transform:translateY(120px) rotate(360deg)} }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -28,6 +43,21 @@
     <div class="d-flex gap-2">
         <button class="btn btn-primary btn-sm" data-csp-click="showAddHabit">➕ 新建习惯</button>
         <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+    </div>
+</div>
+
+<!-- Today Overview -->
+<div class="overview-card" id="overviewCard">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">📅 今日打卡状态 — <span id="todayDate"></span></h6>
+        <button class="btn btn-sm btn-outline-success" data-csp-click="checkinAllToday">✅ 一键全部打卡</button>
+    </div>
+    <div class="overview-stats" id="overviewStats">
+        <div class="overview-stat"><div class="overview-stat-val" style="color:#3b82f6" id="ovTotal">0</div><div class="overview-stat-label">总习惯</div></div>
+        <div class="overview-stat"><div class="overview-stat-val" style="color:#10b981" id="ovDone">0</div><div class="overview-stat-label">今日已完成</div></div>
+        <div class="overview-stat"><div class="overview-stat-val" style="color:#f59e0b" id="ovRemain">0</div><div class="overview-stat-label">待打卡</div></div>
+        <div class="overview-stat"><div class="overview-stat-val" style="color:#ec4899" id="ovBestStreak">0</div><div class="overview-stat-label">🔥 最佳连续</div></div>
+        <div class="overview-stat"><div class="overview-stat-val" style="color:#8b5cf6" id="ovRate">0%</div><div class="overview-stat-label">本月达成率</div></div>
     </div>
 </div>
 
@@ -82,6 +112,7 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
 var habitDaysCount = 30;
+var _allHabits = []; // cached for overview
 
 function getLast30Days() {
     var days = [];
@@ -132,18 +163,100 @@ function deleteHabit(id) {
         .catch(function() {});
 }
 
-function toggleHabitDay(logId, day, completed) {
-    var body = { date: day, completed: !completed };
-    // If we have a logId, update; otherwise it's a create
+// ====== 核心：每日打卡 ======
+function toggleHabitDay(habitId, day, completed) {
+    var body = { habit_id: habitId, date: day, completed: !completed };
     fetch('/api/habit_logs', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(body)
     }).then(function(r) { return r.json(); })
-    .then(function() { loadHabits(); })
-    .catch(function() {});
+    .then(function(d) {
+        if (d.ok) {
+            if (!completed) spawnConfetti(); // only on check (not uncheck)
+            loadHabits();
+        }
+    }).catch(function() {});
 }
 
+function checkinToday(habitId) {
+    var today = new Date().toISOString().split('T')[0];
+    toggleHabitDay(habitId, today, false);
+}
+
+function checkinAllToday() {
+    var today = new Date().toISOString().split('T')[0];
+    var promises = [];
+    for (var i = 0; i < _allHabits.length; i++) {
+        var h = _allHabits[i];
+        var logs = h.logs || [];
+        // Build map from logs array
+        var done = false;
+        for (var j = 0; j < logs.length; j++) {
+            if (logs[j].date === today && logs[j].completed) { done = true; break; }
+        }
+        if (!done) {
+            promises.push(fetch('/api/habit_logs', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({habit_id: h.id, date: today, completed: true})
+            }));
+        }
+    }
+    if (promises.length === 0) {
+        alert('今日已全部打卡！🎉');
+        return;
+    }
+    Promise.all(promises).then(function() {
+        spawnConfetti();
+        loadHabits();
+    }).catch(function() {
+        loadHabits();
+    });
+}
+
+// ====== 彩纸动效 ======
+function spawnConfetti() {
+    var emojis = ['🎉','✨','🌟','💫','🎊','⭐','🔥','💪'];
+    for (var i = 0; i < 12; i++) {
+        var el = document.createElement('div');
+        el.className = 'confetti';
+        el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        el.style.left = (Math.random() * 80 + 10) + '%';
+        el.style.top = (Math.random() * 30 + 30) + '%';
+        el.style.fontSize = (Math.random() * 16 + 14) + 'px';
+        el.style.animationDelay = (Math.random() * 0.3) + 's';
+        document.body.appendChild(el);
+        setTimeout(function(){ el.remove(); }, 1300);
+    }
+}
+
+// ====== 连续打卡计算 ======
+function calcStreak(logsMap) {
+    var today = new Date().toISOString().split('T')[0];
+    var yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    var yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Current streak: count consecutive days backward from today or yesterday
+    var streak = 0;
+    var checkDate = logsMap[today] ? today : (logsMap[yesterdayStr] ? yesterdayStr : null);
+    if (!checkDate) return 0;
+
+    var d = new Date(checkDate);
+    while (true) {
+        var ds = d.toISOString().split('T')[0];
+        if (logsMap[ds]) {
+            streak++;
+            d.setDate(d.getDate() - 1);
+        } else {
+            break;
+        }
+    }
+    return streak;
+}
+
+// ====== 渲染习惯卡片 ======
 function renderHabits(habits) {
     var grid = document.getElementById('habitsGrid');
     var days = getLast30Days();
@@ -158,24 +271,40 @@ function renderHabits(habits) {
     for (var i = 0; i < habits.length; i++) {
         var h = habits[i];
         var logs = h.logs || {};
-        var completedCount = Object.keys(logs).filter(function(k) { return logs[k]; }).length;
+        var logsMap = {};
+        for (var k = 0; k < logs.length; k++) {
+            if (logs[k].completed) logsMap[logs[k].date] = true;
+        }
+        var completedCount = Object.keys(logsMap).length;
+        var todayDone = !!logsMap[today];
+        var streak = calcStreak(logsMap);
 
         html += '<div class="habit-card">';
+        // Check-in button
+        if (todayDone) {
+            html += '<div class="checkin-btn done">✅ 今日已打卡 ' + (streak > 0 ? '· 🔥 连续' + streak + '天' : '') + '</div>';
+        } else {
+            html += '<button class="checkin-btn" data-csp-click="checkinToday" data-csp-args="[' + h.id + ']">✅ 今日打卡</button>';
+        }
+
         html += '<div class="habit-header">';
         html += '<span class="habit-name">' + (h.icon||'✅') + ' ' + (h.name||'未命名') + '</span>';
         html += '<div class="habit-actions">';
+        if (streak >= 3) {
+            html += '<span class="streak-badge" style="background:rgba(245,158,11,.15)"><span class="streak-fire">🔥</span> ' + streak + '天</span>';
+        }
         html += '<button class="btn btn-outline-secondary btn-sm" data-csp-click="deleteHabit" data-csp-args="[' + (h.id||0) + ']">🗑</button>';
         html += '</div>';
         html += '</div>';
 
-        // Day checkboxes
+        // Day grid
         html += '<div class="habit-days">';
         for (var j = 0; j < days.length; j++) {
             var d = days[j];
-            var checked = logs[d] ? ' checked' : '';
-            var todayClass = d === today ? ' today' : '';
+            var checked = logsMap[d] ? ' checked' : '';
+            var todayClass = d === today ? ' today-big' : '';
             var label = d.slice(5);
-            html += '<div class="habit-day' + checked + todayClass + '" data-csp-click="toggleHabitDayRaw" data-habit="' + (h.id||0) + '" data-day="' + d + '" data-completed="' + (logs[d] ? '1' : '0') + '" title="' + d + '">';
+            html += '<div class="habit-day' + checked + todayClass + '" data-csp-click="toggleHabitDayRaw" data-habit="' + h.id + '" data-day="' + d + '" data-completed="' + (logsMap[d] ? '1' : '0') + '" title="' + d + '">';
             html += checked ? '✓' : label.slice(3);
             html += '</div>';
         }
@@ -194,15 +323,80 @@ function renderHabits(habits) {
     grid.innerHTML = html;
 }
 
+// ====== 今日概览面板 ======
+function renderOverview(habits) {
+    _allHabits = habits || [];
+    var today = new Date().toISOString().split('T')[0];
+    var todayDateEl = document.getElementById('todayDate');
+    var now = new Date();
+    todayDateEl.textContent = now.getFullYear() + '年' + (now.getMonth()+1) + '月' + now.getDate() + '日 ' + ['日','一','二','三','四','五','六'][now.getDay()];
+
+    if (!habits || habits.length === 0) {
+        document.getElementById('ovTotal').textContent = '0';
+        document.getElementById('ovDone').textContent = '0';
+        document.getElementById('ovRemain').textContent = '0';
+        document.getElementById('ovBestStreak').textContent = '0';
+        document.getElementById('ovRate').textContent = '0%';
+        return;
+    }
+
+    var total = habits.length;
+    var done = 0;
+    var bestStreak = 0;
+    var monthTotal = 0;
+    var monthDone = 0;
+    var monthPrefix = today.slice(0, 7);
+
+    for (var i = 0; i < habits.length; i++) {
+        var logs = habits[i].logs || [];
+        var logsMap = {};
+        for (var j = 0; j < logs.length; j++) {
+            if (logs[j].completed) {
+                logsMap[logs[j].date] = true;
+            }
+            if (logs[j].date.slice(0,7) === monthPrefix) {
+                monthTotal++;
+                if (logs[j].completed) monthDone++;
+            }
+        }
+        if (logsMap[today]) done++;
+        var streak = calcStreak(logsMap);
+        if (streak > bestStreak) bestStreak = streak;
+    }
+
+    document.getElementById('ovTotal').textContent = total;
+    document.getElementById('ovDone').textContent = done;
+    document.getElementById('ovRemain').textContent = total - done;
+    document.getElementById('ovBestStreak').textContent = bestStreak;
+    document.getElementById('ovRate').textContent = monthTotal > 0 ? Math.round(monthDone / monthTotal * 100) + '%' : '0%';
+
+    // Color the done/remain based on progress
+    var doneEl = document.getElementById('ovDone');
+    var remainEl = document.getElementById('ovRemain');
+    var card = document.getElementById('overviewCard');
+    if (done === total && total > 0) {
+        doneEl.style.color = '#10b981';
+        remainEl.style.color = '#10b981';
+        card.style.background = 'linear-gradient(135deg,rgba(16,185,129,.08),rgba(16,185,129,.03))';
+    } else {
+        doneEl.style.color = '#10b981';
+        remainEl.style.color = total - done > 0 ? '#f59e0b' : '#10b981';
+        card.style.background = 'linear-gradient(135deg,rgba(59,130,246,.05),rgba(16,185,129,.05))';
+    }
+}
+
 function loadHabits() {
     fetch('/api/habits').then(function(r) { return r.json(); })
     .then(function(data) {
-        renderHabits(data.habits || data || []);
+        var habits = data.habits || data || [];
+        renderOverview(habits);
+        renderHabits(habits);
     }).catch(function() {
         document.getElementById('habitsGrid').innerHTML = '<div class="text-center text-muted py-4" style="grid-column:1/-1;">加载失败</div>';
     });
 }
 
+// ====== Event handlers ======
 // icon picker
 (function() {
     var icons = document.querySelectorAll('#iconPicker .icon-picker-item');
@@ -224,13 +418,14 @@ function loadHabits() {
     });
 })();
 
-// day toggle via click
+// day toggle via click delegation
 document.addEventListener('click', function(e) {
     var el = e.target.closest('.habit-day');
     if (!el) return;
+    var habitId = parseInt(el.getAttribute('data-habit'));
     var day = el.getAttribute('data-day');
     var completed = el.getAttribute('data-completed') === '1';
-    toggleHabitDay(null, day, completed);
+    toggleHabitDay(habitId, day, completed);
 });
 
 loadHabits();
