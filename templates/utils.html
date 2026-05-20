@@ -46,6 +46,12 @@
     <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[9]'>🎨 颜色</button>
     <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[10]'>🔢 进制</button>
     <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[11]'>🏷 HTML实体</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[12]'>📝 文本处理</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[13]'>🔄 CSV↔JSON</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[14]'>🌐 HTTP状态码</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[15]'>📄 MIME类型</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[16]'>🔤 Unicode</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[17]'>📝 Lorem Ipsum</button>
 </div>
 
 <!-- 0: 密码生成器 -->
@@ -206,6 +212,103 @@
     </div>
     <div class="ut-result" id="htmlResult"></div>
     <div id="htmlEntitiesTable" style="margin-top:12px;display:none"></div>
+</div>
+
+<!-- 12: 文本处理 -->
+<div class="ut-panel" id="utPanel12">
+    <div class="ut-row">
+        <textarea id="textProcInput" placeholder="输入或粘贴文本...&#10;每行一条"></textarea>
+    </div>
+    <div class="ut-row" style="gap:8px">
+        <button class="ut-btn-primary" data-csp-click="textProcSort">🔤 排序</button>
+        <button class="ut-btn-primary" data-csp-click="textProcDedupe">♊ 去重</button>
+        <button class="ut-btn-success" data-csp-click="textProcTrim">✂️ 去首尾空格</button>
+        <button class="ut-btn-primary" data-csp-click="textProcUpper">A→A</button>
+        <button class="ut-btn-primary" data-csp-click="textProcLower">A→a</button>
+        <button class="ut-btn-warning" data-csp-click="textProcReverse">↕ 反转</button>
+        <button class="ut-btn-primary" data-csp-click="textProcShuffle">🔀 随机</button>
+    </div>
+    <div class="ut-row">
+        <textarea id="textProcOutput" placeholder="处理结果..." style="background:#f9fafb" readonly></textarea>
+    </div>
+    <div class="ut-row">
+        <span id="textProcStats" style="font-size:12px;color:#6b7280"></span>
+        <button class="ut-btn-success" data-csp-click="textProcCopy">📋 复制结果</button>
+    </div>
+</div>
+
+<!-- 13: CSV ↔ JSON -->
+<div class="ut-panel" id="utPanel13">
+    <ul class="nav nav-tabs mb-2" style="border:none;gap:4px">
+        <li class="nav-item"><button class="nav-link active" data-csp-click="switchCsvTab" data-csp-args='[0]'>CSV → JSON</button></li>
+        <li class="nav-item"><button class="nav-link" data-csp-click="switchCsvTab" data-csp-args='[1]'>JSON → CSV</button></li>
+    </ul>
+    <div id="csvPanel0">
+        <div class="ut-row">
+            <textarea id="csvInput" placeholder="粘贴 CSV 数据...&#10;name,age,city&#10;Alice,30,NYC&#10;Bob,25,LA"></textarea>
+        </div>
+        <div class="ut-row">
+            <label style="font-size:13px">分隔符 <input type="text" id="csvSep" value="," style="width:50px"></label>
+            <button class="ut-btn-primary" data-csp-click="csvToJson">CSV → JSON</button>
+        </div>
+    </div>
+    <div id="csvPanel1" style="display:none">
+        <div class="ut-row">
+            <textarea id="jsonForCsv" placeholder='粘贴 JSON 数组...&#10;[{"name":"Alice","age":30}]'></textarea>
+        </div>
+        <div class="ut-row">
+            <button class="ut-btn-primary" data-csp-click="jsonToCsv">JSON → CSV</button>
+        </div>
+    </div>
+    <div class="ut-result" id="csvResult"></div>
+</div>
+
+<!-- 14: HTTP 状态码参考 -->
+<div class="ut-panel" id="utPanel14">
+    <div class="ut-row">
+        <input type="text" id="httpSearch" placeholder="搜索状态码或描述..." style="flex:1" oninput="filterHttpCodes()">
+    </div>
+    <div style="overflow-x:auto;max-height:500px;overflow-y:auto" id="httpTable"></div>
+</div>
+
+<!-- 15: MIME 类型查询 -->
+<div class="ut-panel" id="utPanel15">
+    <div class="ut-row">
+        <input type="text" id="mimeInput" placeholder="输入文件扩展名 (如 .pdf) 或 MIME 类型 (如 application/json)..." style="flex:1;font-family:monospace">
+        <button class="ut-btn-primary" data-csp-click="lookupMime">查询</button>
+    </div>
+    <div class="ut-result" id="mimeResult"></div>
+    <div id="mimeSuggestions" style="margin-top:8px;font-size:12px;color:#6b7280"></div>
+</div>
+
+<!-- 16: Unicode 字符查询 -->
+<div class="ut-panel" id="utPanel16">
+    <div class="ut-row">
+        <input type="text" id="uniInput" placeholder="输入字符 或 Unicode 码点 (如 U+4E2D 或 0x4E2D 或 20013)..." style="flex:1;font-family:monospace">
+        <button class="ut-btn-primary" data-csp-click="lookupUnicode">查询</button>
+    </div>
+    <div id="uniResult" style="display:none;margin-top:12px">
+        <div class="ut-row" style="align-items:center">
+            <div id="uniChar" style="font-size:64px;width:100px;height:100px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:12px"></div>
+            <div id="uniInfo" style="flex:1;font-size:14px"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 17: Lorem Ipsum 生成器 -->
+<div class="ut-panel" id="utPanel17">
+    <div class="ut-row">
+        <label style="font-size:13px">类型 <select id="loremType"><option value="paragraphs">段落</option><option value="sentences">句子</option><option value="words">单词</option></select></label>
+        <label style="font-size:13px">数量 <input type="number" id="loremCount" value="3" min="1" max="100" style="width:70px"></label>
+        <button class="ut-btn-primary" data-csp-click="genLorem">生成</button>
+    </div>
+    <div class="ut-row">
+        <textarea id="loremOutput" placeholder="生成结果..." style="background:#f9fafb;min-height:150px" readonly></textarea>
+    </div>
+    <div class="ut-row">
+        <span id="loremStats" style="font-size:12px;color:#6b7280"></span>
+        <button class="ut-btn-success" data-csp-click="copyLorem">📋 复制</button>
+    </div>
 </div>
 
 <script nonce="{{ csp_nonce }}">
@@ -476,7 +579,7 @@ function htmlEncode() {
     var text = document.getElementById('htmlInput').value;
     if (!text) { showResult('htmlResult', '请输入文本', true); return; }
     var encoded = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    showResult('htmlResult', '✅ 编码结果:\\n' + encoded);
+    showResult('htmlResult', '✅ 编码结果: ' + encoded);
     try { navigator.clipboard.writeText(encoded); } catch(e) {}
 }
 
@@ -485,7 +588,7 @@ function htmlDecode() {
     if (!text) { showResult('htmlResult', '请输入文本', true); return; }
     var txt = document.createElement('textarea');
     txt.innerHTML = text;
-    showResult('htmlResult', '✅ 解码结果:\\n' + txt.value);
+    showResult('htmlResult', '✅ 解码结果: ' + txt.value);
     try { navigator.clipboard.writeText(txt.value); } catch(e) {}
 }
 
@@ -494,26 +597,375 @@ function htmlCommonEntities() {
     if (table.style.display === 'block') { table.style.display = 'none'; return; }
     table.style.display = 'block';
     var entities = [
-        ['&amp;lt;','&lt;','<','小于号'],
-        ['&amp;gt;','&gt;','>','大于号'],
-        ['&amp;amp;','&amp;','&','和号'],
-        ['&amp;quot;','&quot;','\"','双引号'],
-        ['&amp;#39;','&#39;',\"'\",'单引号'],
-        ['&amp;nbsp;','&nbsp;',' ','不间断空格'],
-        ['&amp;copy;','&copy;','©','版权'],
-        ['&amp;reg;','&reg;','®','注册商标'],
-        ['&amp;trade;','&trade;','™','商标'],
-        ['&amp;mdash;','&mdash;','—','长破折号'],
-        ['&amp;ndash;','&ndash;','–','短破折号'],
-        ['&amp;hellip;','&hellip;','…','省略号'],
-        ['&amp;laquo;','&laquo;','«','左书名号'],
-        ['&amp;raquo;','&raquo;','»','右书名号'],
-        ['&amp;times;','&times;','×','乘号'],
-        ['&amp;divide;','&divide;','÷','除号']
+        ['&amp;lt;', '&lt;', '<', '小于号'],
+        ['&amp;gt;', '&gt;', '>', '大于号'],
+        ['&amp;amp;', '&amp;', '&', '和号'],
+        ['&amp;quot;', '&quot;', '"', '双引号'],
+        ['&amp;#39;', '&#39;', "'", '单引号'],
+        ['&amp;nbsp;', '&nbsp;', ' ', '不间断空格'],
+        ['&amp;copy;', '&copy;', '©', '版权'],
+        ['&amp;reg;', '&reg;', '®', '注册商标'],
+        ['&amp;trade;', '&trade;', '™', '商标'],
+        ['&amp;mdash;', '&mdash;', '—', '长破折号'],
+        ['&amp;ndash;', '&ndash;', '–', '短破折号'],
+        ['&amp;hellip;', '&hellip;', '…', '省略号'],
+        ['&amp;laquo;', '&laquo;', '«', '左书名号'],
+        ['&amp;raquo;', '&raquo;', '»', '右书名号'],
+        ['&amp;times;', '&times;', '×', '乘号'],
+        ['&amp;divide;', '&divide;', '÷', '除号']
     ];
     table.innerHTML = '<div style="overflow-x:auto"><table class="table table-sm table-bordered" style="font-size:13px;margin:0"><thead><tr><th>实体名</th><th>实体编号</th><th>符号</th><th>说明</th></tr></thead><tbody>' +
         entities.map(function(e){ return '<tr><td><code>'+e[0]+'</code></td><td><code>'+e[1]+'</code></td><td style="font-size:18px;text-align:center">'+e[2]+'</td><td>'+e[3]+'</td></tr>'; }).join('') +
         '</tbody></table></div>';
 }
+
+// ====== 12. 文本处理 ======
+function textProcGet() { return document.getElementById('textProcInput').value; }
+function textProcSet(v, label, cnt) {
+    document.getElementById('textProcOutput').value = v;
+    document.getElementById('textProcStats').textContent = label + (cnt !== undefined ? ' | ' + cnt + ' 行' : '');
+}
+function textProcSort() {
+    var lines = textProcGet().split('\n');
+    lines.sort();
+    textProcSet(lines.join('\n'), '已排序', lines.length);
+}
+function textProcDedupe() {
+    var lines = textProcGet().split('\n');
+    var seen = {}, out = [];
+    for (var i = 0; i < lines.length; i++) {
+        if (!seen[lines[i]]) { seen[lines[i]] = true; out.push(lines[i]); }
+    }
+    textProcSet(out.join('\n'), '去重完成', out.length);
+}
+function textProcTrim() {
+    var lines = textProcGet().split('\n');
+    for (var i = 0; i < lines.length; i++) lines[i] = lines[i].trim();
+    textProcSet(lines.join('\n'), '首尾空格已去除', lines.length);
+}
+function textProcUpper() {
+    var v = textProcGet().toUpperCase();
+    textProcSet(v, '已转大写');
+}
+function textProcLower() {
+    var v = textProcGet().toLowerCase();
+    textProcSet(v, '已转小写');
+}
+function textProcReverse() {
+    var lines = textProcGet().split('\n');
+    lines.reverse();
+    textProcSet(lines.join('\n'), '已反转', lines.length);
+}
+function textProcShuffle() {
+    var lines = textProcGet().split('\n');
+    for (var i = lines.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = lines[i]; lines[i] = lines[j]; lines[j] = t;
+    }
+    textProcSet(lines.join('\n'), '已随机打乱', lines.length);
+}
+function textProcCopy() {
+    var v = document.getElementById('textProcOutput').value;
+    if (!v) return;
+    try { navigator.clipboard.writeText(v); showResult('textProcStats', '已复制到剪贴板'); } catch(e) {}
+}
+
+// ====== 13. CSV ↔ JSON ======
+function switchCsvTab(idx) {
+    document.getElementById('csvPanel0').style.display = idx === 0 ? 'block' : 'none';
+    document.getElementById('csvPanel1').style.display = idx === 1 ? 'block' : 'none';
+    var btns = document.querySelectorAll('#utPanel13 .nav-link');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('active', i === idx);
+    document.getElementById('csvResult').className = 'ut-result';
+}
+function csvToJson() {
+    var text = document.getElementById('csvInput').value.trim();
+    if (!text) { showResult('csvResult', '请输入 CSV 数据', true); return; }
+    var sep = document.getElementById('csvSep').value || ',';
+    var lines = text.split('\n').filter(function(l){ return l.trim(); });
+    if (lines.length < 2) { showResult('csvResult', '至少需要标题行 + 一行数据', true); return; }
+    var headers = lines[0].split(sep).map(function(h){ return h.trim(); });
+    var result = [];
+    for (var i = 1; i < lines.length; i++) {
+        var vals = lines[i].split(sep);
+        var obj = {};
+        for (var j = 0; j < headers.length; j++) obj[headers[j]] = (vals[j] || '').trim();
+        result.push(obj);
+    }
+    showResult('csvResult', JSON.stringify(result, null, 2));
+    try { navigator.clipboard.writeText(JSON.stringify(result, null, 2)); } catch(e) {}
+}
+function jsonToCsv() {
+    var text = document.getElementById('jsonForCsv').value.trim();
+    if (!text) { showResult('csvResult', '请输入 JSON 数据', true); return; }
+    try {
+        var arr = JSON.parse(text);
+        if (!Array.isArray(arr) || arr.length === 0) { showResult('csvResult', 'JSON 必须是对象数组', true); return; }
+        var headers = Object.keys(arr[0]);
+        var csv = headers.join(',') + '\n';
+        for (var i = 0; i < arr.length; i++) {
+            var row = headers.map(function(h){
+                var v = String(arr[i][h] !== undefined ? arr[i][h] : '');
+                return v.indexOf(',') >= 0 || v.indexOf('"') >= 0 ? '"' + v.replace(/"/g,'""') + '"' : v;
+            });
+            csv += row.join(',') + '\n';
+        }
+        showResult('csvResult', csv);
+        try { navigator.clipboard.writeText(csv); } catch(e) {}
+    } catch(e) { showResult('csvResult', 'JSON 解析错误: ' + e.message, true); }
+}
+
+// ====== 14. HTTP 状态码参考 ======
+(function(){
+    var HTTP_CODES = [
+        ['1xx','100','Continue','继续'],
+        ['1xx','101','Switching Protocols','切换协议'],
+        ['1xx','102','Processing','处理中'],
+        ['1xx','103','Early Hints','早期提示'],
+        ['2xx','200','OK','成功'],
+        ['2xx','201','Created','已创建'],
+        ['2xx','202','Accepted','已接受'],
+        ['2xx','203','Non-Authoritative Information','非权威信息'],
+        ['2xx','204','No Content','无内容'],
+        ['2xx','205','Reset Content','重置内容'],
+        ['2xx','206','Partial Content','部分内容'],
+        ['3xx','300','Multiple Choices','多种选择'],
+        ['3xx','301','Moved Permanently','永久移动'],
+        ['3xx','302','Found','临时移动'],
+        ['3xx','303','See Other','查看其他'],
+        ['3xx','304','Not Modified','未修改'],
+        ['3xx','307','Temporary Redirect','临时重定向'],
+        ['3xx','308','Permanent Redirect','永久重定向'],
+        ['4xx','400','Bad Request','错误请求'],
+        ['4xx','401','Unauthorized','未授权'],
+        ['4xx','402','Payment Required','需要付款'],
+        ['4xx','403','Forbidden','禁止访问'],
+        ['4xx','404','Not Found','未找到'],
+        ['4xx','405','Method Not Allowed','方法不允许'],
+        ['4xx','406','Not Acceptable','不可接受'],
+        ['4xx','408','Request Timeout','请求超时'],
+        ['4xx','409','Conflict','冲突'],
+        ['4xx','410','Gone','已删除'],
+        ['4xx','413','Payload Too Large','请求体过大'],
+        ['4xx','414','URI Too Long','URI过长'],
+        ['4xx','415','Unsupported Media Type','不支持的媒体类型'],
+        ['4xx','418','I\'m a teapot','我是茶壶'],
+        ['4xx','422','Unprocessable Entity','无法处理的实体'],
+        ['4xx','429','Too Many Requests','请求过多'],
+        ['4xx','451','Unavailable For Legal Reasons','因法律原因不可用'],
+        ['5xx','500','Internal Server Error','服务器内部错误'],
+        ['5xx','501','Not Implemented','未实现'],
+        ['5xx','502','Bad Gateway','网关错误'],
+        ['5xx','503','Service Unavailable','服务不可用'],
+        ['5xx','504','Gateway Timeout','网关超时']
+    ];
+    function renderHttpTable(filter) {
+        var codes = HTTP_CODES;
+        if (filter) {
+            var f = filter.toLowerCase();
+            codes = HTTP_CODES.filter(function(c){ return c[1].indexOf(f) >= 0 || c[2].toLowerCase().indexOf(f) >= 0 || c[3].indexOf(f) >= 0 || c[0].indexOf(f) >= 0; });
+        }
+        var html = '<table class="table table-sm table-hover" style="font-size:13px;margin:0"><thead><tr><th>分类</th><th>状态码</th><th>名称</th><th>说明</th></tr></thead><tbody>';
+        var colors = {'1xx':'#6b7280','2xx':'#10b981','3xx':'#3b82f6','4xx':'#f59e0b','5xx':'#ef4444'};
+        for (var i = 0; i < codes.length; i++) {
+            var c = codes[i];
+            html += '<tr><td><span class="badge" style="background:'+colors[c[0]]+'">'+c[0]+'</span></td><td><strong>'+c[1]+'</strong></td><td><code>'+c[2]+'</code></td><td>'+c[3]+'</td></tr>';
+        }
+        html += '</tbody></table>';
+        document.getElementById('httpTable').innerHTML = html;
+    }
+    window.renderHttpTable = renderHttpTable;
+    window.filterHttpCodes = function(){
+        var f = document.getElementById('httpSearch').value;
+        renderHttpTable(f);
+    };
+    // Init
+    setTimeout(function(){ renderHttpTable(); }, 100);
+    // Hook input event (CSP-safe: addEventListener in JS)
+    setTimeout(function(){
+        var el = document.getElementById('httpSearch');
+        if (el) {
+            el.addEventListener('input', function(){ filterHttpCodes(); });
+            el.removeAttribute('oninput');
+        }
+    }, 200);
+})();
+
+// ====== 15. MIME 类型查询 ======
+(function(){
+    var MIME_DB = [
+        ['txt','text/plain','纯文本'],
+        ['html','text/html','HTML'],
+        ['css','text/css','CSS'],
+        ['js','application/javascript','JavaScript'],
+        ['json','application/json','JSON'],
+        ['xml','application/xml','XML'],
+        ['csv','text/csv','CSV'],
+        ['pdf','application/pdf','PDF'],
+        ['zip','application/zip','ZIP'],
+        ['gz','application/gzip','Gzip'],
+        ['tar','application/x-tar','Tarball'],
+        ['7z','application/x-7z-compressed','7-Zip'],
+        ['rar','application/vnd.rar','RAR'],
+        ['png','image/png','PNG 图片'],
+        ['jpg','image/jpeg','JPEG 图片'],
+        ['jpeg','image/jpeg','JPEG 图片'],
+        ['gif','image/gif','GIF 图片'],
+        ['svg','image/svg+xml','SVG 矢量图'],
+        ['webp','image/webp','WebP 图片'],
+        ['ico','image/x-icon','图标'],
+        ['bmp','image/bmp','BMP 位图'],
+        ['mp4','video/mp4','MP4 视频'],
+        ['webm','video/webm','WebM 视频'],
+        ['mp3','audio/mpeg','MP3 音频'],
+        ['wav','audio/wav','WAV 音频'],
+        ['ogg','audio/ogg','OGG 音频'],
+        ['flac','audio/flac','FLAC 音频'],
+        ['ttf','font/ttf','TrueType 字体'],
+        ['woff','font/woff','WOFF 字体'],
+        ['woff2','font/woff2','WOFF2 字体'],
+        ['md','text/markdown','Markdown'],
+        ['yaml','text/yaml','YAML'],
+        ['yml','text/yaml','YAML'],
+        ['toml','application/toml','TOML'],
+        ['sql','application/sql','SQL'],
+        ['sh','application/x-sh','Shell 脚本'],
+        ['py','text/x-python','Python'],
+        ['exe','application/x-msdownload','Windows 可执行文件'],
+        ['dmg','application/x-apple-diskimage','macOS 磁盘映像'],
+        ['apk','application/vnd.android.package-archive','Android 安装包'],
+        ['iso','application/x-iso9660-image','光盘镜像'],
+        ['doc','application/msword','Word 文档'],
+        ['docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document','Word 文档'],
+        ['xls','application/vnd.ms-excel','Excel 表格'],
+        ['xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Excel 表格'],
+        ['ppt','application/vnd.ms-powerpoint','PowerPoint'],
+        ['pptx','application/vnd.openxmlformats-officedocument.presentationml.presentation','PowerPoint']
+    ];
+    window.lookupMime = function(){
+        var q = document.getElementById('mimeInput').value.trim().toLowerCase();
+        var result = document.getElementById('mimeResult');
+        result.className = 'ut-result';
+        if (!q) { showResult('mimeResult', '请输入扩展名或 MIME 类型', true); return; }
+        var ext = q.replace(/^\./, '');
+        // Exact match by extension
+        var matches = MIME_DB.filter(function(m){ return m[0] === ext; });
+        if (matches.length > 0) {
+            var m = matches[0];
+            showResult('mimeResult', '.'.concat(m[0],' → ',m[1],'\n',m[2]));
+            return;
+        }
+        // Exact match by MIME
+        matches = MIME_DB.filter(function(m){ return m[1] === q; });
+        if (matches.length > 0) {
+            var m = matches[0];
+            showResult('mimeResult', m[1],' → .',m[0],'\n',m[2]);
+            return;
+        }
+        // Partial match
+        var partial = MIME_DB.filter(function(m){ return m[0].indexOf(ext) >= 0 || m[1].indexOf(q) >= 0 || m[2].indexOf(q) >= 0; });
+        if (partial.length > 0) {
+            var sug = '找到 ' + partial.length + ' 个相关结果：\n';
+            for (var i = 0; i < Math.min(partial.length, 10); i++) {
+                sug += '.'.concat(partial[i][0],' → ',partial[i][1],' (',partial[i][2],')\n');
+            }
+            showResult('mimeResult', sug);
+            return;
+        }
+        showResult('mimeResult', '未找到匹配的 MIME 类型', true);
+    };
+})();
+
+// ====== 16. Unicode 字符查询 ======
+function lookupUnicode() {
+    var q = document.getElementById('uniInput').value.trim();
+    var result = document.getElementById('uniResult');
+    var charEl = document.getElementById('uniChar');
+    var infoEl = document.getElementById('uniInfo');
+    if (!q) { result.style.display = 'none'; return; }
+    var code;
+    // Parse input: U+4E2D, 0x4E2D, 20013, or a character
+    if (/^U\+[0-9a-fA-F]+$/i.test(q)) {
+        code = parseInt(q.slice(2), 16);
+    } else if (/^0x[0-9a-fA-F]+$/i.test(q)) {
+        code = parseInt(q, 16);
+    } else if (/^\d+$/.test(q)) {
+        code = parseInt(q, 10);
+    } else if (q.length === 1) {
+        code = q.charCodeAt(0);
+    } else {
+        infoEl.innerHTML = '<span style="color:#dc2626">无法识别输入格式</span>';
+        return;
+    }
+    if (code < 0 || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) {
+        infoEl.innerHTML = '<span style="color:#dc2626">无效的 Unicode 码点</span>';
+        return;
+    }
+    try {
+        var ch = String.fromCodePoint(code);
+        var hex = code.toString(16).toUpperCase().padStart(4, '0');
+        var category = '';
+        if (code >= 0x4E00 && code <= 0x9FFF) category = 'CJK 统一汉字';
+        else if (code >= 0x3040 && code <= 0x309F) category = '平假名';
+        else if (code >= 0x30A0 && code <= 0x30FF) category = '片假名';
+        else if (code >= 0xAC00 && code <= 0xD7AF) category = '韩文';
+        else if (code >= 0x0000 && code <= 0x007F) category = '基本拉丁';
+        else if (code >= 0x0080 && code <= 0x00FF) category = '拉丁扩展';
+        else if (code >= 0x2000 && code <= 0x206F) category = '通用标点';
+        else if (code >= 0x2600 && code <= 0x26FF) category = '杂项符号';
+        else if (code >= 0x1F300 && code <= 0x1F5FF) category = '杂项符号和象形文字';
+        else if (code >= 0x1F600 && code <= 0x1F64F) category = '表情符号';
+        else category = '其他';
+        charEl.textContent = ch;
+        infoEl.innerHTML = [
+            '<strong>字符:</strong> ' + ch,
+            '<strong>码点:</strong> U+' + hex,
+            '<strong>十进制:</strong> ' + code,
+            '<strong>HTML 实体:</strong> &amp;#x' + hex + '; 或 &amp;#' + code + ';',
+            '<strong>分类:</strong> ' + category,
+            '<strong>UTF-8:</strong> ' + encodeURIComponent(ch).replace(/%/g, ' ').trim(),
+            '<strong>JavaScript:</strong> \\u{' + hex + '}' 
+        ].join('<br>');
+        result.style.display = 'block';
+    } catch(e) {
+        infoEl.innerHTML = '<span style="color:#dc2626">不支持的码点</span>';
+    }
+}
+
+// ====== 17. Lorem Ipsum ======
+(function(){
+    var LOREM_WORDS = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur excepteur sint occaecat cupidatat non proident sunt in culpa qui officia deserunt mollit anim id est laborum'.split(' ');
+    window.genLorem = function(){
+        var type = document.getElementById('loremType').value;
+        var count = parseInt(document.getElementById('loremCount').value) || 3;
+        var result = '';
+        var words = LOREM_WORDS;
+        if (type === 'words') {
+            var out = [];
+            for (var i = 0; i < count; i++) out.push(words[i % words.length]);
+            result = out.join(' ');
+        } else if (type === 'sentences') {
+            for (var s = 0; s < count; s++) {
+                var len = 6 + Math.floor(Math.random() * 12);
+                var sent = [];
+                for (var i = 0; i < len; i++) sent.push(words[(s * len + i) % words.length]);
+                var str = sent.join(' ');
+                result += str.charAt(0).toUpperCase() + str.slice(1) + '. ';
+            }
+        } else {
+            for (var p = 0; p < count; p++) {
+                result += 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\n\n';
+            }
+            result = result.trim();
+        }
+        document.getElementById('loremOutput').value = result;
+        document.getElementById('loremStats').textContent = type === 'words' ? count + ' 个单词' : (type === 'sentences' ? count + ' 个句子' : count + ' 段');
+    };
+    window.copyLorem = function(){
+        var v = document.getElementById('loremOutput').value;
+        if (!v) return;
+        try { navigator.clipboard.writeText(v); } catch(e) {}
+    };
+})();
 </script>
 {% endblock %}

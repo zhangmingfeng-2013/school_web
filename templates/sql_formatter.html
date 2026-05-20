@@ -1,0 +1,593 @@
+{% extends "base.html" %}
+{% block title %}📊 SQL 格式化器{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    .sql-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .sql-main {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .sql-panel {
+        display: flex;
+        flex-direction: column;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: var(--card-shadow);
+    }
+    .sql-panel-header {
+        padding: 0.6rem 1rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+        background: var(--bs-tertiary-bg);
+        border-bottom: 1px solid var(--border-light);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .sql-textarea {
+        width: 100%;
+        min-height: 200px;
+        padding: 1rem;
+        border: none;
+        resize: vertical;
+        font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Courier New', 'Consolas', monospace;
+        font-size: 0.9rem;
+        line-height: 1.7;
+        background: var(--bs-body-bg);
+        color: var(--text-body);
+        outline: none;
+    }
+    .sql-output {
+        min-height: 200px;
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 1rem;
+        margin: 0;
+        border: none;
+        font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Courier New', 'Consolas', monospace;
+        font-size: 0.9rem;
+        line-height: 1.7;
+        background: var(--diff-bg);
+        color: var(--diff-color);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        border-radius: 0;
+    }
+    .sql-output:empty::after {
+        content: "格式化后的 SQL 将显示在这里...";
+        color: var(--text-muted);
+        font-style: italic;
+    }
+    .sql-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .sql-actions .btn {
+        border-radius: 8px;
+        font-size: 0.9rem;
+        padding: 0.5rem 1.2rem;
+    }
+    .sql-status {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-left: auto;
+    }
+
+    /* 语法高亮颜色 */
+    .sql-kw-major {
+        color: #569cd6;
+        font-weight: 700;
+    }
+    .sql-kw-clause {
+        color: #c586c0;
+        font-weight: 600;
+    }
+    .sql-kw-func {
+        color: #dcdcaa;
+        font-weight: 600;
+    }
+    .sql-string {
+        color: #ce9178;
+    }
+    .sql-number {
+        color: #b5cea8;
+    }
+    .sql-comment {
+        color: #6a9955;
+        font-style: italic;
+    }
+    .sql-paren {
+        color: #ffd700;
+    }
+
+    @media (max-width: 767.98px) {
+        .sql-textarea {
+            min-height: 160px;
+            font-size: 0.82rem;
+        }
+        .sql-output {
+            min-height: 160px;
+            max-height: 400px;
+            font-size: 0.82rem;
+        }
+        .sql-actions .btn {
+            font-size: 0.82rem;
+            padding: 0.4rem 0.9rem;
+        }
+    }
+</style>
+
+<div class="sql-wrapper">
+    <h2 class="mb-2">📊 SQL 格式化器</h2>
+    <p class="text-muted mb-2">格式化或压缩 SQL 语句。关键字大写、自动缩进对齐。支持语法高亮。纯前端处理，数据不会上传。</p>
+
+    <!-- 输入区 -->
+    <div class="sql-panel">
+        <div class="sql-panel-header">
+            <span>✏️ SQL 输入</span>
+            <span class="sql-status" id="sqlCharCount">0 字符</span>
+        </div>
+        <textarea
+            id="sqlInput"
+            class="sql-textarea"
+            placeholder="输入 SQL 语句，例如：select id, name, email from users where status = 'active' order by created_at desc limit 10"
+            aria-label="SQL 输入区域"
+            spellcheck="false"
+        ></textarea>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="sql-actions" role="toolbar" aria-label="SQL 操作工具栏">
+        <button class="btn btn-primary" data-csp-click="formatSQL" title="格式化 SQL">
+            ✨ 格式化
+        </button>
+        <button class="btn btn-outline-secondary" data-csp-click="minifySQL" title="压缩为单行">
+            📦 压缩
+        </button>
+        <button class="btn btn-outline-secondary" data-csp-click="copySQL" title="复制结果到剪贴板">
+            📋 复制
+        </button>
+        <button class="btn btn-outline-secondary" data-csp-click="clearSQL" title="清空">
+            🗑️ 清空
+        </button>
+        <span class="sql-status" id="sqlResultStatus"></span>
+    </div>
+
+    <!-- 结果区 -->
+    <div class="sql-panel">
+        <div class="sql-panel-header">
+            <span>📋 结果</span>
+            <button class="btn btn-sm btn-outline-secondary" data-csp-click="copySQL" title="复制">
+                📋 复制
+            </button>
+        </div>
+        <pre id="sqlOutput" class="sql-output" aria-live="polite" aria-label="格式化结果"></pre>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+(function() {
+    var input = document.getElementById('sqlInput');
+    var output = document.getElementById('sqlOutput');
+    var charCount = document.getElementById('sqlCharCount');
+    var resultStatus = document.getElementById('sqlResultStatus');
+
+    // ====== SQL 关键字列表 ======
+    // 主要子句关键字（新行，顶格）
+    var MAJOR_CLAUSES = [
+        'SELECT', 'FROM', 'WHERE', 'GROUP\\s+BY', 'ORDER\\s+BY', 'HAVING',
+        'LIMIT', 'OFFSET',
+        'INSERT\\s+INTO', 'VALUES',
+        'UPDATE', 'SET',
+        'DELETE\\s+FROM',
+        'CREATE\\s+TABLE', 'ALTER\\s+TABLE', 'DROP\\s+TABLE', 'DROP\\s+INDEX', 'CREATE\\s+INDEX',
+        'UNION\\s+ALL', 'UNION',
+        'INTERSECT', 'EXCEPT'
+    ];
+
+    // 子句关键字（新行，缩进）
+    var SUB_CLAUSES = [
+        'LEFT\\s+JOIN', 'RIGHT\\s+JOIN', 'INNER\\s+JOIN', 'OUTER\\s+JOIN',
+        'CROSS\\s+JOIN', 'FULL\\s+JOIN', 'NATURAL\\s+JOIN',
+        'JOIN', 'ON', 'AND', 'OR'
+    ];
+
+    // 独立关键字（用于大写和关键词标识）
+    var ALL_KEYWORDS = [
+        'SELECT', 'FROM', 'WHERE',
+        'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN',
+        'CROSS JOIN', 'FULL JOIN', 'NATURAL JOIN',
+        'JOIN', 'ON', 'AND', 'OR',
+        'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET',
+        'INSERT INTO', 'VALUES',
+        'UPDATE', 'SET',
+        'DELETE FROM',
+        'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'DROP INDEX', 'CREATE INDEX',
+        'UNION ALL', 'UNION', 'INTERSECT', 'EXCEPT',
+        'AS', 'DISTINCT', 'ALL',
+        'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+        'IN', 'BETWEEN', 'LIKE', 'IS', 'NULL', 'NOT', 'EXISTS',
+        'COUNT', 'SUM', 'AVG', 'MAX', 'MIN',
+        'ASC', 'DESC', 'NULLS FIRST', 'NULLS LAST',
+        'PRIMARY KEY', 'FOREIGN KEY', 'REFERENCES', 'DEFAULT', 'CHECK', 'UNIQUE', 'CONSTRAINT',
+        'CASCADE', 'RESTRICT', 'NO ACTION',
+        'IF', 'NOT NULL', 'AUTO_INCREMENT', 'SERIAL',
+        'TRUE', 'FALSE',
+        'WITH', 'RECURSIVE', 'RETURNING',
+        'OVER', 'PARTITION BY', 'ROW NUMBER'
+    ];
+
+    // 函数关键字（用于高亮）
+    var FUNC_KEYWORDS = ['COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'COALESCE', 'NULLIF', 'CAST', 'CONVERT', 'SUBSTRING', 'UPPER', 'LOWER', 'TRIM', 'LENGTH', 'REPLACE', 'CONCAT', 'NOW', 'CURRENT_DATE', 'CURRENT_TIMESTAMP'];
+
+    // ====== 工具函数 ======
+    function updateCharCount() {
+        charCount.textContent = input.value.length + ' 字符';
+    }
+
+    // ====== 标记占位符保护（避免格式化破坏字符串和注释中的内容） ======
+    function protectLiterals(sql) {
+        var placeholders = [];
+        var idx = 0;
+
+        // 保护单引号字符串
+        sql = sql.replace(/'(''|[^'])*'/g, function(m) {
+            var ph = '___SQLSTR' + (idx++) + '___';
+            placeholders.push({ ph: ph, val: m });
+            return ph;
+        });
+
+        // 保护双引号标识符
+        sql = sql.replace(/"([^"]|"")*"/g, function(m) {
+            var ph = '___SQLDQ' + (idx++) + '___';
+            placeholders.push({ ph: ph, val: m });
+            return ph;
+        });
+
+        // 保护反引号标识符
+        sql = sql.replace(/`[^`]*`/g, function(m) {
+            var ph = '___SQLBT' + (idx++) + '___';
+            placeholders.push({ ph: ph, val: m });
+            return ph;
+        });
+
+        // 保护单行注释
+        sql = sql.replace(/--[^\n]*/g, function(m) {
+            var ph = '___SQLCM' + (idx++) + '___';
+            placeholders.push({ ph: ph, val: m });
+            return ph;
+        });
+
+        // 保护块注释
+        sql = sql.replace(/\/\*[\s\S]*?\*\//g, function(m) {
+            var ph = '___SQLBC' + (idx++) + '___';
+            placeholders.push({ ph: ph, val: m });
+            return ph;
+        });
+
+        return { sql: sql, placeholders: placeholders };
+    }
+
+    function restoreLiterals(sql, placeholders) {
+        for (var i = placeholders.length - 1; i >= 0; i--) {
+            sql = sql.split(placeholders[i].ph).join(placeholders[i].val);
+        }
+        return sql;
+    }
+
+    // ====== 关键字大写（词边界匹配） ======
+    function uppercaseKeywords(sql) {
+        // 按长度降序排序，确保长关键字先匹配（如 ORDER BY 优先于 ORDER）
+        var sorted = ALL_KEYWORDS.slice().sort(function(a, b) { return b.length - a.length; });
+        for (var i = 0; i < sorted.length; i++) {
+            var kw = sorted[i];
+            var escaped = kw.replace(/\s+/g, '\\s+');
+            var regex = new RegExp('\\b' + escaped + '\\b', 'gi');
+            sql = sql.replace(regex, function(m) {
+                return m.toUpperCase();
+            });
+        }
+        return sql;
+    }
+
+    // ====== 格式化 SQL（美化） ======
+    function beautifySQL(raw) {
+        if (!raw || !raw.trim()) return '';
+
+        // Step 1: 保护字面量
+        var protected = protectLiterals(raw);
+        var sql = protected.sql;
+        var placeholders = protected.placeholders;
+
+        // Step 2: 规范化空白
+        sql = sql.replace(/\s+/g, ' ');
+        sql = sql.replace(/\s*\(\s*/g, ' (');
+        sql = sql.replace(/\s*\)\s*/g, ') ');
+        sql = sql.replace(/\s*,\s*/g, ', ');
+        sql = sql.replace(/\s*;\s*$/, ';');
+        sql = sql.trim();
+
+        // Step 3: 在主要关键字前添加换行
+        for (var i = 0; i < MAJOR_CLAUSES.length; i++) {
+            var kw = MAJOR_CLAUSES[i];
+            var regex = new RegExp('\\s+' + kw + '\\b', 'gi');
+            sql = sql.replace(regex, function(m) {
+                var indent = '';
+                // UNION/UNION ALL/INTERSECT/EXCEPT 前面加额外空行
+                if (/UNION|INTERSECT|EXCEPT/i.test(m)) {
+                    indent = '\n\n';
+                } else {
+                    indent = '\n';
+                }
+                return indent + m.trim();
+            });
+        }
+
+        // Step 4: 在子句关键字前添加换行并缩进
+        for (var j = 0; j < SUB_CLAUSES.length; j++) {
+            var skw = SUB_CLAUSES[j];
+            var sregex = new RegExp('\\s+' + skw + '\\b', 'gi');
+            sql = sql.replace(sregex, function(m) {
+                return '\n  ' + m.trim();
+            });
+        }
+
+        // Step 5: CASE WHEN THEN ELSE END 特殊处理
+        sql = sql.replace(/\s+(WHEN)\b/gi, '\n    $1');
+        sql = sql.replace(/\s+(THEN)\b/gi, ' $1');
+        sql = sql.replace(/\s+(ELSE)\b/gi, '\n    $1');
+        sql = sql.replace(/\s+(END)\b/gi, '\n  $1');
+
+        // Step 6: 处理括号内的缩进 - 开括号后增加缩进
+        // 简化处理：在左括号后换行并缩进
+        sql = sql.replace(/\(\s*(SELECT)\b/gi, '(\n    $1');
+
+        // Step 7: 清理多余的空白行
+        sql = sql.replace(/\n{3,}/g, '\n\n');
+        sql = sql.replace(/^\s+|\s+$/g, '');
+        sql = sql.replace(/ +\n/g, '\n');
+        sql = sql.replace(/\n +/g, '\n');
+
+        // Step 8: 关键字转大写
+        sql = uppercaseKeywords(sql);
+
+        // Step 9: 恢复字面量
+        sql = restoreLiterals(sql, placeholders);
+
+        // Step 10: 结尾的分号单独处理
+        sql = sql.replace(/\s*;\s*$/, ';');
+
+        return sql;
+    }
+
+    // ====== 压缩 SQL（单行） ======
+    function minifySQL(raw) {
+        if (!raw || !raw.trim()) return '';
+
+        // 保护字面量
+        var protected = protectLiterals(raw);
+        var sql = protected.sql;
+        var placeholders = protected.placeholders;
+
+        // 移除注释
+        sql = sql.replace(/--[^\n]*/g, '');
+        sql = sql.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // 将换行和多余空白替换为单个空格
+        sql = sql.replace(/\s+/g, ' ');
+
+        // 清理括号和逗号周围的空格
+        sql = sql.replace(/\s*\(\s*/g, '(');
+        sql = sql.replace(/\s*\)\s*/g, ')');
+        sql = sql.replace(/\s*,\s*/g, ',');
+        sql = sql.replace(/\s*=\s*/g, '=');
+        sql = sql.replace(/\s*>\s*/g, '>');
+        sql = sql.replace(/\s*<\s*/g, '<');
+
+        sql = sql.trim();
+
+        // 关键字大写
+        sql = uppercaseKeywords(sql);
+
+        // 恢复字面量
+        sql = restoreLiterals(sql, placeholders);
+
+        // 确保以分号结尾
+        if (sql && !/;\s*$/.test(sql)) {
+            sql += ';';
+        }
+
+        return sql;
+    }
+
+    // ====== 语法高亮 ======
+    function colorizeSQL(sql) {
+        if (!sql) return '';
+
+        // HTML 转义
+        var escaped = sql
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // 保护已经转义的内容中的特殊模式
+        // 匹配字符串字面量 '...'
+        escaped = escaped.replace(/'[^']*'/g, function(m) {
+            return '<span class="sql-string">' + m + '</span>';
+        });
+
+        // 匹配注释
+        escaped = escaped.replace(/(--[^\n]*)/g, function(m) {
+            return '<span class="sql-comment">' + m + '</span>';
+        });
+        escaped = escaped.replace(/(\/\*[\s\S]*?\*\/)/g, function(m) {
+            return '<span class="sql-comment">' + m + '</span>';
+        });
+
+        // 匹配数字
+        escaped = escaped.replace(/\b(\d+(?:\.\d+)?)\b/g, function(m) {
+            return '<span class="sql-number">' + m + '</span>';
+        });
+
+        // 匹配括号
+        escaped = escaped.replace(/(\(|\))/g, function(m) {
+            return '<span class="sql-paren">' + m + '</span>';
+        });
+
+        // 高亮主要子句关键字（已转大写）
+        var majorList = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING',
+            'LIMIT', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM',
+            'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'DROP INDEX',
+            'UNION ALL', 'UNION'];
+        for (var i = 0; i < majorList.length; i++) {
+            var mkw = majorList[i].replace(/\s+/g, '\\s+');
+            var regex = new RegExp('\\b(' + mkw + ')\\b', 'gi');
+            escaped = escaped.replace(regex, function(m, g1) {
+                return '<span class="sql-kw-major">' + g1 + '</span>';
+            });
+        }
+
+        // 高亮子句关键字
+        var subList = ['LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'CROSS JOIN', 'FULL JOIN',
+            'JOIN', 'ON', 'AND', 'OR', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+            'IN', 'BETWEEN', 'LIKE', 'IS', 'NULL', 'NOT', 'EXISTS',
+            'AS', 'DISTINCT', 'ASC', 'DESC'];
+        for (var j = 0; j < subList.length; j++) {
+            var skw = subList[j].replace(/\s+/g, '\\s+');
+            var sregex = new RegExp('\\b(' + skw + ')\\b', 'gi');
+            escaped = escaped.replace(sregex, function(m, g1) {
+                if (!/<span/.test(m)) {
+                    return '<span class="sql-kw-clause">' + g1 + '</span>';
+                }
+                return m;
+            });
+        }
+
+        // 高亮函数关键字
+        var funcList = ['COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'COALESCE', 'NULLIF', 'CAST'];
+        for (var k = 0; k < funcList.length; k++) {
+            var fkw = funcList[k];
+            var fregex = new RegExp('\\b(' + fkw + ')\\b(?=\\s*\\()', 'gi');
+            escaped = escaped.replace(fregex, function(m, g1) {
+                if (!/<span/.test(m)) {
+                    return '<span class="sql-kw-func">' + g1 + '</span>';
+                }
+                return m;
+            });
+        }
+
+        return escaped;
+    }
+
+    // ====== 更新输出 ======
+    function setOutput(text) {
+        if (text) {
+            output.innerHTML = colorizeSQL(text);
+            resultStatus.textContent = '✓ 完成';
+        } else {
+            output.innerHTML = '';
+            resultStatus.textContent = '⚠ 输入为空';
+        }
+    }
+
+    // ====== 公开的按钮处理函数 ======
+    window.formatSQL = function() {
+        var raw = input.value;
+        if (!raw.trim()) {
+            setOutput('');
+            return;
+        }
+        var result = beautifySQL(raw);
+        setOutput(result);
+    };
+
+    window.minifySQL = function() {
+        var raw = input.value;
+        if (!raw.trim()) {
+            setOutput('');
+            return;
+        }
+        var result = minifySQL(raw);
+        setOutput(result);
+    };
+
+    window.copySQL = function() {
+        var text = output.textContent || '';
+        if (!text.trim()) {
+            // 尝试复制输入内容
+            text = input.value;
+            if (!text.trim()) {
+                resultStatus.textContent = '⚠ 没有可复制的内容';
+                setTimeout(function() { resultStatus.textContent = ''; }, 2000);
+                return;
+            }
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+                resultStatus.textContent = '✓ 已复制到剪贴板';
+                setTimeout(function() { resultStatus.textContent = ''; }, 2000);
+            }).catch(function() {
+                fallbackCopy(text);
+            });
+        } else {
+            fallbackCopy(text);
+        }
+    };
+
+    function fallbackCopy(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
+            resultStatus.textContent = '✓ 已复制到剪贴板';
+        } catch (e) {
+            resultStatus.textContent = '❌ 复制失败';
+        }
+        document.body.removeChild(ta);
+        setTimeout(function() { resultStatus.textContent = ''; }, 2000);
+    }
+
+    window.clearSQL = function() {
+        input.value = '';
+        output.innerHTML = '';
+        updateCharCount();
+        resultStatus.textContent = '';
+    };
+
+    // ====== 输入事件监听 ======
+    input.addEventListener('input', function() {
+        updateCharCount();
+    });
+
+    // ====== 键盘快捷键 Ctrl+Enter 格式化 ======
+    input.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            window.formatSQL();
+        }
+    });
+
+    // ====== 初始化 ======
+    updateCharCount();
+
+    // ====== 加载示例 SQL ======
+    input.value = 'select u.id, u.name, u.email, o.order_date, o.total_amount\nfrom users u\ninner join orders o on u.id = o.user_id\nwhere u.status = \'active\' and o.total_amount > 100\ngroup by u.id, u.name, u.email, o.order_date, o.total_amount\norder by o.order_date desc\nlimit 20';
+    updateCharCount();
+})();
+</script>
+{% endblock %}
