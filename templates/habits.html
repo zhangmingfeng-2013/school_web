@@ -29,6 +29,8 @@
 .habit-day.today-big.checked { background:#10b981;color:#fff;border-color:#10b981;box-shadow:0 0 12px rgba(16,185,129,.35) }
 .streak-badge { display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:600 }
 .streak-fire { color:#f59e0b }
+.streak-badge-fire { background:rgba(245,158,11,.15) }
+[data-bs-theme="dark"] .streak-badge-fire { background:rgba(245,158,11,.2) }
 .overview-card { background:linear-gradient(135deg,rgba(59,130,246,.05),rgba(16,185,129,.05));border:1px solid var(--border-light);border-radius:12px;padding:1rem;margin-bottom:1.5rem }
 .overview-stats { display:flex;gap:1.5rem;flex-wrap:wrap }
 .overview-stat { text-align:center;min-width:70px }
@@ -291,7 +293,7 @@ function renderHabits(habits) {
         html += '<span class="habit-name">' + (h.icon||'✅') + ' ' + (h.name||'未命名') + '</span>';
         html += '<div class="habit-actions">';
         if (streak >= 3) {
-            html += '<span class="streak-badge" style="background:rgba(245,158,11,.15)"><span class="streak-fire">🔥</span> ' + streak + '天</span>';
+            html += '<span class="streak-badge streak-badge-fire"><span class="streak-fire">🔥</span> ' + streak + '天</span>';
         }
         html += '<button class="btn btn-outline-secondary btn-sm" data-csp-click="deleteHabit" data-csp-args="[' + (h.id||0) + ']">🗑</button>';
         html += '</div>';
@@ -410,6 +412,8 @@ function loadHabits() {
 
     var colors = document.querySelectorAll('#colorPicker .color-dot');
     colors.forEach(function(el) {
+        // Set background via JS (bypasses CSP inline-style blocking)
+        el.style.background = el.getAttribute('data-color');
         el.addEventListener('click', function() {
             colors.forEach(function(x) { x.classList.remove('selected'); });
             this.classList.add('selected');
@@ -429,5 +433,17 @@ document.addEventListener('click', function(e) {
 });
 
 loadHabits();
+
+// ====== CSP 修复：JS 初始化被屏蔽的 inline style ======
+(function initCspFix() {
+    // 隐藏新建习惯表单
+    document.getElementById('addHabitCard').style.display = 'none';
+    // 概览面板初始颜色
+    document.getElementById('ovTotal').style.color = '#3b82f6';
+    document.getElementById('ovDone').style.color = '#10b981';
+    document.getElementById('ovRemain').style.color = '#f59e0b';
+    document.getElementById('ovBestStreak').style.color = '#ec4899';
+    document.getElementById('ovRate').style.color = '#8b5cf6';
+})();
 </script>
 {% endblock %}
