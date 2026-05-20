@@ -42,6 +42,10 @@
     <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[5]'>🆔 UUID</button>
     <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[6]'>⏱ 时间戳</button>
     <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[7]'>📊 字数</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[8]'>🔍 正则</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[9]'>🎨 颜色</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[10]'>🔢 进制</button>
+    <button class="ut-tab" data-csp-click="switchUtilTab" data-csp-args='[11]'>🏷 HTML实体</button>
 </div>
 
 <!-- 0: 密码生成器 -->
@@ -139,6 +143,69 @@
         <button class="ut-btn-primary" data-csp-click="countText">统计</button>
     </div>
     <div class="ut-grid" id="countStats" style="display:none;margin-top:12px"></div>
+</div>
+
+<!-- 8: 正则测试器 -->
+<div class="ut-panel" id="utPanel8">
+    <div class="ut-row">
+        <input type="text" id="regexPattern" placeholder="正则表达式 (如 \\d{3}-\\d{4})" style="flex:1;min-width:200px">
+        <input type="text" id="regexFlags" placeholder="标志 (如 gi)" style="width:80px">
+        <button class="ut-btn-primary" data-csp-click="testRegex">测试</button>
+    </div>
+    <div class="ut-row">
+        <textarea id="regexInput" placeholder="输入要匹配的文本..."></textarea>
+    </div>
+    <div class="ut-result" id="regexResult"></div>
+    <div id="regexMatches" style="margin-top:8px"></div>
+</div>
+
+<!-- 9: 颜色转换器 -->
+<div class="ut-panel" id="utPanel9">
+    <div class="ut-row">
+        <div><label style="font-size:13px;display:block;margin-bottom:2px">HEX</label><input type="text" id="colorHex" placeholder="#3b82f6" style="width:120px;font-family:monospace"></div>
+        <div><label style="font-size:13px;display:block;margin-bottom:2px">RGB</label><input type="text" id="colorRgb" placeholder="59,130,246" style="width:140px;font-family:monospace"></div>
+        <div><label style="font-size:13px;display:block;margin-bottom:2px">HSL</label><input type="text" id="colorHsl" placeholder="217,91%,60%" style="width:140px;font-family:monospace"></div>
+    </div>
+    <div class="ut-row">
+        <button class="ut-btn-primary" data-csp-click="convertColor" data-csp-args='["hex"]'>HEX → RGB/HSL</button>
+        <button class="ut-btn-success" data-csp-click="convertColor" data-csp-args='["rgb"]'>RGB → HEX/HSL</button>
+        <button class="ut-btn-warning" data-csp-click="convertColor" data-csp-args='["hsl"]'>HSL → HEX/RGB</button>
+    </div>
+    <div class="ut-row">
+        <div id="colorPreview" style="width:80px;height:80px;border-radius:8px;border:2px solid #e5e7eb;background:#3b82f6"></div>
+        <div id="colorInfo" style="font-size:13px;color:#6b7280"></div>
+    </div>
+</div>
+
+<!-- 10: 进制转换器 -->
+<div class="ut-panel" id="utPanel10">
+    <div class="ut-row">
+        <input type="text" id="baseInput" placeholder="输入数值..." style="width:200px;font-family:monospace">
+        <select id="baseFrom">
+            <option value="10">十进制 (10)</option>
+            <option value="2">二进制 (2)</option>
+            <option value="8">八进制 (8)</option>
+            <option value="16">十六进制 (16)</option>
+        </select>
+        <span style="font-size:18px">→</span>
+        <button class="ut-btn-primary" data-csp-click="convertBase">转换</button>
+        <button class="ut-btn-success" data-csp-click="convertBaseAll">全部</button>
+    </div>
+    <div class="ut-grid mt-3" id="baseResults"></div>
+</div>
+
+<!-- 11: HTML 实体编解码 -->
+<div class="ut-panel" id="utPanel11">
+    <div class="ut-row">
+        <textarea id="htmlInput" placeholder="输入 HTML 文本... 如 &lt;div&gt;Hello&lt;/div&gt;"></textarea>
+    </div>
+    <div class="ut-row">
+        <button class="ut-btn-success" data-csp-click="htmlEncode">编码 → 实体</button>
+        <button class="ut-btn-warning" data-csp-click="htmlDecode">实体 → 解码</button>
+        <button class="ut-btn-primary" data-csp-click="htmlCommonEntities">常用实体参考</button>
+    </div>
+    <div class="ut-result" id="htmlResult"></div>
+    <div id="htmlEntitiesTable" style="margin-top:12px;display:none"></div>
 </div>
 
 <script nonce="{{ csp_nonce }}">
@@ -275,6 +342,178 @@ async function countText() {
             '<div class="ut-stat"><div class="ut-stat-val">' + d.lines + '</div><div class="ut-stat-label">行数</div></div>' +
             '<div class="ut-stat"><div class="ut-stat-val">' + d.bytes + '</div><div class="ut-stat-label">字节(UTF-8)</div></div>';
     }
+}
+// ====== 8. 正则测试 ======
+function testRegex() {
+    var pattern = document.getElementById('regexPattern').value;
+    var flags = document.getElementById('regexFlags').value.trim();
+    var text = document.getElementById('regexInput').value;
+    var matchesDiv = document.getElementById('regexMatches');
+    matchesDiv.innerHTML = '';
+
+    if (!pattern) { showResult('regexResult', '请输入正则表达式', true); return; }
+    try {
+        var re = new RegExp(pattern, flags);
+        var match = re.exec(text);
+        var results = [];
+        var count = 0;
+        while (match) {
+            count++;
+            results.push({index: match.index, match: match[0], groups: match.slice(1)});
+            if (!re.global) break;
+            match = re.exec(text);
+        }
+        if (count === 0) {
+            showResult('regexResult', '❌ 无匹配');
+        } else {
+            showResult('regexResult', '✅ 找到 ' + count + ' 个匹配');
+            // Highlight matches in text
+            var html = '';
+            var lastIdx = 0;
+            var re2 = new RegExp(pattern, flags.includes('g') ? flags : flags + 'g');
+            var m;
+            while ((m = re2.exec(text)) !== null) {
+                html += escHtml(text.slice(lastIdx, m.index));
+                html += '<mark style="background:#fef08a;padding:0 2px;border-radius:2px">' + escHtml(m[0]) + '</mark>';
+                lastIdx = m.index + m[0].length;
+            }
+            html += escHtml(text.slice(lastIdx));
+            matchesDiv.innerHTML = '<div style="font-family:monospace;font-size:13px;padding:10px;background:#f9fafb;border-radius:6px;word-break:break-all;line-height:1.8">' + html + '</div>';
+        }
+    } catch(e) {
+        showResult('regexResult', '正则表达式错误: ' + e.message, true);
+    }
+}
+function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ====== 9. 颜色转换 ======
+function convertColor(from) {
+    var hexEl = document.getElementById('colorHex');
+    var rgbEl = document.getElementById('colorRgb');
+    var hslEl = document.getElementById('colorHsl');
+    var preview = document.getElementById('colorPreview');
+    var info = document.getElementById('colorInfo');
+    var r, g, b, h, s, l, hexVal;
+
+    if (from === 'hex') {
+        hexVal = hexEl.value.trim().replace('#','');
+        if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hexVal)) { info.textContent = '❌ HEX格式错误'; return; }
+        if (hexVal.length === 3) hexVal = hexVal[0]+hexVal[0]+hexVal[1]+hexVal[1]+hexVal[2]+hexVal[2];
+        r = parseInt(hexVal.slice(0,2), 16); g = parseInt(hexVal.slice(2,4), 16); b = parseInt(hexVal.slice(4,6), 16);
+    } else if (from === 'rgb') {
+        var parts = rgbEl.value.trim().split(/[,\s]+/).map(Number);
+        if (parts.length < 3 || parts.some(function(v){return isNaN(v)||v<0||v>255})) { info.textContent = '❌ RGB格式错误(0-255)'; return; }
+        r = parts[0]; g = parts[1]; b = parts[2];
+    } else if (from === 'hsl') {
+        var m = hslEl.value.trim().match(/^(\d+)[,\s]+(\d+)%?[,\s]+(\d+)%?$/);
+        if (!m) { info.textContent = '❌ HSL格式错误(如 217,91%,60%)'; return; }
+        h = parseInt(m[1]); s = parseInt(m[2]); l = parseInt(m[3]);
+        var hslToRgb = function(p,q,t){if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+        var h1 = h/360, s1 = s/100, l1 = l/100;
+        var q = l1 < 0.5 ? l1*(1+s1) : l1+s1-l1*s1;
+        var p = 2*l1 - q;
+        r = Math.round(hslToRgb(p,q,h1+1/3)*255);
+        g = Math.round(hslToRgb(p,q,h1)*255);
+        b = Math.round(hslToRgb(p,q,h1-1/3)*255);
+    }
+
+    // Convert RGB to HSL for display
+    var r1 = r/255, g1 = g/255, b1 = b/255;
+    var max = Math.max(r1,g1,b1), min = Math.min(r1,g1,b1);
+    var lOut = (max+min)/2;
+    var sOut = 0, hOut = 0;
+    if (max !== min) {
+        var d = max - min;
+        sOut = lOut > 0.5 ? d/(2-max-min) : d/(max+min);
+        if (max === r1) hOut = ((g1-b1)/d+(g1<b1?6:0))/6;
+        else if (max === g1) hOut = ((b1-r1)/d+2)/6;
+        else hOut = ((r1-g1)/d+4)/6;
+    }
+
+    hexVal = '#' + [r,g,b].map(function(v){return v.toString(16).padStart(2,'0');}).join('');
+    hexEl.value = hexVal;
+    rgbEl.value = r+','+g+','+b;
+    hslEl.value = Math.round(hOut*360)+','+Math.round(sOut*100)+'%,'+Math.round(lOut*100)+'%';
+    preview.style.background = hexVal;
+    info.innerHTML = '<span style="color:#333">HEX: <code>' + hexVal + '</code> | RGB: <code>rgb('+r+','+g+','+b+')</code> | HSL: <code>hsl('+Math.round(hOut*360)+','+Math.round(sOut*100)+'%,'+Math.round(lOut*100)+'%)</code></span>';
+}
+
+// ====== 10. 进制转换 ======
+function convertBase() {
+    var val = document.getElementById('baseInput').value.trim();
+    var from = parseInt(document.getElementById('baseFrom').value);
+    var num;
+    try {
+        num = parseInt(val, from);
+    } catch(e) { num = NaN; }
+    if (isNaN(num)) { document.getElementById('baseResults').innerHTML = '<div class="ut-stat" style="grid-column:1/-1"><div class="ut-stat-val" style="color:#dc2626">错误</div><div class="ut-stat-label">无效的' + from + '进制数</div></div>'; return; }
+    var results = [
+        {label:'二进制',val:num.toString(2),base:2},
+        {label:'八进制',val:num.toString(8),base:8},
+        {label:'十进制',val:num.toString(10),base:10},
+        {label:'十六进制',val:num.toString(16).toUpperCase(),base:16}
+    ];
+    document.getElementById('baseResults').innerHTML = results.map(function(r){
+        return '<div class="ut-stat"><div class="ut-stat-val">'+r.val+'</div><div class="ut-stat-label">'+r.label+' ('+r.base+')</div></div>';
+    }).join('');
+    // Copy decimal
+    try { navigator.clipboard.writeText(num.toString(10)); } catch(e) {}
+}
+
+function convertBaseAll() {
+    var val = document.getElementById('baseInput').value.trim();
+    var from = parseInt(document.getElementById('baseFrom').value);
+    var num;
+    try { num = parseInt(val, from); } catch(e) { num = NaN; }
+    if (isNaN(num)) { document.getElementById('baseResults').innerHTML = '<div class="ut-stat" style="grid-column:1/-1"><div class="ut-stat-val" style="color:#dc2626">错误</div><div class="ut-stat-label">无效输入</div></div>'; return; }
+    convertBase();
+}
+
+// ====== 11. HTML 实体 ======
+function htmlEncode() {
+    var text = document.getElementById('htmlInput').value;
+    if (!text) { showResult('htmlResult', '请输入文本', true); return; }
+    var encoded = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    showResult('htmlResult', '✅ 编码结果:\\n' + encoded);
+    try { navigator.clipboard.writeText(encoded); } catch(e) {}
+}
+
+function htmlDecode() {
+    var text = document.getElementById('htmlInput').value;
+    if (!text) { showResult('htmlResult', '请输入文本', true); return; }
+    var txt = document.createElement('textarea');
+    txt.innerHTML = text;
+    showResult('htmlResult', '✅ 解码结果:\\n' + txt.value);
+    try { navigator.clipboard.writeText(txt.value); } catch(e) {}
+}
+
+function htmlCommonEntities() {
+    var table = document.getElementById('htmlEntitiesTable');
+    if (table.style.display === 'block') { table.style.display = 'none'; return; }
+    table.style.display = 'block';
+    var entities = [
+        ['&amp;lt;','&lt;','<','小于号'],
+        ['&amp;gt;','&gt;','>','大于号'],
+        ['&amp;amp;','&amp;','&','和号'],
+        ['&amp;quot;','&quot;','\"','双引号'],
+        ['&amp;#39;','&#39;',\"'\",'单引号'],
+        ['&amp;nbsp;','&nbsp;',' ','不间断空格'],
+        ['&amp;copy;','&copy;','©','版权'],
+        ['&amp;reg;','&reg;','®','注册商标'],
+        ['&amp;trade;','&trade;','™','商标'],
+        ['&amp;mdash;','&mdash;','—','长破折号'],
+        ['&amp;ndash;','&ndash;','–','短破折号'],
+        ['&amp;hellip;','&hellip;','…','省略号'],
+        ['&amp;laquo;','&laquo;','«','左书名号'],
+        ['&amp;raquo;','&raquo;','»','右书名号'],
+        ['&amp;times;','&times;','×','乘号'],
+        ['&amp;divide;','&divide;','÷','除号']
+    ];
+    table.innerHTML = '<div style="overflow-x:auto"><table class="table table-sm table-bordered" style="font-size:13px;margin:0"><thead><tr><th>实体名</th><th>实体编号</th><th>符号</th><th>说明</th></tr></thead><tbody>' +
+        entities.map(function(e){ return '<tr><td><code>'+e[0]+'</code></td><td><code>'+e[1]+'</code></td><td style="font-size:18px;text-align:center">'+e[2]+'</td><td>'+e[3]+'</td></tr>'; }).join('') +
+        '</tbody></table></div>';
 }
 </script>
 {% endblock %}

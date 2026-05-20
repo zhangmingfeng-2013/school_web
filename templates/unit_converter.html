@@ -1,0 +1,654 @@
+{% extends "base.html" %}
+{% block title %}📐 单位换算{% endblock %}
+
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    .converter-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .converter-card {
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    .converter-card .card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        padding: 1.2rem 1.5rem;
+    }
+    .converter-subtitle {
+        font-size: 0.9rem;
+    }
+    .converter-card .card-body {
+        padding: 1.8rem;
+    }
+
+    /* Category Tabs */
+    .category-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 1.5rem;
+    }
+    .category-tab {
+        padding: 0.55rem 1rem;
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background: var(--bs-tertiary-bg);
+        color: var(--text-body);
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        user-select: none;
+    }
+    .category-tab:hover {
+        background: var(--bg-card-hover);
+        border-color: rgba(102, 126, 234, 0.4);
+    }
+    .category-tab.active {
+        background: #667eea;
+        color: #fff;
+        border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+    }
+
+    /* Conversion Panel */
+    .conversion-panel {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .conversion-input-group {
+        flex: 1 1 180px;
+        min-width: 160px;
+    }
+    .conversion-arrow {
+        font-size: 1.5rem;
+        color: #667eea;
+        font-weight: bold;
+        flex: 0 0 auto;
+        align-self: center;
+        padding: 0 0.25rem;
+    }
+    .conversion-input-group label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-bottom: 0.3rem;
+        display: block;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .conversion-input-group input,
+    .conversion-input-group select {
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        border: 2px solid var(--border-light);
+        border-radius: 10px;
+        background: var(--bs-body-bg);
+        color: var(--text-body);
+        font-size: 1rem;
+        transition: border-color 0.2s;
+    }
+    .conversion-input-group input:focus,
+    .conversion-input-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+    .conversion-input-group input {
+        font-size: 1.3rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    /* Result Display */
+    .result-display {
+        margin-top: 1.5rem;
+        padding: 1.2rem 1.5rem;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
+        border-radius: 12px;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        text-align: center;
+        min-height: 70px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .result-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #667eea;
+        word-break: break-all;
+    }
+    .result-label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+    .result-formula {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        opacity: 0.7;
+        margin-top: 0.2rem;
+    }
+
+    /* Swap button */
+    .swap-btn {
+        flex: 0 0 auto;
+        align-self: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 2px solid var(--border-light);
+        background: var(--bs-body-bg);
+        color: #667eea;
+        cursor: pointer;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        margin-top: 1.1rem;
+    }
+    .swap-btn:hover {
+        background: #667eea;
+        color: #fff;
+        border-color: #667eea;
+        transform: rotate(180deg);
+    }
+
+    /* Quick preset buttons */
+    .quick-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 1rem;
+    }
+    .preset-chip {
+        padding: 0.3rem 0.7rem;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        border: 1px solid var(--border-light);
+        background: var(--bs-body-bg);
+        color: var(--text-body);
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+    }
+    .preset-chip:hover {
+        background: rgba(102, 126, 234, 0.12);
+        border-color: rgba(102, 126, 234, 0.5);
+    }
+
+    /* Dark mode adjustments */
+    [data-bs-theme="dark"] .converter-card .card-header {
+        background: linear-gradient(135deg, #5a6fd6, #65408a);
+    }
+    [data-bs-theme="dark"] .category-tab.active {
+        background: #5a6fd6;
+    }
+    [data-bs-theme="dark"] .result-value {
+        color: #8eb5ff;
+    }
+    [data-bs-theme="dark"] .swap-btn:hover {
+        background: #5a6fd6;
+    }
+    [data-bs-theme="dark"] .result-display {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.12));
+    }
+    [data-bs-theme="dark"] .conversion-input-group input:focus,
+    [data-bs-theme="dark"] .conversion-input-group select:focus {
+        border-color: #8eb5ff;
+        box-shadow: 0 0 0 3px rgba(142, 181, 255, 0.15);
+    }
+    [data-bs-theme="dark"] .swap-btn {
+        color: #8eb5ff;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .conversion-panel {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .conversion-arrow {
+            transform: rotate(90deg);
+            margin: 0.25rem 0;
+        }
+        .conversion-input-group {
+            flex: 1 1 auto;
+            width: 100%;
+        }
+        .swap-btn {
+            margin-top: 0;
+        }
+        .category-tab {
+            font-size: 0.8rem;
+            padding: 0.45rem 0.75rem;
+        }
+        .result-value {
+            font-size: 1.5rem;
+        }
+    }
+    @media (max-width: 480px) {
+        .category-tabs {
+            gap: 0.3rem;
+        }
+        .category-tab {
+            font-size: 0.72rem;
+            padding: 0.35rem 0.55rem;
+        }
+        .converter-card .card-body {
+            padding: 1rem;
+        }
+    }
+</style>
+
+<div class="converter-container">
+    <div class="card converter-card">
+        <div class="card-header">
+            <h2 class="mb-0">📐 单位换算工具</h2>
+            <p class="mb-0 mt-1 opacity-75 converter-subtitle">支持长度、重量、温度、面积、体积、速度、数据、时间 — 实时换算</p>
+        </div>
+        <div class="card-body">
+            <!-- Category Tabs -->
+            <div class="category-tabs" id="categoryTabs">
+                <button class="category-tab active" data-csp-click="switchCategory" data-csp-args='["length"]'>📏 长度</button>
+                <button class="category-tab" data-csp-click="switchCategory" data-csp-args='["weight"]'>⚖️ 重量</button>
+                <button class="category-tab" data-csp-click="switchCategory" data-csp-args='["temperature"]'>🌡️ 温度</button>
+                <button class="category-tab" data-csp-click="switchCategory" data-csp-args='["area"]'>📐 面积</button>
+                <button class="category-tab" data-csp-click="switchCategory" data-csp-args='["volume"]'>🧪 体积</button>
+                <button class="category-tab" data-csp-click="switchCategory" data-csp-args='["speed"]'>🚀 速度</button>
+                <button class="category-tab" data-csp-click="switchCategory" data-csp-args='["data"]'>💾 数据</button>
+                <button class="category-tab" data-csp-click="switchCategory" data-csp-args='["time"]'>⏱️ 时间</button>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="quick-presets" id="quickPresets"></div>
+
+            <!-- Conversion Panel -->
+            <div class="conversion-panel">
+                <div class="conversion-input-group">
+                    <label for="inputValue">输入值</label>
+                    <input type="number" id="inputValue" value="1" step="any" placeholder="输入数值">
+                </div>
+                <div class="conversion-input-group">
+                    <label for="fromUnit">源单位</label>
+                    <select id="fromUnit"></select>
+                </div>
+                <button class="swap-btn" data-csp-click="swapUnits" title="交换单位" aria-label="交换单位">⇄</button>
+                <div class="conversion-input-group">
+                    <label for="toUnit">目标单位</label>
+                    <select id="toUnit"></select>
+                </div>
+            </div>
+
+            <!-- Result -->
+            <div class="result-display" id="resultDisplay">
+                <div class="result-value" id="resultValue">—</div>
+                <div class="result-label" id="resultLabel">输入数值进行计算</div>
+                <div class="result-formula" id="resultFormula"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// ============================================================
+// Unit Converter — All conversion data & logic
+// ============================================================
+
+// --- Unit definitions: { name, symbol, toBase(value), fromBase(value), presets }
+var UNIT_DATA = {
+    length: {
+        units: [
+            { id: 'mm',       name: '毫米 (mm)',       toBase: function(v) { return v / 1000; },        fromBase: function(v) { return v * 1000; } },
+            { id: 'cm',       name: '厘米 (cm)',       toBase: function(v) { return v / 100; },         fromBase: function(v) { return v * 100; } },
+            { id: 'm',        name: '米 (m)',          toBase: function(v) { return v; },               fromBase: function(v) { return v; } },
+            { id: 'km',       name: '千米 (km)',       toBase: function(v) { return v * 1000; },        fromBase: function(v) { return v / 1000; } },
+            { id: 'inch',     name: '英寸 (in)',       toBase: function(v) { return v * 0.0254; },      fromBase: function(v) { return v / 0.0254; } },
+            { id: 'foot',     name: '英尺 (ft)',       toBase: function(v) { return v * 0.3048; },      fromBase: function(v) { return v / 0.3048; } },
+            { id: 'mile',     name: '英里 (mi)',       toBase: function(v) { return v * 1609.344; },    fromBase: function(v) { return v / 1609.344; } }
+        ],
+        presets: [
+            { label: '1英尺=?厘米', from: 'foot', to: 'cm', value: 1 },
+            { label: '1英里=?千米', from: 'mile', to: 'km', value: 1 },
+            { label: '身高175cm=?英尺', from: 'cm', to: 'foot', value: 175 }
+        ]
+    },
+    weight: {
+        units: [
+            { id: 'mg',       name: '毫克 (mg)',       toBase: function(v) { return v / 1e6; },         fromBase: function(v) { return v * 1e6; } },
+            { id: 'g',        name: '克 (g)',          toBase: function(v) { return v / 1000; },        fromBase: function(v) { return v * 1000; } },
+            { id: 'kg',       name: '千克 (kg)',       toBase: function(v) { return v; },               fromBase: function(v) { return v; } },
+            { id: 'ton',      name: '吨 (t)',          toBase: function(v) { return v * 1000; },        fromBase: function(v) { return v / 1000; } },
+            { id: 'ounce',    name: '盎司 (oz)',       toBase: function(v) { return v * 0.028349523125; }, fromBase: function(v) { return v / 0.028349523125; } },
+            { id: 'pound',    name: '磅 (lb)',         toBase: function(v) { return v * 0.45359237; },  fromBase: function(v) { return v / 0.45359237; } }
+        ],
+        presets: [
+            { label: '1磅=?克', from: 'pound', to: 'g', value: 1 },
+            { label: '70kg=?磅', from: 'kg', to: 'pound', value: 70 },
+            { label: '1盎司=?克', from: 'ounce', to: 'g', value: 1 }
+        ]
+    },
+    temperature: {
+        units: [
+            { id: 'celsius',    name: '摄氏度 (°C)',    toBase: function(v) { return v; },              fromBase: function(v) { return v; } },
+            { id: 'fahrenheit', name: '华氏度 (°F)',    toBase: function(v) { return (v - 32) * 5/9; }, fromBase: function(v) { return v * 9/5 + 32; } },
+            { id: 'kelvin',     name: '开尔文 (K)',     toBase: function(v) { return v - 273.15; },     fromBase: function(v) { return v + 273.15; } }
+        ],
+        presets: [
+            { label: '0°C=?°F', from: 'celsius', to: 'fahrenheit', value: 0 },
+            { label: '100°F=?°C', from: 'fahrenheit', to: 'celsius', value: 100 },
+            { label: '体温37°C=?°F', from: 'celsius', to: 'fahrenheit', value: 37 }
+        ]
+    },
+    area: {
+        units: [
+            { id: 'sqmm',      name: '平方毫米 (mm²)',  toBase: function(v) { return v / 1e6; },        fromBase: function(v) { return v * 1e6; } },
+            { id: 'sqcm',      name: '平方厘米 (cm²)',  toBase: function(v) { return v / 10000; },      fromBase: function(v) { return v * 10000; } },
+            { id: 'sqm',       name: '平方米 (m²)',     toBase: function(v) { return v; },              fromBase: function(v) { return v; } },
+            { id: 'hectare',   name: '公顷 (ha)',       toBase: function(v) { return v * 10000; },      fromBase: function(v) { return v / 10000; } },
+            { id: 'sqkm',      name: '平方公里 (km²)',  toBase: function(v) { return v * 1e6; },        fromBase: function(v) { return v / 1e6; } },
+            { id: 'sqinch',    name: '平方英寸 (in²)',  toBase: function(v) { return v * 0.00064516; }, fromBase: function(v) { return v / 0.00064516; } },
+            { id: 'sqfoot',    name: '平方英尺 (ft²)',  toBase: function(v) { return v * 0.09290304; }, fromBase: function(v) { return v / 0.09290304; } },
+            { id: 'acre',      name: '英亩 (ac)',       toBase: function(v) { return v * 4046.8564224; }, fromBase: function(v) { return v / 4046.8564224; } }
+        ],
+        presets: [
+            { label: '1英亩=?平方米', from: 'acre', to: 'sqm', value: 1 },
+            { label: '100m²=?平方英尺', from: 'sqm', to: 'sqfoot', value: 100 },
+            { label: '1km²=?公顷', from: 'sqkm', to: 'hectare', value: 1 }
+        ]
+    },
+    volume: {
+        units: [
+            { id: 'ml',        name: '毫升 (mL)',       toBase: function(v) { return v / 1000; },       fromBase: function(v) { return v * 1000; } },
+            { id: 'liter',     name: '升 (L)',          toBase: function(v) { return v; },              fromBase: function(v) { return v; } },
+            { id: 'cubicm',    name: '立方米 (m³)',     toBase: function(v) { return v * 1000; },       fromBase: function(v) { return v / 1000; } },
+            { id: 'gallon',    name: '加仑 (gal)',      toBase: function(v) { return v * 3.785411784; }, fromBase: function(v) { return v / 3.785411784; } },
+            { id: 'pint',      name: '品脱 (pt)',       toBase: function(v) { return v * 0.473176473; }, fromBase: function(v) { return v / 0.473176473; } }
+        ],
+        presets: [
+            { label: '1加仑=?升', from: 'gallon', to: 'liter', value: 1 },
+            { label: '500mL=?品脱', from: 'ml', to: 'pint', value: 500 },
+            { label: '1m³=?升', from: 'cubicm', to: 'liter', value: 1 }
+        ]
+    },
+    speed: {
+        units: [
+            { id: 'mps',       name: '米/秒 (m/s)',     toBase: function(v) { return v; },              fromBase: function(v) { return v; } },
+            { id: 'kmh',       name: '千米/时 (km/h)',   toBase: function(v) { return v / 3.6; },        fromBase: function(v) { return v * 3.6; } },
+            { id: 'mph',       name: '英里/时 (mph)',    toBase: function(v) { return v * 0.44704; },    fromBase: function(v) { return v / 0.44704; } },
+            { id: 'knot',      name: '节 (kn)',          toBase: function(v) { return v * 0.514444; },   fromBase: function(v) { return v / 0.514444; } }
+        ],
+        presets: [
+            { label: '100km/h=?mph', from: 'kmh', to: 'mph', value: 100 },
+            { label: '1马赫(340m/s)=?km/h', from: 'mps', to: 'kmh', value: 340 },
+            { label: '60mph=?km/h', from: 'mph', to: 'kmh', value: 60 }
+        ]
+    },
+    data: {
+        units: [
+            { id: 'byte',      name: '字节 (B)',        toBase: function(v) { return v; },              fromBase: function(v) { return v; } },
+            { id: 'kb',        name: 'KB',              toBase: function(v) { return v * 1024; },       fromBase: function(v) { return v / 1024; } },
+            { id: 'mb',        name: 'MB',              toBase: function(v) { return v * 1048576; },    fromBase: function(v) { return v / 1048576; } },
+            { id: 'gb',        name: 'GB',              toBase: function(v) { return v * 1073741824; }, fromBase: function(v) { return v / 1073741824; } },
+            { id: 'tb',        name: 'TB',              toBase: function(v) { return v * 1099511627776; }, fromBase: function(v) { return v / 1099511627776; } },
+            { id: 'pb',        name: 'PB',              toBase: function(v) { return v * 1125899906842624; }, fromBase: function(v) { return v / 1125899906842624; } }
+        ],
+        presets: [
+            { label: '1TB=?GB', from: 'tb', to: 'gb', value: 1 },
+            { label: '500GB=?MB', from: 'gb', to: 'mb', value: 500 },
+            { label: '1MB=?KB', from: 'mb', to: 'kb', value: 1 }
+        ]
+    },
+    time: {
+        units: [
+            { id: 'ms',        name: '毫秒 (ms)',       toBase: function(v) { return v / 1000; },       fromBase: function(v) { return v * 1000; } },
+            { id: 'sec',       name: '秒 (s)',          toBase: function(v) { return v; },              fromBase: function(v) { return v; } },
+            { id: 'min',       name: '分 (min)',        toBase: function(v) { return v * 60; },         fromBase: function(v) { return v / 60; } },
+            { id: 'hour',      name: '时 (h)',          toBase: function(v) { return v * 3600; },       fromBase: function(v) { return v / 3600; } },
+            { id: 'day',       name: '天 (d)',          toBase: function(v) { return v * 86400; },      fromBase: function(v) { return v / 86400; } },
+            { id: 'week',      name: '周 (wk)',         toBase: function(v) { return v * 604800; },     fromBase: function(v) { return v / 604800; } },
+            { id: 'month',     name: '月 (mo)',         toBase: function(v) { return v * 2629800; },    fromBase: function(v) { return v / 2629800; } },
+            { id: 'year',      name: '年 (yr)',         toBase: function(v) { return v * 31557600; },   fromBase: function(v) { return v / 31557600; } }
+        ],
+        presets: [
+            { label: '1天=?秒', from: 'day', to: 'sec', value: 1 },
+            { label: '1年=?天', from: 'year', to: 'day', value: 1 },
+            { label: '90分钟=?时', from: 'min', to: 'hour', value: 90 }
+        ]
+    }
+};
+
+// --- State ---
+var currentCategory = 'length';
+
+// --- DOM references ---
+var inputValueEl = document.getElementById('inputValue');
+var fromUnitEl = document.getElementById('fromUnit');
+var toUnitEl = document.getElementById('toUnit');
+var resultValueEl = document.getElementById('resultValue');
+var resultLabelEl = document.getElementById('resultLabel');
+var resultFormulaEl = document.getElementById('resultFormula');
+var quickPresetsEl = document.getElementById('quickPresets');
+var categoryTabsEl = document.getElementById('categoryTabs');
+
+// --- Initialize ---
+function initConverter() {
+    populateUnits(currentCategory);
+    populatePresets(currentCategory);
+    updateActiveTab();
+    convert();
+}
+
+// --- Populate unit dropdowns ---
+function populateUnits(cat) {
+    var data = UNIT_DATA[cat];
+    fromUnitEl.innerHTML = '';
+    toUnitEl.innerHTML = '';
+    for (var i = 0; i < data.units.length; i++) {
+        var u = data.units[i];
+        var opt1 = document.createElement('option');
+        opt1.value = u.id;
+        opt1.textContent = u.name;
+        fromUnitEl.appendChild(opt1);
+        var opt2 = document.createElement('option');
+        opt2.value = u.id;
+        opt2.textContent = u.name;
+        toUnitEl.appendChild(opt2);
+    }
+    // Set sensible defaults
+    if (data.units.length >= 2) {
+        fromUnitEl.value = data.units[0].id;
+        toUnitEl.value = data.units[1].id;
+    }
+}
+
+// --- Populate quick presets ---
+function populatePresets(cat) {
+    var data = UNIT_DATA[cat];
+    quickPresetsEl.innerHTML = '';
+    for (var i = 0; i < data.presets.length; i++) {
+        var p = data.presets[i];
+        var chip = document.createElement('span');
+        chip.className = 'preset-chip';
+        chip.textContent = p.label;
+        chip.setAttribute('data-csp-click', 'applyPreset');
+        chip.setAttribute('data-csp-args', JSON.stringify([cat, i]));
+        quickPresetsEl.appendChild(chip);
+    }
+}
+
+// --- Update active tab UI ---
+function updateActiveTab() {
+    var tabs = categoryTabsEl.querySelectorAll('.category-tab');
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].classList.remove('active');
+    }
+    // Find tab whose data-csp-args contains current category
+    for (var j = 0; j < tabs.length; j++) {
+        var argsStr = tabs[j].getAttribute('data-csp-args');
+        if (argsStr && argsStr.indexOf('"' + currentCategory + '"') !== -1) {
+            tabs[j].classList.add('active');
+            break;
+        }
+    }
+}
+
+// --- Switch category ---
+function switchCategory(cat) {
+    if (cat === currentCategory) return;
+    currentCategory = cat;
+    populateUnits(cat);
+    populatePresets(cat);
+    updateActiveTab();
+    convert();
+}
+window.switchCategory = switchCategory;
+
+// --- Apply preset ---
+function applyPreset(cat, idx) {
+    currentCategory = cat;
+    populateUnits(cat);
+    populatePresets(cat);
+    updateActiveTab();
+    var p = UNIT_DATA[cat].presets[idx];
+    inputValueEl.value = p.value;
+    fromUnitEl.value = p.from;
+    toUnitEl.value = p.to;
+    convert();
+}
+window.applyPreset = applyPreset;
+
+// --- Swap units ---
+function swapUnits() {
+    var tmp = fromUnitEl.value;
+    fromUnitEl.value = toUnitEl.value;
+    toUnitEl.value = tmp;
+    convert();
+}
+window.swapUnits = swapUnits;
+
+// --- Format number nicely ---
+function fmtNum(n) {
+    if (n === 0) return '0';
+    if (isNaN(n) || !isFinite(n)) return '—';
+    var absN = Math.abs(n);
+    if (absN >= 1e15 || (absN < 1e-10 && absN > 0)) {
+        return n.toExponential(6);
+    }
+    // Determine decimal places based on magnitude
+    var dec;
+    if (absN >= 1000) dec = 2;
+    else if (absN >= 1) dec = 6;
+    else if (absN >= 0.001) dec = 8;
+    else dec = 10;
+    // Trim trailing zeros
+    var s = n.toFixed(dec);
+    if (s.indexOf('.') !== -1) {
+        s = s.replace(/\.?0+$/, '');
+    }
+    return s;
+}
+
+// --- Perform conversion ---
+function convert() {
+    var raw = inputValueEl.value.trim();
+    if (raw === '') {
+        resultValueEl.textContent = '—';
+        resultLabelEl.textContent = '请输入数值';
+        resultFormulaEl.textContent = '';
+        return;
+    }
+    var val = parseFloat(raw);
+    if (isNaN(val)) {
+        resultValueEl.textContent = '⚠️';
+        resultLabelEl.textContent = '请输入有效数字';
+        resultFormulaEl.textContent = '';
+        return;
+    }
+    var catData = UNIT_DATA[currentCategory];
+    var fromUnitObj = null;
+    var toUnitObj = null;
+    for (var i = 0; i < catData.units.length; i++) {
+        if (catData.units[i].id === fromUnitEl.value) fromUnitObj = catData.units[i];
+        if (catData.units[i].id === toUnitEl.value) toUnitObj = catData.units[i];
+    }
+    if (!fromUnitObj || !toUnitObj) {
+        resultValueEl.textContent = '—';
+        resultLabelEl.textContent = '请选择单位';
+        resultFormulaEl.textContent = '';
+        return;
+    }
+    // Same unit
+    if (fromUnitObj.id === toUnitObj.id) {
+        var formatted = fmtNum(val);
+        resultValueEl.textContent = formatted + ' ' + getUnitSymbol(currentCategory, toUnitObj.id);
+        resultLabelEl.textContent = '源单位与目标单位相同';
+        resultFormulaEl.textContent = '';
+        return;
+    }
+    // Convert: to base, then from base
+    var baseVal = fromUnitObj.toBase(val);
+    var result = toUnitObj.fromBase(baseVal);
+    var formatted = fmtNum(result);
+    resultValueEl.textContent = formatted + ' ' + getUnitSymbol(currentCategory, toUnitObj.id);
+    resultLabelEl.textContent = fmtNum(val) + ' ' + getUnitSymbol(currentCategory, fromUnitObj.id) + ' = ' + formatted + ' ' + getUnitSymbol(currentCategory, toUnitObj.id);
+    resultFormulaEl.textContent = '换算公式: ' + getFormulaDescription(currentCategory, fromUnitObj.id, toUnitObj.id, val, result);
+}
+
+// --- Get short unit symbol ---
+function getUnitSymbol(cat, unitId) {
+    var data = UNIT_DATA[cat];
+    for (var i = 0; i < data.units.length; i++) {
+        if (data.units[i].id === unitId) {
+            return data.units[i].name.split(' ')[0];
+        }
+    }
+    return unitId;
+}
+
+// --- Get formula description ---
+function getFormulaDescription(cat, fromId, toId, fromVal, toVal) {
+    if (cat === 'temperature') {
+        if (fromId === 'celsius' && toId === 'fahrenheit') return '°F = °C × 9/5 + 32 = ' + fromVal + ' × 1.8 + 32';
+        if (fromId === 'fahrenheit' && toId === 'celsius') return '°C = (°F − 32) × 5/9 = (' + fromVal + ' − 32) × 5/9';
+        if (fromId === 'celsius' && toId === 'kelvin') return 'K = °C + 273.15 = ' + fromVal + ' + 273.15';
+        if (fromId === 'kelvin' && toId === 'celsius') return '°C = K − 273.15 = ' + fromVal + ' − 273.15';
+        if (fromId === 'fahrenheit' && toId === 'kelvin') return 'K = (°F − 32) × 5/9 + 273.15';
+        if (fromId === 'kelvin' && toId === 'fahrenheit') return '°F = (K − 273.15) × 9/5 + 32';
+        return '温度换算';
+    }
+    var data = UNIT_DATA[cat];
+    var fromU = null, toU = null;
+    for (var i = 0; i < data.units.length; i++) {
+        if (data.units[i].id === fromId) fromU = data.units[i];
+        if (data.units[i].id === toId) toU = data.units[i];
+    }
+    if (!fromU || !toU) return '';
+    var fromName = fromU.name.split(' ')[0];
+    var toName = toU.name.split(' ')[0];
+    return fromName + ' → ' + toName;
+}
+
+// --- Event listeners ---
+inputValueEl.addEventListener('input', convert);
+fromUnitEl.addEventListener('change', convert);
+toUnitEl.addEventListener('change', convert);
+
+// --- Initialize on DOM ready ---
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initConverter);
+} else {
+    initConverter();
+}
+</script>
+{% endblock %}

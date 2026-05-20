@@ -512,6 +512,20 @@
   "utils_tab_uuid": "🆔 UUID",
   "utils_tab_timestamp": "⏱ 시간",
   "utils_tab_count": "📊 카운터",
+  "utils_tab_regex": "🔍 정규식",
+  "utils_tab_color": "🎨 색상",
+  "utils_tab_base": "🔢 진법",
+  "utils_tab_htmlentity": "🏷 HTML엔티티",
   "dashboard_feature_utils": "🧰 유틸리티",
-  "dashboard_feature_utils_desc": "비밀번호 생성 · 해시 · Base64 · JSON 등 8개 도구"
+  "dashboard_feature_utils_desc": "비밀번호 생성 · 해시 · Base64 · JSON 등 12개 도구",
+  "dashboard_feature_markdown": "📝 마크다운 편집기",
+  "dashboard_feature_markdown_desc": "실시간 미리보기, 도구 모음, HTML 내보내기",
+  "dashboard_feature_textdiff": "🔍 텍스트 비교",
+  "dashboard_feature_textdiff_desc": "줄 단위 비교, 추가/삭제/변경없음 색상 구분",
+  "dashboard_feature_jwt": "🔐 JWT 디코더",
+  "dashboard_feature_jwt_desc": "토큰 분석, Header/Payload 보기, 만료 확인",
+  "dashboard_feature_unitconverter": "📐 단위 변환",
+  "dashboard_feature_unitconverter_desc": "길이/무게/온도/면적/부피/속도/데이터/시간",
+  "dashboard_feature_countdown": "⏰ 카운트다운",
+  "dashboard_feature_countdown_desc": "중요 날짜 카운트다운, 진행 추적, 템플릿"
 }

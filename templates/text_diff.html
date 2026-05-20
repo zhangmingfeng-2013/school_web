@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+{% block title %}🔍 文本差异对比{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    .diff-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* 输入区：左右两栏 */
+    .diff-input-row {
+        display: flex;
+        gap: 1rem;
+    }
+    .diff-input-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    .diff-input-col label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.4rem;
+        color: var(--text-body);
+    }
+    .diff-textarea {
+        flex: 1;
+        width: 100%;
+        min-height: 240px;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        resize: vertical;
+        font-family: 'SF Mono', 'Courier New', 'Consolas', monospace;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        background: var(--bs-body-bg);
+        color: var(--text-body);
+        outline: none;
+        transition: border-color .2s;
+    }
+    .diff-textarea:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
+    }
+
+    /* 操作按钮 */
+    .diff-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        align-items: center;
+    }
+    .diff-actions .btn {
+        border-radius: 8px;
+        font-weight: 500;
+    }
+
+    /* 统计信息 */
+    .diff-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background: var(--bs-tertiary-bg);
+        font-size: 0.9rem;
+        color: var(--text-body);
+        display: none;
+    }
+    .diff-stats.visible {
+        display: flex;
+    }
+    .diff-stat-item {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .diff-stat-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        flex-shrink: 0;
+    }
+    .diff-stat-dot.added {
+        background: #4caf50;
+    }
+    .diff-stat-dot.deleted {
+        background: #f44336;
+    }
+    .diff-stat-dot.unchanged {
+        background: #9e9e9e;
+    }
+    [data-bs-theme="dark"] .diff-stat-dot.unchanged {
+        background: #6b7280;
+    }
+
+    /* 结果展示区 */
+    .diff-result {
+        border: 1px solid var(--border-light);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--bs-body-bg);
+        display: none;
+    }
+    .diff-result.visible {
+        display: block;
+    }
+    .diff-result-header {
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        font-size: 0.85rem;
+        background: var(--bs-tertiary-bg);
+        border-bottom: 1px solid var(--border-light);
+        color: var(--text-body);
+    }
+    .diff-result-body {
+        max-height: 500px;
+        overflow-y: auto;
+        font-family: 'SF Mono', 'Courier New', 'Consolas', monospace;
+        font-size: 0.875rem;
+        line-height: 1.7;
+    }
+    .diff-line {
+        display: flex;
+        padding: 1px 0;
+        min-height: 1.7em;
+    }
+    .diff-line-num {
+        flex-shrink: 0;
+        width: 48px;
+        text-align: right;
+        padding: 0 10px 0 4px;
+        color: var(--text-muted);
+        user-select: none;
+        font-size: 0.8rem;
+        line-height: inherit;
+        background: rgba(0,0,0,.03);
+    }
+    [data-bs-theme="dark"] .diff-line-num {
+        background: rgba(255,255,255,.03);
+    }
+    .diff-line-sign {
+        flex-shrink: 0;
+        width: 22px;
+        text-align: center;
+        font-weight: 700;
+        user-select: none;
+        line-height: inherit;
+    }
+    .diff-line-text {
+        flex: 1;
+        padding: 0 10px 0 4px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        line-height: inherit;
+    }
+
+    /* 新增行（绿色） */
+    .diff-line.added {
+        background: #e8f5e9;
+    }
+    .diff-line.added .diff-line-sign {
+        color: #2e7d32;
+    }
+    [data-bs-theme="dark"] .diff-line.added {
+        background: rgba(76, 175, 80, .15);
+    }
+    [data-bs-theme="dark"] .diff-line.added .diff-line-sign {
+        color: #66bb6a;
+    }
+
+    /* 删除行（红色） */
+    .diff-line.deleted {
+        background: #ffebee;
+    }
+    .diff-line.deleted .diff-line-sign {
+        color: #c62828;
+    }
+    [data-bs-theme="dark"] .diff-line.deleted {
+        background: rgba(244, 67, 54, .15);
+    }
+    [data-bs-theme="dark"] .diff-line.deleted .diff-line-sign {
+        color: #ef5350;
+    }
+
+    /* 未变化行 */
+    .diff-line.unchanged {
+        background: transparent;
+    }
+    .diff-line.unchanged .diff-line-sign {
+        color: var(--text-muted);
+    }
+
+    /* 空状态提示 */
+    .diff-empty {
+        padding: 2rem;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    /* 响应式：手机端上下布局 */
+    @media (max-width: 767.98px) {
+        .diff-input-row {
+            flex-direction: column;
+        }
+        .diff-textarea {
+            min-height: 180px;
+        }
+        .diff-result-body {
+            max-height: 350px;
+        }
+        .diff-line-num {
+            width: 36px;
+            font-size: 0.72rem;
+        }
+        .diff-line-sign {
+            width: 18px;
+        }
+    }
+</style>
+
+<div class="diff-wrapper">
+    <h2 class="mb-1">🔍 文本差异对比</h2>
+    <p class="text-muted mb-2">贴入原始文本和对比文本，点击"对比"查看逐行差异。纯前端处理，数据不会上传。</p>
+
+    <!-- 输入区 -->
+    <div class="diff-input-row">
+        <div class="diff-input-col">
+            <label for="diffOriginal">📄 原始文本</label>
+            <textarea
+                id="diffOriginal"
+                class="diff-textarea"
+                placeholder="在此贴入原始文本..."
+                aria-label="原始文本输入"
+                spellcheck="false"
+            ></textarea>
+        </div>
+        <div class="diff-input-col">
+            <label for="diffModified">📝 对比文本</label>
+            <textarea
+                id="diffModified"
+                class="diff-textarea"
+                placeholder="在此贴入对比文本..."
+                aria-label="对比文本输入"
+                spellcheck="false"
+            ></textarea>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="diff-actions">
+        <button class="btn btn-primary" data-csp-click="doDiff">
+            🔍 对比
+        </button>
+        <button class="btn btn-outline-secondary" data-csp-click="swapTexts">
+            🔄 交换
+        </button>
+        <button class="btn btn-outline-secondary" data-csp-click="clearDiff">
+            🗑️ 清空
+        </button>
+    </div>
+
+    <!-- 统计 -->
+    <div id="diffStats" class="diff-stats">
+        <div class="diff-stat-item">
+            <span class="diff-stat-dot added"></span>
+            <span>新增 <strong id="diffAddedCount">0</strong> 行</span>
+        </div>
+        <div class="diff-stat-item">
+            <span class="diff-stat-dot deleted"></span>
+            <span>删除 <strong id="diffDeletedCount">0</strong> 行</span>
+        </div>
+        <div class="diff-stat-item">
+            <span class="diff-stat-dot unchanged"></span>
+            <span>未变化 <strong id="diffUnchangedCount">0</strong> 行</span>
+        </div>
+    </div>
+
+    <!-- 结果 -->
+    <div id="diffResult" class="diff-result">
+        <div class="diff-result-header">📋 差异结果</div>
+        <div id="diffResultBody" class="diff-result-body"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+(function() {
+    var originalEl = document.getElementById('diffOriginal');
+    var modifiedEl = document.getElementById('diffModified');
+    var statsEl = document.getElementById('diffStats');
+    var resultEl = document.getElementById('diffResult');
+    var resultBody = document.getElementById('diffResultBody');
+    var addedCount = document.getElementById('diffAddedCount');
+    var deletedCount = document.getElementById('diffDeletedCount');
+    var unchangedCount = document.getElementById('diffUnchangedCount');
+
+    // ====== LCS 算法（最长公共子序列） ======
+    function lcsTable(a, b) {
+        var m = a.length;
+        var n = b.length;
+        // 只用两行滚动数组优化内存
+        var dp = [];
+        for (var i = 0; i <= m; i++) {
+            dp[i] = new Array(n + 1);
+            dp[i][0] = 0;
+        }
+        for (var j = 0; j <= n; j++) {
+            dp[0][j] = 0;
+        }
+        for (var i = 1; i <= m; i++) {
+            for (var j = 1; j <= n; j++) {
+                if (a[i - 1] === b[j - 1]) {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                } else {
+                    dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                }
+            }
+        }
+        return dp;
+    }
+
+    // Backtrack LCS table to produce diff operations
+    function backtrackDiff(dp, a, b, i, j) {
+        var ops = [];
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+                ops.push({ type: 'unchanged', line: a[i - 1] });
+                i--;
+                j--;
+            } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+                ops.push({ type: 'added', line: b[j - 1] });
+                j--;
+            } else if (i > 0 && (j === 0 || dp[i - 1][j] > dp[i][j - 1])) {
+                ops.push({ type: 'deleted', line: a[i - 1] });
+                i--;
+            }
+        }
+        ops.reverse();
+        return ops;
+    }
+
+    // ====== 执行 Diff ======
+    function computeDiff(original, modified) {
+        var a = original.split('\n');
+        var b = modified.split('\n');
+        var dp = lcsTable(a, b);
+        return backtrackDiff(dp, a, b, a.length, b.length);
+    }
+
+    // ====== 渲染结果 ======
+    function renderDiff(ops) {
+        if (!ops || ops.length === 0) {
+            resultBody.innerHTML = '<div class="diff-empty">两段文本均为空，无差异可显示。</div>';
+            statsEl.classList.remove('visible');
+            resultEl.classList.add('visible');
+            return;
+        }
+
+        var added = 0, deleted = 0, unchanged = 0;
+        var html = '';
+        var lineNum = 0;
+
+        for (var k = 0; k < ops.length; k++) {
+            var op = ops[k];
+            lineNum++;
+            var cssClass = '';
+            var sign = '';
+
+            if (op.type === 'added') {
+                cssClass = 'added';
+                sign = '+';
+                added++;
+            } else if (op.type === 'deleted') {
+                cssClass = 'deleted';
+                sign = '-';
+                deleted++;
+            } else {
+                cssClass = 'unchanged';
+                sign = ' ';
+                unchanged++;
+            }
+
+            // 使用 __htmlescape 防止 XSS（服务端注入的安全转义函数）
+            var displayText = op.line || '';
+
+            html += '<div class="diff-line ' + cssClass + '">' +
+                '<span class="diff-line-num">' + lineNum + '</span>' +
+                '<span class="diff-line-sign">' + sign + '</span>' +
+                '<span class="diff-line-text">' + escapeHtml(displayText) + '</span>' +
+                '</div>';
+        }
+
+        // 更新结果
+        resultBody.innerHTML = html;
+        addedCount.textContent = added;
+        deletedCount.textContent = deleted;
+        unchangedCount.textContent = unchanged;
+
+        statsEl.classList.add('visible');
+        resultEl.classList.add('visible');
+    }
+
+    // HTML 转义
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    // ====== 隐藏结果 ======
+    function hideResults() {
+        statsEl.classList.remove('visible');
+        resultEl.classList.remove('visible');
+    }
+
+    // ====== 全局函数（通过 data-csp-click 调用） ======
+
+    // 对比
+    window.doDiff = function() {
+        var original = originalEl.value;
+        var modified = modifiedEl.value;
+
+        if (!original.trim() && !modified.trim()) {
+            resultBody.innerHTML = '<div class="diff-empty">请在文本框中输入内容后再进行对比。</div>';
+            statsEl.classList.remove('visible');
+            resultEl.classList.add('visible');
+            return;
+        }
+
+        var ops = computeDiff(original, modified);
+        renderDiff(ops);
+    };
+
+    // 交换
+    window.swapTexts = function() {
+        var tmp = originalEl.value;
+        originalEl.value = modifiedEl.value;
+        modifiedEl.value = tmp;
+        hideResults();
+    };
+
+    // 清空
+    window.clearDiff = function() {
+        if ((originalEl.value.trim() || modifiedEl.value.trim()) &&
+            !confirm('确定要清空所有内容吗？')) {
+            return;
+        }
+        originalEl.value = '';
+        modifiedEl.value = '';
+        hideResults();
+    };
+
+    // ====== 键盘快捷键 Ctrl+Enter 触发对比 ======
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            var active = document.activeElement;
+            if (active === originalEl || active === modifiedEl) {
+                e.preventDefault();
+                window.doDiff();
+            }
+        }
+    });
+
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}🔐 JWT 解码器 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.jwt-wrap { max-width:900px;margin:0 auto }
+.jwt-panel { background:var(--bg-card,#fff);border-radius:10px;padding:16px;margin-top:12px;border:1px solid var(--border-light,#e5e7eb) }
+.jwt-panel h6 { font-size:.85rem;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px }
+.jwt-json { font-family:'SF Mono',Monaco,'Cascadia Code',monospace;font-size:.82rem;white-space:pre-wrap;word-break:break-all;background:var(--bg-code,#f8f9fa);padding:10px 14px;border-radius:6px;max-height:300px;overflow-y:auto;color:var(--text-body,#333) }
+.jwt-sig { font-family:monospace;font-size:.75rem;word-break:break-all;color:var(--text-muted,#888);background:var(--bg-code,#f8f9fa);padding:10px 14px;border-radius:6px }
+.jwt-badge { display:inline-block;padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:600 }
+.jwt-badge-ok { background:#d1fae5;color:#065f46 }
+.jwt-badge-warn { background:#fef3c7;color:#92400e }
+.jwt-badge-err { background:#fee2e2;color:#991b1b }
+.jwt-input { font-family:monospace;font-size:.85rem;min-height:100px;resize:vertical }
+[data-bs-theme="dark"] .jwt-badge-ok { background:#064e3b;color:#6ee7b7 }
+[data-bs-theme="dark"] .jwt-badge-warn { background:#78350f;color:#fcd34d }
+[data-bs-theme="dark"] .jwt-badge-err { background:#7f1d1d;color:#fca5a5 }
+</style>
+
+<div class="jwt-wrap">
+    <h2 class="mb-1">🔐 JWT 解码器</h2>
+    <p class="text-muted mb-3">解析 JSON Web Token，查看 Header、Payload 和过期状态</p>
+
+    <div class="mb-3">
+        <textarea class="form-control jwt-input" id="jwtInput" placeholder="粘贴 JWT Token...&#10;格式：xxxxx.yyyyy.zzzzz"></textarea>
+    </div>
+    <div class="d-flex gap-2 flex-wrap mb-3">
+        <button class="btn btn-primary" data-csp-click="decodeJWT">🔍 解析</button>
+        <button class="btn btn-outline-secondary" data-csp-click="loadJwtSample">📋 加载示例</button>
+        <button class="btn btn-outline-danger btn-sm" data-csp-click="clearJWT">🗑️ 清空</button>
+    </div>
+
+    <div id="jwtResult" style="display:none">
+        <!-- Header -->
+        <div class="jwt-panel">
+            <h6>📋 Header <span id="jwtAlg" class="jwt-badge jwt-badge-ok"></span></h6>
+            <div class="jwt-json" id="jwtHeader"></div>
+        </div>
+        <!-- Payload -->
+        <div class="jwt-panel">
+            <h6>📦 Payload <span id="jwtStatus"></span></h6>
+            <div class="jwt-json" id="jwtPayload"></div>
+            <div class="mt-2" id="jwtClaims" style="font-size:.82rem"></div>
+        </div>
+        <!-- Signature -->
+        <div class="jwt-panel">
+            <h6>🔏 Signature</h6>
+            <div class="jwt-sig" id="jwtSig"></div>
+        </div>
+    </div>
+    <div id="jwtError" class="alert alert-danger mt-3" style="display:none"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// ====== Base64URL 解码 ======
+function base64UrlDecode(str) {
+    str = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) str += '=';
+    try {
+        var decoded = atob(str);
+        return decodeURIComponent(decoded.split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+    } catch(e) {
+        return atob(str);
+    }
+}
+
+// ====== 解析 JWT ======
+function decodeJWT() {
+    var token = document.getElementById('jwtInput').value.trim();
+    document.getElementById('jwtError').style.display = 'none';
+    document.getElementById('jwtResult').style.display = 'none';
+
+    if (!token) {
+        showJwtError('请输入 JWT Token');
+        return;
+    }
+
+    var parts = token.split('.');
+    if (parts.length !== 3) {
+        showJwtError('JWT 格式错误：应包含 3 个部分（header.payload.signature）');
+        return;
+    }
+
+    try {
+        // Decode Header
+        var headerJson = base64UrlDecode(parts[0]);
+        var header = JSON.parse(headerJson);
+        document.getElementById('jwtHeader').textContent = JSON.stringify(header, null, 2);
+        var alg = header.alg || 'none';
+        var algEl = document.getElementById('jwtAlg');
+        algEl.textContent = 'alg: ' + alg;
+        algEl.className = 'jwt-badge ' + (alg === 'none' ? 'jwt-badge-err' : 'jwt-badge-ok');
+
+        // Decode Payload
+        var payloadJson = base64UrlDecode(parts[1]);
+        var payload = JSON.parse(payloadJson);
+        document.getElementById('jwtPayload').textContent = JSON.stringify(payload, null, 2);
+
+        // Claims 分析
+        var claimsHtml = '';
+        var now = Math.floor(Date.now() / 1000);
+        var statusBadge = '';
+
+        // 签发时间
+        if (payload.iat) {
+            var iatDate = new Date(payload.iat * 1000);
+            claimsHtml += '<span class="badge bg-info me-1">📅 签发: ' + formatDate(iatDate) + '</span> ';
+        }
+        // 过期时间
+        if (payload.exp) {
+            var expDate = new Date(payload.exp * 1000);
+            var remaining = payload.exp - now;
+            if (remaining > 0) {
+                claimsHtml += '<span class="badge bg-success me-1">⏰ 过期: ' + formatDate(expDate) + '</span> ';
+                claimsHtml += '<span class="badge bg-success me-1">✅ 剩余: ' + formatDuration(remaining) + '</span> ';
+                statusBadge = '<span class="jwt-badge jwt-badge-ok">✅ 有效</span>';
+            } else {
+                claimsHtml += '<span class="badge bg-danger me-1">⏰ 过期: ' + formatDate(expDate) + '</span> ';
+                claimsHtml += '<span class="badge bg-danger me-1">❌ 已过期 ' + formatDuration(-remaining) + '前</span> ';
+                statusBadge = '<span class="jwt-badge jwt-badge-err">❌ 已过期</span>';
+            }
+        } else {
+            statusBadge = '<span class="jwt-badge jwt-badge-warn">⚠️ 无过期时间</span>';
+        }
+        // 生效时间
+        if (payload.nbf) {
+            var nbfDate = new Date(payload.nbf * 1000);
+            var valid = now >= payload.nbf;
+            claimsHtml += '<span class="badge ' + (valid ? 'bg-secondary' : 'bg-warning text-dark') + ' me-1">🔓 生效: ' + formatDate(nbfDate) + '</span> ';
+        }
+        // 签发者/主题/受众
+        if (payload.iss) claimsHtml += '<span class="badge bg-secondary me-1">🏢 iss: ' + escapeHtml(payload.iss) + '</span> ';
+        if (payload.sub) claimsHtml += '<span class="badge bg-secondary me-1">👤 sub: ' + escapeHtml(payload.sub) + '</span> ';
+        if (payload.aud) {
+            var aud = Array.isArray(payload.aud) ? payload.aud.join(', ') : payload.aud;
+            claimsHtml += '<span class="badge bg-secondary me-1">🎯 aud: ' + escapeHtml(aud) + '</span> ';
+        }
+        if (payload.jti) claimsHtml += '<span class="badge bg-secondary me-1">🆔 jti: ' + escapeHtml(payload.jti) + '</span> ';
+
+        document.getElementById('jwtClaims').innerHTML = claimsHtml;
+        document.getElementById('jwtStatus').innerHTML = statusBadge;
+
+        // Signature
+        document.getElementById('jwtSig').textContent = parts[2];
+
+        document.getElementById('jwtResult').style.display = 'block';
+    } catch(e) {
+        showJwtError('解析失败: ' + e.message);
+    }
+}
+
+function showJwtError(msg) {
+    var el = document.getElementById('jwtError');
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
+function formatDate(d) {
+    return d.getFullYear() + '-' +
+        String(d.getMonth()+1).padStart(2,'0') + '-' +
+        String(d.getDate()).padStart(2,'0') + ' ' +
+        String(d.getHours()).padStart(2,'0') + ':' +
+        String(d.getMinutes()).padStart(2,'0') + ':' +
+        String(d.getSeconds()).padStart(2,'0');
+}
+
+function formatDuration(sec) {
+    if (sec < 60) return sec + '秒';
+    if (sec < 3600) return Math.floor(sec/60) + '分钟';
+    if (sec < 86400) return Math.floor(sec/3600) + '小时';
+    if (sec < 2592000) return Math.floor(sec/86400) + '天';
+    return Math.floor(sec/2592000) + '个月';
+}
+
+function loadJwtSample() {
+    // 生成一个示例 JWT（纯演示，不包含有效签名）
+    var header = btoa(JSON.stringify({"alg":"HS256","typ":"JWT"})).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+    var now = Math.floor(Date.now()/1000);
+    var payload = btoa(JSON.stringify({
+        "sub":"1234567890",
+        "name":"Zhang Mingfeng",
+        "admin":true,
+        "iat":now - 3600,
+        "exp":now + 7200,
+        "nbf":now - 1800,
+        "iss":"https://example.com",
+        "aud":"my-app",
+        "jti":"abc-def-123"
+    })).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+    var sig = 'dGhpcyBpcyBhIGZha2Ugc2lnbmF0dXJl';
+    document.getElementById('jwtInput').value = header + '.' + payload + '.' + sig;
+    decodeJWT();
+}
+
+function clearJWT() {
+    document.getElementById('jwtInput').value = '';
+    document.getElementById('jwtResult').style.display = 'none';
+    document.getElementById('jwtError').style.display = 'none';
+}
+</script>
+{% endblock %}

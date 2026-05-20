@@ -503,6 +503,20 @@
   "utils_tab_uuid": "🆔 UUID",
   "utils_tab_timestamp": "⏱ 时间戳",
   "utils_tab_count": "📊 字数",
+  "utils_tab_regex": "🔍 正则",
+  "utils_tab_color": "🎨 颜色",
+  "utils_tab_base": "🔢 进制",
+  "utils_tab_htmlentity": "🏷 HTML实体",
   "dashboard_feature_utils": "🧰 实用工具",
-  "dashboard_feature_utils_desc": "密码生成 · 哈希 · Base64 · JSON格式化等8个工具"
+  "dashboard_feature_utils_desc": "密码生成 · 哈希 · Base64 · JSON 等12个工具",
+  "dashboard_feature_markdown": "📝 Markdown 编辑器",
+  "dashboard_feature_markdown_desc": "实时预览，工具栏辅助，导出 HTML",
+  "dashboard_feature_textdiff": "🔍 文本差异对比",
+  "dashboard_feature_textdiff_desc": "逐行 Diff，新增/删除/未变化分色高亮",
+  "dashboard_feature_jwt": "🔐 JWT 解码器",
+  "dashboard_feature_jwt_desc": "解析 Token，查看 Header/Payload，检查过期",
+  "dashboard_feature_unitconverter": "📐 单位换算",
+  "dashboard_feature_unitconverter_desc": "长度/重量/温度/面积/体积/速度/数据/时间",
+  "dashboard_feature_countdown": "⏰ 倒计时 · 纪念日",
+  "dashboard_feature_countdown_desc": "重要日期倒计时，进度追踪，模板预设"
 }

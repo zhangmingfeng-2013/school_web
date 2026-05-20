@@ -353,6 +353,26 @@
         </a>
     </div>
 
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('unit_converter_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(99,102,241,.1)!important;"><span style="font-size:2rem;">📐</span></div>
+                <h5>单位换算</h5>
+                <p class="text-muted small">长度/重量/温度/面积/体积/速度/数据/时间</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('countdown_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(236,72,153,.1)!important;"><span style="font-size:2rem;">⏰</span></div>
+                <h5>倒计时 · 纪念日</h5>
+                <p class="text-muted small">重要日期倒计时，进度追踪，模板预设</p>
+            </div></div>
+        </a>
+    </div>
+
     <!-- ====== 🟢 办公效率类 ====== -->
     <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟢 办公效率</h5></div>
 
@@ -411,6 +431,36 @@
 
     <!-- ====== 🟠 工具增强类 ====== -->
     <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟠 工具增强</h5></div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('markdown_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(59,130,246,.08)!important;"><span style="font-size:2rem;">📝</span></div>
+                <h5>Markdown 编辑器</h5>
+                <p class="text-muted small">实时预览，工具栏辅助，导出 HTML</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('text_diff_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(14,203,139,.1)!important;"><span style="font-size:2rem;">🔍</span></div>
+                <h5>文本差异对比</h5>
+                <p class="text-muted small">逐行 Diff，新增/删除/未变化分色高亮</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('jwt_decoder_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:rgba(249,115,22,.1)!important;"><span style="font-size:2rem;">🔐</span></div>
+                <h5>JWT 解码器</h5>
+                <p class="text-muted small">解析 Token，查看 Header/Payload，检查过期</p>
+            </div></div>
+        </a>
+    </div>
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('qrcode_page') }}" class="text-decoration-none text-dark">

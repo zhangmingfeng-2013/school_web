@@ -503,6 +503,20 @@
   "utils_tab_uuid": "🆔 UUID",
   "utils_tab_timestamp": "⏱ Timestamp",
   "utils_tab_count": "📊 Counter",
+  "utils_tab_regex": "🔍 Regex",
+  "utils_tab_color": "🎨 Color",
+  "utils_tab_base": "🔢 Base",
+  "utils_tab_htmlentity": "🏷 HTML Entity",
   "dashboard_feature_utils": "🧰 Utility Tools",
-  "dashboard_feature_utils_desc": "Password gen · Hash · Base64 · JSON format & more"
+  "dashboard_feature_utils_desc": "Password gen · Hash · Base64 · JSON & 12 tools",
+  "dashboard_feature_markdown": "📝 Markdown Editor",
+  "dashboard_feature_markdown_desc": "Live preview, toolbar, export to HTML",
+  "dashboard_feature_textdiff": "🔍 Text Diff",
+  "dashboard_feature_textdiff_desc": "Line-by-line diff, color-coded add/delete/unchanged",
+  "dashboard_feature_jwt": "🔐 JWT Decoder",
+  "dashboard_feature_jwt_desc": "Decode token, view Header/Payload, check expiry",
+  "dashboard_feature_unitconverter": "📐 Unit Converter",
+  "dashboard_feature_unitconverter_desc": "Length/Weight/Temperature/Area/Volume/Speed/Data/Time",
+  "dashboard_feature_countdown": "⏰ Countdown",
+  "dashboard_feature_countdown_desc": "Important date countdown, progress tracking, templates"
 }

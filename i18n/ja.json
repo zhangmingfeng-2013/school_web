@@ -512,6 +512,20 @@
   "utils_tab_uuid": "🆔 UUID",
   "utils_tab_timestamp": "⏱ タイム",
   "utils_tab_count": "📊 カウント",
+  "utils_tab_regex": "🔍 正規表現",
+  "utils_tab_color": "🎨 カラー",
+  "utils_tab_base": "🔢 基数",
+  "utils_tab_htmlentity": "🏷 HTML実体",
   "dashboard_feature_utils": "🧰 ユーティリティ",
-  "dashboard_feature_utils_desc": "パスワード生成・ハッシュ・Base64・JSON等8ツール"
+  "dashboard_feature_utils_desc": "パスワード生成・ハッシュ・Base64・JSON等12ツール",
+  "dashboard_feature_markdown": "📝 マークダウン",
+  "dashboard_feature_markdown_desc": "リアルタイムプレビュー、ツールバー、HTMLエクスポート",
+  "dashboard_feature_textdiff": "🔍 テキスト差分",
+  "dashboard_feature_textdiff_desc": "行単位の差分、追加/削除/変更なしを色分け",
+  "dashboard_feature_jwt": "🔐 JWT デコーダー",
+  "dashboard_feature_jwt_desc": "トークン解析、Header/Payloadの表示、有効期限確認",
+  "dashboard_feature_unitconverter": "📐 単位変換",
+  "dashboard_feature_unitconverter_desc": "長さ/重さ/温度/面積/体積/速度/データ/時間",
+  "dashboard_feature_countdown": "⏰ カウントダウン",
+  "dashboard_feature_countdown_desc": "重要な日のカウントダウン、進捗追跡、テンプレート"
 }

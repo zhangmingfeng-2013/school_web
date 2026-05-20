@@ -695,7 +695,7 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester"}
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown"}
 CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/")
 
 @app.before_request
@@ -7540,6 +7540,37 @@ def api_api_tester_proxy():
         })
     except Exception as e:
         return jsonify({"ok": False, "error": f"请求失败: {str(e)}"}), 500
+
+
+# ---------- Markdown 编辑器 ----------
+@app.route("/markdown")
+@login_required
+def markdown_page():
+    return render_template("markdown.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 单位换算 ----------
+@app.route("/unit_converter")
+@login_required
+def unit_converter_page():
+    return render_template("unit_converter.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 文本差异对比 ----------
+@app.route("/text_diff")
+@login_required
+def text_diff_page():
+    return render_template("text_diff.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- JWT 解码器 ----------
+@app.route("/jwt_decoder")
+@login_required
+def jwt_decoder_page():
+    return render_template("jwt_decoder.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 倒计时纪念日 ----------
+@app.route("/countdown")
+@login_required
+def countdown_page():
+    return render_template("countdown.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 
 # ---------- 启动 ----------
