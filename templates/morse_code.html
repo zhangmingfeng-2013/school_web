@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}📡 摩尔斯电码 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.mc-wrap { max-width:800px;margin:0 auto }
+.mc-row { display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px }
+.mc-row textarea { flex:1;min-height:100px;resize:vertical;font-family:monospace;font-size:1rem;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;background:var(--bs-body-bg);color:var(--bs-body-color) }
+.mc-result { padding:14px 18px;background:#f3f4f6;border-radius:8px;font-family:monospace;font-size:1rem;word-break:break-all;min-height:60px;margin-top:12px;display:none }
+.mc-result.show { display:block }
+.mc-result.error { background:#fef2f2;color:#dc2626 }
+.mc-result.success { background:#f0fdf4;color:#166534 }
+.mc-table { width:100%;font-size:.85rem;margin-top:12px }
+.mc-table td { padding:6px 10px;border-bottom:1px solid var(--border-light) }
+.mc-table td:first-child { font-weight:700;font-family:monospace;width:60px;text-align:center;color:#3b82f6;font-size:1.1rem }
+.mc-table td:nth-child(2) { font-family:monospace;width:120px }
+.mc-audio-btn { cursor:pointer;font-size:1.2rem }
+</style>
+
+<div class="mc-wrap">
+    <h2 class="mb-1">📡 摩尔斯电码</h2>
+    <p class="text-muted mb-3">文本 ↔ 摩尔斯电码 编解码 · 支持播放电码音效</p>
+
+    <!-- 编码 -->
+    <div class="card mb-3"><div class="card-body">
+        <h6>🔤 文本 → 摩尔斯电码</h6>
+        <div class="mc-row">
+            <textarea id="mcText" placeholder="输入英文/数字/标点..."></textarea>
+        </div>
+        <div class="mc-row">
+            <button class="btn btn-primary btn-sm" data-csp-click="mcEncode" style="padding:6px 20px">编码 → ●●● ▬▬▬</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="mcPlay" data-csp-args='["result"]'>🔊 播放</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="mcClear" data-csp-args='["all"]'>清空</button>
+        </div>
+        <div class="mc-result" id="mcEncoded"></div>
+    </div></div>
+
+    <!-- 解码 -->
+    <div class="card mb-3"><div class="card-body">
+        <h6>📡 摩尔斯电码 → 文本</h6>
+        <p style="font-size:.8rem;color:var(--text-muted)">用 <code>.</code> (点) <code>-</code> (划) <code>/</code> (词分隔) <code>空格</code> (字分隔)</p>
+        <div class="mc-row">
+            <textarea id="mcCode" placeholder="输入摩尔斯电码... 如 ... --- ... / .... . .-.. .-.. ---"></textarea>
+        </div>
+        <div class="mc-row">
+            <button class="btn btn-success btn-sm" data-csp-click="mcDecode" style="padding:6px 20px">解码 → 文本</button>
+        </div>
+        <div class="mc-result" id="mcDecoded"></div>
+    </div></div>
+
+    <!-- 码表 -->
+    <div class="card"><div class="card-body">
+        <h6>📋 摩尔斯电码表</h6>
+        <table class="mc-table" id="mcTable"></table>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var MORSE = {
+    'A':'.-','B':'-...','C':'-.-.','D':'-..','E':'.','F':'..-.','G':'--.','H':'....',
+    'I':'..','J':'.---','K':'-.-','L':'.-..','M':'--','N':'-.','O':'---','P':'.--.',
+    'Q':'--.-','R':'.-.','S':'...','T':'-','U':'..-','V':'...-','W':'.--','X':'-..-',
+    'Y':'-.--','Z':'--..',
+    '0':'-----','1':'.----','2':'..---','3':'...--','4':'....-','5':'.....',
+    '6':'-....','7':'--...','8':'---..','9':'----.',
+    '.':'.-.-.-',',':'--..--','?':'..--..',"'":'.----.','!':'-.-.--','/':'-..-.',
+    '(':'-.--.',')':'-.--.-','&':'.-...',':':'---...',';':'-.-.-.','=':'-...-',
+    '+':'.-.-.','-':'-....-','_':'..--.-','"':'.-..-.','$':'...-..-','@':'.--.-.'
+};
+var REV_MORSE = {}; for (var k in MORSE) REV_MORSE[MORSE[k]] = k;
+
+// 编码
+function mcEncode() {
+    var text = document.getElementById('mcText').value.trim().toUpperCase();
+    var el = document.getElementById('mcEncoded');
+    if (!text) { el.className = 'mc-result error show'; el.textContent = '请输入文本'; return; }
+    var chars = [];
+    var words = text.split(/\s+/);
+    for (var w = 0; w < words.length; w++) {
+        var wchars = [];
+        for (var i = 0; i < words[w].length; i++) {
+            var c = words[w][i];
+            if (MORSE[c]) wchars.push(MORSE[c]);
+            else wchars.push(c);
+        }
+        if (wchars.length) chars.push(wchars.join(' '));
+    }
+    el.className = 'mc-result success show';
+    el.textContent = chars.join(' / ');
+}
+
+// 解码
+function mcDecode() {
+    var code = document.getElementById('mcCode').value.trim();
+    var el = document.getElementById('mcDecoded');
+    if (!code) { el.className = 'mc-result error show'; el.textContent = '请输入摩尔斯电码'; return; }
+    var words = code.split(/\s*\/\s*/);
+    var result = [];
+    for (var w = 0; w < words.length; w++) {
+        var letters = words[w].trim().split(/\s+/);
+        var word = '';
+        for (var i = 0; i < letters.length; i++) {
+            var ch = REV_MORSE[letters[i]];
+            word += ch || '?';
+        }
+        result.push(word);
+    }
+    el.className = 'mc-result success show';
+    el.textContent = result.join(' ');
+}
+
+// 清空
+function mcClear(what) {
+    if (what === 'all') {
+        document.getElementById('mcText').value = '';
+        document.getElementById('mcCode').value = '';
+        document.getElementById('mcEncoded').className = 'mc-result';
+        document.getElementById('mcDecoded').className = 'mc-result';
+    }
+}
+
+// 播放摩尔斯电码
+var mcAudioCtx = null;
+var mcPlaying = false;
+function mcPlay(target) {
+    if (mcPlaying) return;
+    var el = document.getElementById('mcEncoded');
+    var text = el.textContent || '';
+    if (!text || el.className.indexOf('show') < 0) return;
+    mcPlaying = true;
+    if (!mcAudioCtx) mcAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var dotDur = 0.08, dashDur = dotDur * 3, freq = 700;
+    var totalTime = 0;
+    var events = [];
+    for (var i = 0; i < text.length; i++) {
+        var c = text[i];
+        if (c === '.') { events.push([totalTime, dotDur]); totalTime += dotDur; }
+        else if (c === '-') { events.push([totalTime, dashDur]); totalTime += dashDur; }
+        else if (c === '/') { totalTime += dashDur * 2; }
+        totalTime += dotDur;
+    }
+    var osc = mcAudioCtx.createOscillator();
+    var gain = mcAudioCtx.createGain();
+    gain.gain.value = 0;
+    osc.type = 'sine'; osc.frequency.value = freq;
+    osc.connect(gain); gain.connect(mcAudioCtx.destination);
+    osc.start();
+    for (var e = 0; e < events.length; e++) {
+        gain.gain.setValueAtTime(0.4, events[e][0]);
+        gain.gain.setValueAtTime(0, events[e][0] + events[e][1]);
+    }
+    setTimeout(function(){ osc.stop(); mcPlaying = false; }, (totalTime + 0.2) * 1000);
+}
+
+// 码表
+(function(){
+    var html = '<tr><th>字符</th><th>电码</th><th>字符</th><th>电码</th><th>字符</th><th>电码</th></tr>';
+    var keys = Object.keys(MORSE);
+    for (var i = 0; i < keys.length; i += 3) {
+        html += '<tr>';
+        for (var j = 0; j < 3 && i + j < keys.length; j++) {
+            html += '<td>' + keys[i+j] + '</td><td>' + MORSE[keys[i+j]] + '</td>';
+        }
+        html += '</tr>';
+    }
+    document.getElementById('mcTable').innerHTML = html;
+})();
+</script>
+{% endblock %}

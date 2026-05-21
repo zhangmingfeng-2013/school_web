@@ -1,0 +1,489 @@
+{% extends "base.html" %}
+{% block title %}🎨 代码格式化 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.cf-wrap { max-width:1000px;margin:0 auto }
+.cf-panel { display:flex;gap:1rem }
+.cf-panel textarea { flex:1;min-height:350px;font-family:'Fira Code','Cascadia Code',monospace;font-size:.85rem;resize:vertical;padding:14px;border:1px solid #d1d5db;border-radius:8px;background:var(--bs-body-bg);color:var(--bs-body-color);line-height:1.5;tab-size:4 }
+.cf-dir { display:flex;flex-direction:column;justify-content:center;gap:8px }
+@media (max-width:768px) { .cf-panel { flex-direction:column } .cf-dir { flex-direction:row;flex-wrap:wrap } }
+.cf-stats { display:none;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:.8rem;color:var(--text-muted) }
+.cf-stat { padding:4px 12px;background:var(--bs-tertiary-bg);border-radius:12px }
+.cf-lang-group { font-size:.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center }
+.cf-lang-divider { flex:1;height:1px;background:var(--bs-border-color);margin-left:8px }
+.cf-ops-bar { border-top:1px solid var(--bs-border-color) !important }
+.cf-ops-label { font-size:.85rem;font-weight:600 }
+.cf-ops-btn { padding:5px 16px !important }
+.cf-arrow { font-size:1.5rem }
+</style>
+
+<div class="cf-wrap">
+    <h2 class="mb-1">🎨 代码格式化 / 压缩</h2>
+    <p class="text-muted mb-3">支持 9 种语言：CSS · SCSS · HTML · XML · JavaScript · TypeScript · JSON · Python · SQL</p>
+
+    <div class="card mb-3"><div class="card-body">
+        <div class="mb-3">
+            <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                <span class="cf-lang-group">🌐 Web 样式<span class="cf-lang-divider"></span></span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary active" data-csp-click="cfSetLang" data-csp-args='["css"]'>CSS</button>
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["scss"]'>SCSS</button>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                <span class="cf-lang-group">📄 标记语言<span class="cf-lang-divider"></span></span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["html"]'>HTML</button>
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["xml"]'>XML</button>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                <span class="cf-lang-group">⚡ 脚本语言<span class="cf-lang-divider"></span></span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["js"]'>JavaScript</button>
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["ts"]'>TypeScript</button>
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["json"]'>JSON</button>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <span class="cf-lang-group">🐍 通用语言<span class="cf-lang-divider"></span></span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["python"]'>Python</button>
+                    <button class="btn btn-outline-primary" data-csp-click="cfSetLang" data-csp-args='["sql"]'>SQL</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap align-items-center mb-3 pt-2 cf-ops-bar">
+            <span class="cf-ops-label">操作：</span>
+            <button class="btn btn-primary btn-sm cf-ops-btn" data-csp-click="cfFormat">✨ 格式化</button>
+            <button class="btn btn-success btn-sm cf-ops-btn" data-csp-click="cfMinify">📦 压缩</button>
+            <button class="btn btn-outline-secondary btn-sm cf-ops-btn" data-csp-click="cfCopy">📋 复制结果</button>
+            <button class="btn btn-outline-danger btn-sm cf-ops-btn" data-csp-click="cfClear">🗑 清空</button>
+        </div>
+
+        <div class="cf-panel">
+            <textarea id="cfInput" placeholder="在这里粘贴代码..."></textarea>
+            <div class="cf-dir">
+                <span class="cf-arrow">→</span>
+            </div>
+            <textarea id="cfOutput" placeholder="结果将显示在这里..." readonly></textarea>
+        </div>
+
+        <div class="cf-stats" id="cfStats">
+            <span class="cf-stat">📝 输入: <strong id="cfInSize"></strong></span>
+            <span class="cf-stat">📤 输出: <strong id="cfOutSize"></strong></span>
+            <span class="cf-stat">📊 压缩比: <strong id="cfRatio"></strong></span>
+        </div>
+    </div></div>
+
+    <!-- 快捷示例 -->
+    <div class="card"><div class="card-body">
+        <h6>💡 快捷示例</h6>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["css"]'>CSS</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["scss"]'>SCSS</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["html"]'>HTML</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["xml"]'>XML</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["js"]'>JavaScript</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["ts"]'>TypeScript</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["json"]'>JSON</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["python"]'>Python</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="cfDemo" data-csp-args='["sql"]'>SQL</button>
+        </div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var cfLang = 'css';
+
+var DEMOS = {
+    css: 'body {\n    margin: 0;\n    padding: 0;\n    font-family: sans-serif;\n}\n\n.container {\n    max-width: 1200px;\n    margin: 0 auto;\n    padding: 20px;\n}\n\n.btn-primary {\n    background: #3b82f6;\n    color: #fff;\n    border: none;\n    border-radius: 8px;\n    padding: 10px 24px;\n    cursor: pointer;\n    transition: all .2s;\n}\n\n.btn-primary:hover {\n    background: #2563eb;\n}',
+    scss: '$primary: #3b82f6;\n$radius: 8px;\n\n.card {\n    background: white;\n    border-radius: $radius;\n    padding: 20px;\n\n    &__header {\n        font-size: 1.5rem;\n        font-weight: bold;\n    }\n\n    &__body {\n        line-height: 1.6;\n        color: #333;\n    }\n\n    &--dark {\n        background: #1a1a2e;\n        color: #eee;\n\n        .card__body {\n            color: #ccc;\n        }\n    }\n}\n\n@mixin flex-center {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.btn {\n    @include flex-center;\n    padding: 10px 24px;\n    border: none;\n    border-radius: $radius;\n    background: $primary;\n    color: white;\n}',
+    html: '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>示例页面</title>\n    <style>\n        body { background: #f5f5f5; }\n    </style>\n</head>\n<body>\n    <div class="container">\n        <h1>Hello World!</h1>\n        <p>这是一段示例文本。</p>\n        <ul>\n            <li>项目 1</li>\n            <li>项目 2</li>\n        </ul>\n    </div>\n    <script>\n        console.log("loaded");\n    </script>\n</body>\n</html>',
+    xml: '<?xml version="1.0" encoding="UTF-8"?>\n<bookshelf>\n    <book id="1">\n        <title>深入理解计算机系统</title>\n        <author>Randal E. Bryant</author>\n        <year>2016</year>\n        <price currency="CNY">139.00</price>\n    </book>\n    <book id="2">\n        <title>设计模式</title>\n        <author>Erich Gamma</author>\n        <year>1994</year>\n        <price currency="CNY">79.00</price>\n    </book>\n</bookshelf>',
+    js: 'function fibonacci(n) {\n    if (n <= 1) return n;\n    return fibonacci(n - 1) + fibonacci(n - 2);\n}\n\nclass Calculator {\n    constructor() {\n        this.result = 0;\n    }\n\n    add(x, y) {\n        return x + y;\n    }\n\n    multiply(x, y) {\n        return x * y;\n    }\n}\n\nconst calc = new Calculator();\nconsole.log(calc.add(5, 3));\n\ndocument.addEventListener("DOMContentLoaded", () => {\n    const btn = document.querySelector(".btn");\n    btn?.addEventListener("click", () => {\n        alert("Clicked!");\n    });\n});',
+    ts: 'interface User {\n    id: number;\n    name: string;\n    email: string;\n    role: "admin" | "user";\n}\n\nclass UserService {\n    private users: User[] = [];\n\n    addUser(user: User): void {\n        this.users.push(user);\n        console.log(`User ${user.name} added`);\n    }\n\n    getUser(id: number): User | undefined {\n        return this.users.find(u => u.id === id);\n    }\n\n    getAdmins(): User[] {\n        return this.users.filter(u => u.role === "admin");\n    }\n}\n\nconst service = new UserService();\nservice.addUser({ id: 1, name: "Alice", email: "alice@example.com", role: "admin" });',
+    json: '{"name":"多合一工具箱","version":"2.0","author":{"name":"Zhang Mingfeng","email":"admin@example.com"},"features":["code_formatter","password_analyzer","jwt_decoder","weather","pomodoro"],"settings":{"theme":"auto","language":"zh-CN","notifications":true},"stats":{"users":1280,"tools":32,"uptime":"99.9%"}}',
+    python: 'def fibonacci(n):\n    """返回斐波那契数列的第 n 项"""\n    if n <= 1:\n        return n\n    a, b = 0, 1\n    for _ in range(n - 1):\n        a, b = b, a + b\n    return b\n\n\nclass Calculator:\n    def __init__(self, precision=2):\n        self.precision = precision\n        self.history = []\n\n    def add(self, x, y):\n        result = round(x + y, self.precision)\n        self.history.append(f"{x} + {y} = {result}")\n        return result\n\n    def multiply(self, x, y):\n        result = round(x * y, self.precision)\n        self.history.append(f"{x} × {y} = {result}")\n        return result\n\n    def get_history(self):\n        return self.history.copy()\n\n\nif __name__ == "__main__":\n    calc = Calculator()\n    print(calc.add(5, 3))\n    print(calc.multiply(4, 7))',
+    sql: 'SELECT u.id,u.username,u.email,COUNT(o.id) as order_count FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.status = "active" AND u.created_at > "2024-01-01" GROUP BY u.id,u.username,u.email HAVING COUNT(o.id) > 5 ORDER BY order_count DESC LIMIT 20;'
+};
+
+// Language display name map
+var LANG_NAMES = {
+    css: 'CSS', scss: 'SCSS', html: 'HTML', xml: 'XML',
+    js: 'JavaScript', ts: 'TypeScript', json: 'JSON',
+    python: 'Python', sql: 'SQL'
+};
+
+function cfSetLang(lang) {
+    cfLang = lang;
+    var allBtns = document.querySelectorAll('.btn-group .btn');
+    allBtns.forEach(function(b) {
+        b.className = 'btn btn-outline-primary btn-sm';
+    });
+    var allArgs = document.querySelectorAll('[data-csp-args]');
+    allArgs.forEach(function(el) {
+        try {
+            var args = JSON.parse(el.getAttribute('data-csp-args'));
+            if (args[0] === lang && el.closest('.btn-group')) {
+                el.className = 'btn btn-primary btn-sm';
+            }
+        } catch(e) {}
+    });
+    document.getElementById('cfInput').placeholder = '粘贴 ' + (LANG_NAMES[lang] || lang) + ' 代码...';
+}
+
+function cfDemo(lang) {
+    cfSetLang(lang);
+    document.getElementById('cfInput').value = DEMOS[lang] || '';
+}
+
+function cfFormat() {
+    var input = document.getElementById('cfInput').value;
+    var output = document.getElementById('cfOutput');
+    if (!input.trim()) { output.value = '请先输入代码'; return; }
+    try {
+        var result = '';
+        switch (cfLang) {
+            case 'css': result = formatCSS(input); break;
+            case 'scss': result = formatCSS(input); break;
+            case 'html': result = formatHTML(input); break;
+            case 'xml': result = formatHTML(input); break;
+            case 'js': result = formatJS(input); break;
+            case 'ts': result = formatJS(input); break;
+            case 'json': result = formatJSON(input); break;
+            case 'python': result = formatPython(input); break;
+            case 'sql': result = formatSQL(input); break;
+            default: result = input;
+        }
+        output.value = result;
+        updateStats(input, result);
+    } catch(e) {
+        output.value = '格式化错误: ' + e.message;
+    }
+}
+
+function cfMinify() {
+    var input = document.getElementById('cfInput').value;
+    var output = document.getElementById('cfOutput');
+    if (!input.trim()) { output.value = '请先输入代码'; return; }
+    try {
+        var result = '';
+        switch (cfLang) {
+            case 'css': result = minifyCSS(input); break;
+            case 'scss': result = minifyCSS(input); break;
+            case 'html': result = minifyHTML(input); break;
+            case 'xml': result = minifyHTML(input); break;
+            case 'js': result = minifyJS(input); break;
+            case 'ts': result = minifyJS(input); break;
+            case 'json': result = minifyJSON(input); break;
+            case 'python': result = minifyPython(input); break;
+            case 'sql': result = minifySQL(input); break;
+            default: result = input;
+        }
+        output.value = result;
+        updateStats(input, result);
+    } catch(e) {
+        output.value = '压缩错误: ' + e.message;
+    }
+}
+
+function cfCopy() {
+    var output = document.getElementById('cfOutput');
+    if (!output.value) return;
+    output.select();
+    try { document.execCommand('copy');
+        var orig = output.getAttribute('placeholder');
+        output.setAttribute('placeholder','✅ 已复制!');
+        setTimeout(function(){ output.setAttribute('placeholder', orig || '结果将显示在这里...'); }, 1500);
+    } catch(e) {}
+}
+
+function cfClear() {
+    document.getElementById('cfInput').value = '';
+    document.getElementById('cfOutput').value = '';
+    document.getElementById('cfStats').style.display = 'none';
+}
+
+function updateStats(input, output) {
+    document.getElementById('cfInSize').textContent = formatBytes(input.length);
+    document.getElementById('cfOutSize').textContent = formatBytes(output.length);
+    var ratio = input.length > 0 ? ((1 - output.length / input.length) * 100).toFixed(1) : 0;
+    document.getElementById('cfRatio').textContent = ratio + '%';
+    document.getElementById('cfStats').style.display = 'flex';
+}
+
+function formatBytes(b) {
+    if (b < 1024) return b + ' B';
+    return (b / 1024).toFixed(1) + ' KB';
+}
+
+// ====== JSON Format/Minify ======
+function formatJSON(json) {
+    var obj = JSON.parse(json);
+    return JSON.stringify(obj, null, 2);
+}
+
+function minifyJSON(json) {
+    var obj = JSON.parse(json);
+    return JSON.stringify(obj);
+}
+
+// ====== CSS/SCSS Format/Minify ======
+function formatCSS(css) {
+    css = css.replace(/\s*([{};:,>+~])\s*/g, '$1');
+    css = css.replace(/;\}/g, '}');
+    var indent = 0;
+    var result = '';
+    for (var i = 0; i < css.length; i++) {
+        var ch = css[i];
+        if (ch === '{') { result += ' {\n'; indent += 2; result += ' '.repeat(indent); }
+        else if (ch === '}') { indent = Math.max(0, indent - 2); result += '\n' + ' '.repeat(indent) + '}\n'; if (i + 1 < css.length && css[i+1] !== '}') result += '\n' + ' '.repeat(indent); }
+        else if (ch === ';') { result += ';\n' + ' '.repeat(indent); }
+        else if (ch === ',') { result += ',\n' + ' '.repeat(indent); }
+        else { result += ch; }
+    }
+    return result.replace(/\n\s*\n/g, '\n').trim();
+}
+
+function minifyCSS(css) {
+    return css.replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*([{};:,>+~])\s*/g, '$1')
+        .replace(/;\}/g, '}')
+        .trim();
+}
+
+// ====== HTML/XML Format/Minify ======
+function formatHTML(html) {
+    var result = '';
+    var indent = 0;
+    var inlineTags = ['span','a','strong','b','em','i','code','small','img','br','input','label','button'];
+    var selfClosing = ['br','hr','img','input','meta','link','area','base','col','embed','source','track','wbr'];
+    html = html.replace(/>\s+</g, '><').trim();
+    var tokens = html.split(/(<[^>]+>)/g);
+    for (var t = 0; t < tokens.length; t++) {
+        var token = tokens[t].trim();
+        if (!token) continue;
+        if (token[0] === '<') {
+            var isClose = token[1] === '/';
+            var isDecl = token[1] === '?' || token[1] === '!';
+            if (isDecl) {
+                if (result) result += '\n';
+                result += token + '\n';
+                continue;
+            }
+            if (isClose) {
+                var tagName = token.match(/<\/(\w+)/);
+                var name = tagName ? tagName[1] : '';
+                if (inlineTags.indexOf(name) < 0) indent = Math.max(0, indent - 2);
+                if (inlineTags.indexOf(name) < 0 && indent > 0) result += ' '.repeat(indent);
+                result += token;
+                if (inlineTags.indexOf(name) < 0) result += '\n';
+            } else {
+                var tagName = token.match(/<(\w+)/);
+                var name = tagName ? tagName[1] : '';
+                if (inlineTags.indexOf(name) < 0 && indent > 0) result += ' '.repeat(indent);
+                result += token;
+                var isSelfClose = token.endsWith('/>');
+                var isEmpty = selfClosing.indexOf(name) >= 0;
+                if (!isEmpty && !isSelfClose && inlineTags.indexOf(name) < 0) indent += 2;
+                if (!isEmpty && !isSelfClose && inlineTags.indexOf(name) < 0) result += '\n';
+            }
+        } else {
+            result += token;
+        }
+    }
+    return result.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function minifyHTML(html) {
+    return html.replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/>\s+</g, '><')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
+// ====== JS/TS Format/Minify ======
+function formatJS(js) {
+    var result = '';
+    var indent = 0;
+    var inString = false, stringChar = '';
+    var i = 0;
+    while (i < js.length) {
+        var ch = js[i];
+        if (inString) {
+            result += ch;
+            if (ch === stringChar && js[i-1] !== '\\') inString = false;
+            i++; continue;
+        }
+        if (ch === '"' || ch === "'" || ch === '`') { inString = true; stringChar = ch; result += ch; i++; continue; }
+        if (ch === '{' || ch === '[' || ch === '(') {
+            result += ch + '\n';
+            indent += 2;
+            result += ' '.repeat(indent);
+        } else if (ch === '}' || ch === ']' || ch === ')') {
+            indent = Math.max(0, indent - 2);
+            result += '\n' + ' '.repeat(indent) + ch;
+            if (i + 1 < js.length && js[i+1] !== '}' && js[i+1] !== ']' && js[i+1] !== ')' && js[i+1] !== ',' && js[i+1] !== ';') {
+                result += '\n' + ' '.repeat(indent);
+            }
+        } else if (ch === ';' && !inString) {
+            result += ';\n' + ' '.repeat(indent);
+        } else if (ch === ',') {
+            result += ',\n' + ' '.repeat(indent);
+        } else {
+            result += ch;
+        }
+        i++;
+    }
+    return result.replace(/\n\s*\n/g, '\n').trim();
+}
+
+function minifyJS(js) {
+    return js.replace(/\/\/.*$/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*([{}();,:[\]<>])\s*/g, '$1')
+        .replace(/;\}/g, '}')
+        .trim();
+}
+
+// ====== Python Format/Minify ======
+function formatPython(py) {
+    var lines = py.split('\n');
+    var result = [];
+    var prevIndent = 0;
+    // Remove trailing whitespace and normalize
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var trimmed = line.trimEnd();
+        if (!trimmed && i > 0 && i < lines.length - 1) {
+            // Keep single blank lines, collapse multiple
+            if (lines[i-1].trim() || (i+1 < lines.length && lines[i+1].trim())) {
+                result.push('');
+            }
+            continue;
+        }
+        if (!trimmed) {
+            result.push('');
+            continue;
+        }
+        result.push(trimmed);
+    }
+    return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function minifyPython(py) {
+    // Remove comments, collapse extra whitespace, but preserve indentation structure
+    var lines = py.split('\n');
+    var result = [];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        // Remove inline comments (but not strings — simplified)
+        var hashIdx = line.indexOf('#');
+        if (hashIdx >= 0) {
+            // Crude check for string context: count quotes before hash
+            var before = line.substring(0, hashIdx);
+            var dqCount = (before.match(/"/g) || []).length;
+            var sqCount = (before.match(/'/g) || []).length;
+            if (dqCount % 2 === 0 && sqCount % 2 === 0) {
+                line = line.substring(0, hashIdx);
+            }
+        }
+        line = line.trimEnd();
+        if (line.trim()) {
+            result.push(line);
+        }
+    }
+    return result.join('\n').trim();
+}
+
+// ====== SQL Format/Minify ======
+var SQL_KEYWORDS = [
+    'SELECT','FROM','WHERE','AND','OR','NOT','IN','IS','NULL','LIKE','BETWEEN',
+    'JOIN','LEFT','RIGHT','INNER','OUTER','FULL','CROSS','ON',
+    'GROUP','BY','HAVING','ORDER','ASC','DESC','LIMIT','OFFSET',
+    'INSERT','INTO','VALUES','UPDATE','SET','DELETE','CREATE','TABLE','ALTER',
+    'DROP','INDEX','VIEW','TRIGGER','PROCEDURE','FUNCTION',
+    'AS','DISTINCT','UNION','ALL','ANY','SOME','EXISTS','CASE','WHEN','THEN',
+    'ELSE','END','COUNT','SUM','AVG','MIN','MAX',
+    'PRIMARY','KEY','FOREIGN','REFERENCES','DEFAULT','CHECK','UNIQUE',
+    'AUTO_INCREMENT','CASCADE','CONSTRAINT',
+    'BEGIN','COMMIT','ROLLBACK','TRANSACTION',
+    'IF','ELSE','THEN','END IF',
+    'DECLARE','CURSOR','OPEN','FETCH','CLOSE',
+    'WITH','RECURSIVE','OVER','PARTITION','ROW_NUMBER','RANK',
+    'EXPLAIN','ANALYZE','DESCRIBE','SHOW','USE','DATABASE'
+];
+
+var SQL_MAJOR_CLAUSES = [
+    'SELECT','FROM','WHERE','GROUP BY','ORDER BY','HAVING','LIMIT',
+    'INSERT INTO','VALUES','UPDATE','SET','DELETE FROM',
+    'CREATE TABLE','ALTER TABLE','DROP TABLE',
+    'JOIN','LEFT JOIN','RIGHT JOIN','INNER JOIN','OUTER JOIN','FULL JOIN','CROSS JOIN',
+    'UNION','UNION ALL','WITH',
+    'BEGIN','COMMIT','ROLLBACK'
+];
+
+function formatSQL(sql) {
+    // Normalize whitespace
+    sql = sql.replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').trim();
+
+    // Insert line breaks before major clauses
+    for (var i = 0; i < SQL_MAJOR_CLAUSES.length; i++) {
+        var clause = SQL_MAJOR_CLAUSES[i];
+        var regex = new RegExp('\\b(' + clause.replace(/\s/g, '\\s') + ')\\b', 'gi');
+        sql = sql.replace(regex, function(match) {
+            return '\n' + match.toUpperCase();
+        });
+    }
+
+    // Uppercase SQL keywords
+    var words = sql.split(/(\s+|\n|,|\(|\))/g);
+    for (var j = 0; j < words.length; j++) {
+        var w = words[j];
+        var upper = w.toUpperCase();
+        if (SQL_KEYWORDS.indexOf(upper) >= 0) {
+            words[j] = upper;
+        }
+    }
+    sql = words.join('');
+
+    // Indent lines after major clauses
+    var lines = sql.split('\n');
+    var result = [];
+    for (var k = 0; k < lines.length; k++) {
+        var line = lines[k].trim();
+        if (!line) continue;
+        var isMajor = false;
+        for (var m = 0; m < SQL_MAJOR_CLAUSES.length; m++) {
+            var upLine = line.toUpperCase();
+            if (upLine.indexOf(SQL_MAJOR_CLAUSES[m]) === 0) {
+                isMajor = true;
+                break;
+            }
+        }
+        if (k === 0) {
+            result.push(line);
+        } else if (isMajor) {
+            result.push(line);
+        } else {
+            result.push('    ' + line);
+        }
+    }
+
+    return result.join('\n').trim();
+}
+
+function minifySQL(sql) {
+    return sql.replace(/--.*$/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}🎯 随机工具 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.rand-wrap { max-width:1000px;margin:0 auto }
+.dice-display { font-size:4rem;text-align:center;padding:20px;min-height:120px;display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap }
+.die { width:80px;height:80px;border:3px solid #3b82f6;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;font-weight:700;background:linear-gradient(135deg,#eff6ff,#dbeafe) }
+.coin-flip { width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:3rem;margin:0 auto;transition:transform .6s;cursor:pointer }
+.coin-flip.spinning { animation:spinCoin 1s ease-out }
+.coin-flip.tails { background:linear-gradient(135deg,#9ca3af,#6b7280) }
+@keyframes spinCoin { 0%{transform:rotateY(0)} 100%{transform:rotateY(720deg)} }
+.wheel-wrap { position:relative;width:280px;height:280px;margin:0 auto }
+.wheel-arrow { position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:1.5rem;z-index:2 }
+.wheel-canvas { width:100%;height:100% }
+.slot-row { display:flex;gap:12px;justify-content:center;font-size:3rem }
+.slot-cell { width:80px;height:80px;border:3px solid #8b5cf6;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f5f3ff,#ede9fe);overflow:hidden }
+.slot-cell.spinning { animation:slotSpin .1s linear infinite }
+@keyframes slotSpin { 0%{transform:translateY(-100%)} 100%{transform:translateY(0)} }
+.coin-stats { display:flex;justify-content:center;gap:2rem;font-size:1.5rem }
+</style>
+
+<div class="rand-wrap">
+    <h2 class="mb-1">🎯 随机工具</h2>
+    <p class="text-muted mb-3">骰子 · 决策转盘 · 扑克牌 · 抛硬币 · 随机数 · 老虎机</p>
+
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-dice">🎲 骰子</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-wheel">🎯 决策转盘</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-cards">🎴 抽牌</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-coin">🪙 硬币</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-number">🔢 随机数</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-slot">🎰 老虎机</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- Dice -->
+        <div class="tab-pane fade show active" id="tab-dice">
+            <div class="card"><div class="card-body text-center">
+                <div class="dice-display" id="diceDisplay"><span style="color:#6b7280">点击下方骰子开始</span></div>
+                <div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
+                    <button class="btn btn-outline-primary" data-csp-click="rollDice" data-csp-args='[4,1]'>d4</button>
+                    <button class="btn btn-outline-primary" data-csp-click="rollDice" data-csp-args='[6,2]'>2d6</button>
+                    <button class="btn btn-outline-primary" data-csp-click="rollDice" data-csp-args='[8,1]'>d8</button>
+                    <button class="btn btn-outline-primary" data-csp-click="rollDice" data-csp-args='[10,1]'>d10</button>
+                    <button class="btn btn-outline-primary" data-csp-click="rollDice" data-csp-args='[12,1]'>d12</button>
+                    <button class="btn btn-outline-danger" data-csp-click="rollDice" data-csp-args='[20,1]'>d20</button>
+                    <button class="btn btn-outline-warning" data-csp-click="rollDice" data-csp-args='[100,1]'>d100</button>
+                </div>
+                <div id="diceTotal" style="font-size:1.2rem;font-weight:700;color:#3b82f6"></div>
+            </div></div>
+        </div>
+
+        <!-- Decision Wheel -->
+        <div class="tab-pane fade" id="tab-wheel">
+            <div class="card"><div class="card-body text-center">
+                <div class="mb-3">
+                    <textarea id="wheelInput" class="form-control" placeholder="每行一个选项..." style="max-width:400px;margin:0 auto">吃饭\n外卖\n自己做\n不吃</textarea>
+                </div>
+                <div class="wheel-wrap">
+                    <div class="wheel-arrow">▼</div>
+                    <canvas class="wheel-canvas" id="wheelCanvas" width="280" height="280"></canvas>
+                </div>
+                <button class="btn btn-primary mt-3" data-csp-click="spinWheel">🎯 转！</button>
+                <div id="wheelResult" style="font-size:1.3rem;font-weight:700;color:#8b5cf6;margin-top:8px"></div>
+            </div></div>
+        </div>
+
+        <!-- Cards -->
+        <div class="tab-pane fade" id="tab-cards">
+            <div class="card"><div class="card-body text-center">
+                <div class="d-flex justify-content-center gap-3 flex-wrap mb-3" id="cardDisplay"></div>
+                <div class="d-flex justify-content-center gap-2">
+                    <button class="btn btn-primary" data-csp-click="drawCards" data-csp-args='[1]'>抽1张</button>
+                    <button class="btn btn-primary" data-csp-click="drawCards" data-csp-args='[3]'>抽3张</button>
+                    <button class="btn btn-primary" data-csp-click="drawCards" data-csp-args='[5]'>抽5张</button>
+                    <button class="btn btn-outline-secondary" data-csp-click="resetCards">🔄 洗牌</button>
+                </div>
+            </div></div>
+        </div>
+
+        <!-- Coin -->
+        <div class="tab-pane fade" id="tab-coin">
+            <div class="card"><div class="card-body text-center">
+                <div class="coin-flip" id="coinEl" data-csp-click="flipCoin">🪙</div>
+                <div class="coin-stats mt-3">
+                    <span>正面: <strong id="coinHeads">0</strong></span>
+                    <span>反面: <strong id="coinTails">0</strong></span>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm mt-2" data-csp-click="resetCoin">重置</button>
+            </div></div>
+        </div>
+
+        <!-- Random Number -->
+        <div class="tab-pane fade" id="tab-number">
+            <div class="card"><div class="card-body text-center">
+                <div class="d-flex justify-content-center gap-2 align-items-center mb-3">
+                    <input type="number" id="numMin" value="1" style="width:80px" placeholder="最小">
+                    <span>~</span>
+                    <input type="number" id="numMax" value="100" style="width:80px" placeholder="最大">
+                    <input type="number" id="numCount" value="1" min="1" max="20" style="width:60px" placeholder="数量">
+                    <button class="btn btn-primary" data-csp-click="genRandomNum">生成</button>
+                </div>
+                <div id="numResult" style="font-size:2rem;font-weight:700;color:#3b82f6;min-height:60px"></div>
+            </div></div>
+        </div>
+
+        <!-- Slot Machine -->
+        <div class="tab-pane fade" id="tab-slot">
+            <div class="card"><div class="card-body text-center">
+                <div class="slot-row mb-3" id="slotRow">
+                    <div class="slot-cell">🍒</div><div class="slot-cell">🍒</div><div class="slot-cell">🍒</div>
+                </div>
+                <button class="btn btn-lg btn-danger" data-csp-click="spinSlot">🎰 拉杆!</button>
+                <div id="slotResult" style="font-size:1.2rem;font-weight:700;margin-top:8px"></div>
+            </div></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// ====== Dice ======
+function rollDice(sides, count) {
+    var results = [];
+    var total = 0;
+    for (var i = 0; i < count; i++) {
+        var r = Math.floor(Math.random() * sides) + 1;
+        results.push(r); total += r;
+    }
+    var html = results.map(function(r){ return '<div class="die">'+r+'</div>'; }).join('');
+    document.getElementById('diceDisplay').innerHTML = html;
+    document.getElementById('diceTotal').textContent = count > 1 ? '合计: ' + total : '';
+}
+
+// ====== Wheel ======
+var wheelColors = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#6366f1'];
+function drawWheel() {
+    var canvas = document.getElementById('wheelCanvas');
+    var ctx = canvas.getContext('2d');
+    var items = document.getElementById('wheelInput').value.split('\n').filter(function(l){ return l.trim(); });
+    if (items.length === 0) { ctx.clearRect(0,0,280,280); return; }
+    var r = 130, cx = 140, cy = 140, angle = Math.PI*2/items.length;
+    for (var i = 0; i < items.length; i++) {
+        ctx.beginPath(); ctx.moveTo(cx,cy);
+        ctx.arc(cx,cy,r,-Math.PI/2+i*angle,-Math.PI/2+(i+1)*angle);
+        ctx.closePath(); ctx.fillStyle = wheelColors[i % wheelColors.length]; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.save(); ctx.translate(cx,cy); ctx.rotate(-Math.PI/2+i*angle+angle/2);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(items[i].slice(0,6), r*0.65, 5); ctx.restore();
+    }
+}
+function spinWheel() {
+    var items = document.getElementById('wheelInput').value.split('\n').filter(function(l){ return l.trim(); });
+    if (items.length < 2) { alert('请至少输入2个选项'); return; }
+    var canvas = document.getElementById('wheelCanvas');
+    var spins = 5 + Math.random() * 5;
+    var duration = 2000;
+    var start = performance.now();
+    var resultIdx = Math.floor(Math.random() * items.length);
+    var targetAngle = spins * 360 + (resultIdx + 0.5) * (360 / items.length) + 90;
+    function animate(ts) {
+        var progress = Math.min((ts - start) / duration, 1);
+        var eased = 1 - Math.pow(1 - progress, 3);
+        canvas.style.transform = 'rotate(' + (targetAngle * eased) + 'deg)';
+        if (progress < 1) requestAnimationFrame(animate);
+        else { document.getElementById('wheelResult').textContent = '🎉 ' + items[resultIdx]; }
+    }
+    requestAnimationFrame(animate);
+}
+document.getElementById('wheelInput').addEventListener('input', drawWheel);
+setTimeout(drawWheel, 100);
+
+// ====== Cards ======
+var cardDeck = [];
+var SUITS = ['♠','♥','♦','♣'];
+var RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+function resetCards() {
+    cardDeck = [];
+    for (var s = 0; s < 4; s++) for (var r = 0; r < 13; r++) cardDeck.push({suit:SUITS[s],rank:RANKS[r]});
+    document.getElementById('cardDisplay').innerHTML = '<span style="color:#6b7280">牌堆: '+cardDeck.length+'张</span>';
+}
+function drawCards(n) {
+    if (cardDeck.length < n) { alert('牌不够了，请洗牌'); resetCards(); return; }
+    var html = '';
+    for (var i = 0; i < n; i++) {
+        var idx = Math.floor(Math.random() * cardDeck.length);
+        var c = cardDeck.splice(idx, 1)[0];
+        var color = (c.suit === '♥' || c.suit === '♦') ? '#ef4444' : '#1f2937';
+        html += '<div style="width:70px;height:100px;border:2px solid #d1d5db;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff"><span style="font-size:1.5rem;color:'+color+'">'+c.rank+'</span><span style="font-size:1.8rem;color:'+color+'">'+c.suit+'</span></div>';
+    }
+    document.getElementById('cardDisplay').innerHTML = html + '<div style="font-size:.8rem;color:#6b7280;line-height:100px">剩余:'+cardDeck.length+'张</div>';
+}
+resetCards();
+
+// ====== Coin ======
+var coinHeads = 0, coinTails = 0;
+function flipCoin() {
+    var el = document.getElementById('coinEl');
+    if (el.classList.contains('spinning')) return;
+    el.classList.add('spinning');
+    var isHeads = Math.random() > 0.5;
+    setTimeout(function(){
+        el.classList.remove('spinning');
+        if (isHeads) { el.textContent = '🪙'; el.classList.remove('tails'); coinHeads++; }
+        else { el.textContent = '💰'; el.classList.add('tails'); coinTails++; }
+        document.getElementById('coinHeads').textContent = coinHeads;
+        document.getElementById('coinTails').textContent = coinTails;
+    }, 600);
+}
+function resetCoin() { coinHeads = 0; coinTails = 0; document.getElementById('coinHeads').textContent = '0'; document.getElementById('coinTails').textContent = '0'; }
+
+// ====== Random Number ======
+function genRandomNum() {
+    var min = parseInt(document.getElementById('numMin').value) || 1;
+    var max = parseInt(document.getElementById('numMax').value) || 100;
+    var count = parseInt(document.getElementById('numCount').value) || 1;
+    var results = [];
+    for (var i = 0; i < count; i++) results.push(Math.floor(Math.random()*(max-min+1))+min);
+    document.getElementById('numResult').textContent = results.join(', ');
+}
+
+// ====== Slot ======
+var SLOT_EMOJIS = ['🍒','🍋','🍊','🍇','💎','7️⃣','⭐','🔔'];
+function spinSlot() {
+    var cells = document.querySelectorAll('#slotRow .slot-cell');
+    cells.forEach(function(c){ c.classList.add('spinning'); });
+    var results = [];
+    setTimeout(function(){
+        cells.forEach(function(c,i){
+            var e = SLOT_EMOJIS[Math.floor(Math.random()*SLOT_EMOJIS.length)];
+            c.textContent = e; results.push(e); c.classList.remove('spinning');
+        });
+        var msg = '';
+        if (results[0]===results[1] && results[1]===results[2]) msg = '🎉 JACKPOT! 三个相同!';
+        else if (results[0]===results[1] || results[1]===results[2] || results[0]===results[2]) msg = '✨ 一对!';
+        else msg = '😅 再试试';
+        document.getElementById('slotResult').textContent = msg;
+    }, 800);
+}
+</script>
+{% endblock %}

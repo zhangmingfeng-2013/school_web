@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}📖 Git 命令手册 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.git-wrap { max-width:1000px;margin:0 auto }
+.git-sidebar { position:sticky;top:80px }
+.git-cmd { padding:12px 16px;border:1px solid var(--border-light);border-radius:8px;margin-bottom:8px;cursor:pointer;transition:all .15s }
+.git-cmd:hover { border-color:#3b82f6;box-shadow:0 2px 8px rgba(59,130,246,.1) }
+.git-cmd code { background:var(--bs-tertiary-bg);padding:2px 8px;border-radius:4px;font-size:.85rem }
+.git-cmd-desc { font-size:.85rem;color:var(--text-muted);margin-top:4px }
+.git-cmd-example { font-size:.8rem;color:#10b981;margin-top:4px;display:none }
+.git-cmd.show-example .git-cmd-example { display:block }
+.copy-btn { cursor:pointer;opacity:.5;transition:opacity .15s;font-size:.85rem }
+.copy-btn:hover { opacity:1 }
+.git-cat-btn { display:block;width:100%;text-align:left;padding:8px 12px;border:none;background:none;border-radius:6px;transition:all .15s;font-size:.9rem }
+.git-cat-btn:hover { background:rgba(59,130,246,.05);color:#3b82f6 }
+.git-cat-btn.active { background:rgba(59,130,246,.1);color:#3b82f6;font-weight:600 }
+</style>
+
+<div class="git-wrap">
+    <h2 class="mb-1">📖 Git 命令手册</h2>
+    <p class="text-muted mb-3">100+ Git 命令，分类参考，搜索过滤，一键复制</p>
+
+    <div class="row">
+        <div class="col-md-3 mb-3">
+            <div class="git-sidebar">
+                <input type="text" class="form-control form-control-sm mb-2" id="gitSearch" placeholder="搜索命令..." oninput="filterGitCmds()">
+                <div class="list-group list-group-flush" id="gitCatList">
+                    <button class="git-cat-btn active" data-cat="all">📚 全部命令</button>
+                    <button class="git-cat-btn" data-cat="basic">🏠 基础操作</button>
+                    <button class="git-cat-btn" data-cat="branch">🌿 分支管理</button>
+                    <button class="git-cat-btn" data-cat="remote">🌐 远程仓库</button>
+                    <button class="git-cat-btn" data-cat="staging">📦 暂存区</button>
+                    <button class="git-cat-btn" data-cat="commit">💾 提交历史</button>
+                    <button class="git-cat-btn" data-cat="undo">↩️ 撤销回退</button>
+                    <button class="git-cat-btn" data-cat="tag">🏷 标签</button>
+                    <button class="git-cat-btn" data-cat="config">⚙️ 配置</button>
+                    <button class="git-cat-btn" data-cat="log">📜 日志查看</button>
+                    <button class="git-cat-btn" data-cat="stash">📌 暂存堆栈</button>
+                    <button class="git-cat-btn" data-cat="advanced">🚀 高级技巧</button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-9">
+            <div id="gitCmds"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var GIT_COMMANDS = [
+    // Basic
+    {cat:'basic',cmd:'git init',desc:'初始化一个新的 Git 仓库',example:'git init my-project'},
+    {cat:'basic',cmd:'git clone <url>',desc:'克隆远程仓库到本地',example:'git clone https://github.com/user/repo.git'},
+    {cat:'basic',cmd:'git add <file>',desc:'将文件添加到暂存区',example:'git add index.html'},
+    {cat:'basic',cmd:'git add .',desc:'添加当前目录所有更改到暂存区',example:'git add .'},
+    {cat:'basic',cmd:'git add -A',desc:'添加所有更改（包括删除）到暂存区',example:'git add -A'},
+    {cat:'basic',cmd:'git add -p',desc:'交互式选择要暂存的代码块',example:'git add -p'},
+    {cat:'basic',cmd:'git status',desc:'查看工作区和暂存区状态',example:'git status'},
+    {cat:'basic',cmd:'git status -s',desc:'简短格式查看状态',example:'git status -s'},
+    {cat:'basic',cmd:'git diff',desc:'查看工作区与暂存区的差异',example:'git diff'},
+    {cat:'basic',cmd:'git diff --staged',desc:'查看暂存区与最新提交的差异',example:'git diff --staged'},
+    {cat:'basic',cmd:'git diff <commit1> <commit2>',desc:'比较两个提交的差异',example:'git diff HEAD~2 HEAD'},
+    {cat:'basic',cmd:'git mv <old> <new>',desc:'重命名文件并暂存',example:'git mv old.js new.js'},
+    {cat:'basic',cmd:'git rm <file>',desc:'删除文件并暂存',example:'git rm unused.js'},
+    {cat:'basic',cmd:'git rm --cached <file>',desc:'从暂存区移除但保留本地文件',example:'git rm --cached secret.key'},
+    // Branch
+    {cat:'branch',cmd:'git branch',desc:'列出所有本地分支',example:'git branch'},
+    {cat:'branch',cmd:'git branch -a',desc:'列出所有分支（含远程）',example:'git branch -a'},
+    {cat:'branch',cmd:'git branch -r',desc:'列出远程分支',example:'git branch -r'},
+    {cat:'branch',cmd:'git branch <name>',desc:'创建新分支',example:'git branch feature-login'},
+    {cat:'branch',cmd:'git branch -d <name>',desc:'删除分支（安全，检查是否已合并）',example:'git branch -d feature-login'},
+    {cat:'branch',cmd:'git branch -D <name>',desc:'强制删除分支',example:'git branch -D old-branch'},
+    {cat:'branch',cmd:'git checkout <branch>',desc:'切换到指定分支',example:'git checkout main'},
+    {cat:'branch',cmd:'git checkout -b <name>',desc:'创建并切换到新分支',example:'git checkout -b feature-api'},
+    {cat:'branch',cmd:'git switch <branch>',desc:'切换到分支（Git 2.23+）',example:'git switch main'},
+    {cat:'branch',cmd:'git switch -c <name>',desc:'创建并切换到新分支',example:'git switch -c feature-auth'},
+    {cat:'branch',cmd:'git merge <branch>',desc:'合并指定分支到当前分支',example:'git merge feature-login'},
+    {cat:'branch',cmd:'git merge --no-ff <branch>',desc:'合并时创建合并提交',example:'git merge --no-ff feature-login'},
+    {cat:'branch',cmd:'git merge --abort',desc:'取消正在进行的合并',example:'git merge --abort'},
+    {cat:'branch',cmd:'git rebase <branch>',desc:'将当前分支变基到指定分支',example:'git rebase main'},
+    {cat:'branch',cmd:'git rebase -i HEAD~n',desc:'交互式变基最近 n 个提交',example:'git rebase -i HEAD~3'},
+    {cat:'branch',cmd:'git rebase --continue',desc:'解决冲突后继续变基',example:'git rebase --continue'},
+    {cat:'branch',cmd:'git rebase --abort',desc:'取消变基',example:'git rebase --abort'},
+    {cat:'branch',cmd:'git cherry-pick <commit>',desc:'将指定提交应用到当前分支',example:'git cherry-pick abc1234'},
+    // Remote
+    {cat:'remote',cmd:'git remote -v',desc:'查看远程仓库地址',example:'git remote -v'},
+    {cat:'remote',cmd:'git remote add <name> <url>',desc:'添加远程仓库',example:'git remote add origin https://...'},
+    {cat:'remote',cmd:'git remote remove <name>',desc:'删除远程仓库',example:'git remote remove upstream'},
+    {cat:'remote',cmd:'git remote set-url <name> <url>',desc:'修改远程仓库地址',example:'git remote set-url origin git@github.com:user/repo.git'},
+    {cat:'remote',cmd:'git fetch',desc:'从远程获取最新变更但不合并',example:'git fetch origin'},
+    {cat:'remote',cmd:'git fetch --prune',desc:'获取并清理已删除的远程分支',example:'git fetch --prune'},
+    {cat:'remote',cmd:'git pull',desc:'拉取远程变更并合并',example:'git pull origin main'},
+    {cat:'remote',cmd:'git pull --rebase',desc:'拉取远程变更并变基',example:'git pull --rebase'},
+    {cat:'remote',cmd:'git push',desc:'推送本地提交到远程',example:'git push origin main'},
+    {cat:'remote',cmd:'git push -u <remote> <branch>',desc:'推送并设置上游分支',example:'git push -u origin feature-x'},
+    {cat:'remote',cmd:'git push --force',desc:'强制推送（危险）',example:'git push --force origin main'},
+    {cat:'remote',cmd:'git push --force-with-lease',desc:'安全强制推送',example:'git push --force-with-lease'},
+    {cat:'remote',cmd:'git push --tags',desc:'推送所有标签',example:'git push --tags'},
+    {cat:'remote',cmd:'git push origin --delete <branch>',desc:'删除远程分支',example:'git push origin --delete old-feature'},
+    {cat:'remote',cmd:'git push --all',desc:'推送所有分支',example:'git push --all origin'},
+    // Staging
+    {cat:'staging',cmd:'git reset <file>',desc:'从暂存区移除文件',example:'git reset index.html'},
+    {cat:'staging',cmd:'git reset',desc:'清空暂存区',example:'git reset'},
+    {cat:'staging',cmd:'git restore <file>',desc:'丢弃工作区更改（Git 2.23+）',example:'git restore index.html'},
+    {cat:'staging',cmd:'git restore --staged <file>',desc:'从暂存区移除',example:'git restore --staged index.html'},
+    {cat:'staging',cmd:'git checkout -- <file>',desc:'丢弃工作区更改（旧版）',example:'git checkout -- index.html'},
+    {cat:'staging',cmd:'git clean -n',desc:'预览将被删除的未追踪文件',example:'git clean -n'},
+    {cat:'staging',cmd:'git clean -f',desc:'删除未追踪的文件',example:'git clean -f'},
+    {cat:'staging',cmd:'git clean -fd',desc:'删除未追踪文件和目录',example:'git clean -fd'},
+    // Commit
+    {cat:'commit',cmd:'git commit -m "<msg>"',desc:'提交暂存区的内容',example:'git commit -m "feat: add login page"'},
+    {cat:'commit',cmd:'git commit -am "<msg>"',desc:'暂存所有更改并提交',example:'git commit -am "fix: typo"'},
+    {cat:'commit',cmd:'git commit --amend',desc:'修改最近一次提交',example:'git commit --amend -m "new message"'},
+    {cat:'commit',cmd:'git commit --amend --no-edit',desc:'追加文件到最近提交不变更信息',example:'git commit --amend --no-edit'},
+    {cat:'commit',cmd:'git commit --allow-empty',desc:'创建空提交（触发 CI）',example:'git commit --allow-empty -m "trigger CI"'},
+    // Undo
+    {cat:'undo',cmd:'git reset --soft HEAD~1',desc:'撤销最近提交但保留更改',example:'git reset --soft HEAD~1'},
+    {cat:'undo',cmd:'git reset --mixed HEAD~1',desc:'撤销提交和暂存但保留工作区',example:'git reset HEAD~1'},
+    {cat:'undo',cmd:'git reset --hard HEAD~1',desc:'完全撤销最近提交（危险）',example:'git reset --hard HEAD~1'},
+    {cat:'undo',cmd:'git revert <commit>',desc:'创建一个新提交来撤销指定提交',example:'git revert abc1234'},
+    {cat:'undo',cmd:'git revert --no-commit <commit>',desc:'撤销但不自动提交',example:'git revert --no-commit abc1234'},
+    {cat:'undo',cmd:'git reflog',desc:'查看所有 HEAD 变更记录',example:'git reflog'},
+    // Tag
+    {cat:'tag',cmd:'git tag',desc:'列出所有标签',example:'git tag'},
+    {cat:'tag',cmd:'git tag -a v1.0 -m "<msg>"',desc:'创建附注标签',example:'git tag -a v1.0.0 -m "first release"'},
+    {cat:'tag',cmd:'git tag -d <tag>',desc:'删除本地标签',example:'git tag -d v1.0'},
+    {cat:'tag',cmd:'git push origin <tag>',desc:'推送指定标签',example:'git push origin v1.0.0'},
+    {cat:'tag',cmd:'git push origin --delete <tag>',desc:'删除远程标签',example:'git push origin --delete v1.0.0'},
+    // Config
+    {cat:'config',cmd:'git config --list',desc:'列出所有配置',example:'git config --list'},
+    {cat:'config',cmd:'git config --global user.name "<name>"',desc:'设置全局用户名',example:'git config --global user.name "Zhang San"'},
+    {cat:'config',cmd:'git config --global user.email "<email>"',desc:'设置全局邮箱',example:'git config --global user.email "zhang@example.com"'},
+    {cat:'config',cmd:'git config --global alias.<short> <cmd>',desc:'设置命令别名',example:'git config --global alias.co checkout'},
+    {cat:'config',cmd:'git config --global core.editor <editor>',desc:'设置默认编辑器',example:'git config --global core.editor vim'},
+    {cat:'config',cmd:'git config --global init.defaultBranch main',desc:'设置默认分支名',example:'git config --global init.defaultBranch main'},
+    {cat:'config',cmd:'git config --global --edit',desc:'编辑全局配置文件',example:'git config --global --edit'},
+    // Log
+    {cat:'log',cmd:'git log',desc:'查看提交历史',example:'git log'},
+    {cat:'log',cmd:'git log --oneline',desc:'单行显示提交历史',example:'git log --oneline'},
+    {cat:'log',cmd:'git log --graph --oneline --all',desc:'图形化显示分支历史',example:'git log --graph --oneline --all'},
+    {cat:'log',cmd:'git log -p',desc:'显示每次提交的更改内容',example:'git log -p'},
+    {cat:'log',cmd:'git log -n <num>',desc:'显示最近 n 次提交',example:'git log -5'},
+    {cat:'log',cmd:'git log --author="<name>"',desc:'按作者过滤提交',example:'git log --author="Zhang"'},
+    {cat:'log',cmd:'git log --since="<date>"',desc:'显示指定日期之后的提交',example:'git log --since="2024-01-01"'},
+    {cat:'log',cmd:'git log -- <file>',desc:'查看特定文件的提交历史',example:'git log -- index.html'},
+    {cat:'log',cmd:'git log -S"<text>"',desc:'搜索添加或删除指定文本的提交',example:'git log -S"TODO"'},
+    {cat:'log',cmd:'git blame <file>',desc:'查看文件每行的最后修改者',example:'git blame app.py'},
+    {cat:'log',cmd:'git shortlog -sn',desc:'按作者统计提交数',example:'git shortlog -sn'},
+    // Stash
+    {cat:'stash',cmd:'git stash',desc:'暂存当前工作区更改',example:'git stash'},
+    {cat:'stash',cmd:'git stash push -m "<msg>"',desc:'暂存并添加描述',example:'git stash push -m "WIP: login"'},
+    {cat:'stash',cmd:'git stash pop',desc:'恢复最近暂存并删除',example:'git stash pop'},
+    {cat:'stash',cmd:'git stash apply',desc:'恢复最近暂存但不删除',example:'git stash apply'},
+    {cat:'stash',cmd:'git stash list',desc:'列出所有暂存',example:'git stash list'},
+    {cat:'stash',cmd:'git stash drop',desc:'删除最近暂存',example:'git stash drop'},
+    {cat:'stash',cmd:'git stash clear',desc:'清空所有暂存',example:'git stash clear'},
+    {cat:'stash',cmd:'git stash show -p',desc:'查看暂存的详细更改',example:'git stash show -p'},
+    // Advanced
+    {cat:'advanced',cmd:'git bisect start',desc:'二分查找引入问题的提交',example:'git bisect start'},
+    {cat:'advanced',cmd:'git bisect good <commit>',desc:'标记好的提交',example:'git bisect good v1.0'},
+    {cat:'advanced',cmd:'git bisect bad <commit>',desc:'标记坏的提交',example:'git bisect bad HEAD'},
+    {cat:'advanced',cmd:'git bisect reset',desc:'结束二分查找',example:'git bisect reset'},
+    {cat:'advanced',cmd:'git submodule add <url>',desc:'添加子模块',example:'git submodule add https://github.com/lib/mylib.git'},
+    {cat:'advanced',cmd:'git submodule update --init',desc:'初始化并更新子模块',example:'git submodule update --init --recursive'},
+    {cat:'advanced',cmd:'git worktree add <path> <branch>',desc:'添加工作树',example:'git worktree add ../hotfix hotfix'},
+    {cat:'advanced',cmd:'git archive -o <file> HEAD',desc:'导出仓库快照',example:'git archive -o release.zip HEAD'},
+    {cat:'advanced',cmd:'git filter-branch',desc:'重写历史（批量修改）',example:'git filter-branch --tree-filter "rm -f secret.key" HEAD'},
+    {cat:'advanced',cmd:'git gc',desc:'垃圾回收优化仓库',example:'git gc --aggressive'},
+    {cat:'advanced',cmd:'git prune',desc:'清理不可达对象',example:'git prune'},
+    {cat:'advanced',cmd:'git format-patch <commit>',desc:'生成补丁文件',example:'git format-patch HEAD~3'},
+    {cat:'advanced',cmd:'git apply <patch>',desc:'应用补丁',example:'git apply fix.patch'},
+];
+
+var currentCat = 'all';
+var currentSearch = '';
+
+function renderGitCmds() {
+    var filtered = GIT_COMMANDS;
+    if (currentCat !== 'all') filtered = filtered.filter(function(c){ return c.cat === currentCat; });
+    if (currentSearch) {
+        var q = currentSearch.toLowerCase();
+        filtered = filtered.filter(function(c){ return c.cmd.toLowerCase().indexOf(q)>=0 || c.desc.indexOf(q)>=0 || c.example.indexOf(q)>=0; });
+    }
+    var html = '<div style="font-size:.85rem;color:var(--text-muted);margin-bottom:8px">共 ' + filtered.length + ' 条命令</div>';
+    for (var i = 0; i < filtered.length; i++) {
+        var c = filtered[i];
+        html += '<div class="git-cmd" data-csp-click="toggleGitExample">';
+        html += '<div class="d-flex justify-content-between align-items-start">';
+        html += '<div><code>' + c.cmd + '</code><div class="git-cmd-desc">' + c.desc + '</div></div>';
+        html += '<button class="btn btn-sm btn-outline-secondary copy-btn" data-csp-click="copyGitCmd" data-csp-args=\'["' + c.cmd.replace(/"/g,'\\"') + '"]\'>📋</button>';
+        html += '</div>';
+        html += '<div class="git-cmd-example">💡 ' + c.example + '</div>';
+        html += '</div>';
+    }
+    document.getElementById('gitCmds').innerHTML = html;
+}
+
+function toggleGitExample() {
+    this.classList.toggle('show-example');
+}
+
+function copyGitCmd(cmd) {
+    navigator.clipboard.writeText(cmd).then(function(){}).catch(function(){});
+}
+
+function filterGitCmds() {
+    currentSearch = document.getElementById('gitSearch').value;
+    renderGitCmds();
+}
+
+// Category selection
+(function(){
+    var sel = document.getElementById('gitCatList');
+    sel.addEventListener('click', function(e){
+        var btn = e.target.closest('.git-cat-btn');
+        if (!btn) return;
+        sel.querySelectorAll('.git-cat-btn').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentCat = btn.getAttribute('data-cat');
+        renderGitCmds();
+    });
+    // Hook search input (CSP-safe)
+    var searchEl = document.getElementById('gitSearch');
+    searchEl.addEventListener('input', filterGitCmds);
+    searchEl.removeAttribute('oninput');
+})();
+
+renderGitCmds();
+</script>
+{% endblock %}

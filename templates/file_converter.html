@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}🔄 格式转换器 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.fc-wrap { max-width:1000px;margin:0 auto }
+.fc-panel { display:flex;gap:1rem }
+.fc-panel textarea { flex:1;min-height:300px;font-family:monospace;font-size:.85rem;resize:vertical }
+.fc-dir-btn { display:flex;flex-direction:column;justify-content:center;gap:8px }
+@media (max-width:768px) { .fc-panel { flex-direction:column } .fc-dir-btn { flex-direction:row } }
+</style>
+
+<div class="fc-wrap">
+    <h2 class="mb-1">🔄 格式转换器</h2>
+    <p class="text-muted mb-3">JSON ↔ YAML ↔ XML ↔ CSV ↔ TOML 互转</p>
+
+    <div class="card mb-3"><div class="card-body">
+        <div class="d-flex gap-2 flex-wrap align-items-center mb-3">
+            <select class="form-select form-select-sm" style="width:auto" id="fcFrom">
+                <option value="json">JSON → </option>
+                <option value="yaml">YAML → </option>
+                <option value="xml">XML → </option>
+                <option value="csv">CSV → </option>
+                <option value="toml">TOML → </option>
+            </select>
+            <span>→</span>
+            <select class="form-select form-select-sm" style="width:auto" id="fcTo">
+                <option value="json">JSON</option>
+                <option value="yaml" selected>YAML</option>
+                <option value="xml">XML</option>
+                <option value="csv">CSV</option>
+                <option value="toml">TOML</option>
+            </select>
+            <button class="btn btn-primary btn-sm" data-csp-click="convertFormat">🔄 转换</button>
+            <button class="btn btn-outline-success btn-sm" data-csp-click="copyFcResult">📋 复制</button>
+            <button class="btn btn-outline-secondary btn-sm" data-csp-click="swapFc">⇄ 交换</button>
+        </div>
+        <div class="fc-panel">
+            <textarea class="form-control" id="fcInput" placeholder="输入源格式内容..."></textarea>
+            <textarea class="form-control" id="fcOutput" placeholder="转换结果..." readonly style="background:var(--bs-tertiary-bg)"></textarea>
+        </div>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+        <h6>📋 快捷示例</h6>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary" data-csp-click="loadFcSample" data-csp-args='["json"]'>JSON 示例</button>
+            <button class="btn btn-sm btn-outline-primary" data-csp-click="loadFcSample" data-csp-args='["yaml"]'>YAML 示例</button>
+            <button class="btn btn-sm btn-outline-primary" data-csp-click="loadFcSample" data-csp-args='["xml"]'>XML 示例</button>
+            <button class="btn btn-sm btn-outline-primary" data-csp-click="loadFcSample" data-csp-args='["csv"]'>CSV 示例</button>
+            <button class="btn btn-sm btn-outline-primary" data-csp-click="loadFcSample" data-csp-args='["toml"]'>TOML 示例</button>
+        </div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var SAMPLES = {
+    json: '{"name":"test","version":"1.0","items":[{"id":1,"label":"A"},{"id":2,"label":"B"}]}',
+    yaml: 'name: test\nversion: "1.0"\nitems:\n  - id: 1\n    label: A\n  - id: 2\n    label: B',
+    xml: '<?xml version="1.0"?>\n<root>\n  <name>test</name>\n  <version>1.0</version>\n  <items>\n    <item><id>1</id><label>A</label></item>\n    <item><id>2</id><label>B</label></item>\n  </items>\n</root>',
+    csv: 'name,version,id,label\ntest,1.0,1,A\ntest,1.0,2,B',
+    toml: 'name = "test"\nversion = "1.0"\n\n[[items]]\nid = 1\nlabel = "A"\n\n[[items]]\nid = 2\nlabel = "B"'
+};
+
+function loadFcSample(type) {
+    document.getElementById('fcInput').value = SAMPLES[type] || '';
+    document.getElementById('fcFrom').value = type;
+    document.getElementById('fcTo').value = type === 'json' ? 'yaml' : 'json';
+}
+
+function swapFc() {
+    var from = document.getElementById('fcFrom');
+    var to = document.getElementById('fcTo');
+    var fv = from.value, tv = to.value;
+    from.value = tv; to.value = fv;
+    var inp = document.getElementById('fcInput');
+    var out = document.getElementById('fcOutput');
+    inp.value = out.value; out.value = '';
+}
+
+function convertFormat() {
+    var input = document.getElementById('fcInput').value.trim();
+    var from = document.getElementById('fcFrom').value;
+    var to = document.getElementById('fcTo').value;
+    var outEl = document.getElementById('fcOutput');
+    if (!input) { outEl.value = '请输入内容'; return; }
+    if (from === to) { outEl.value = input; return; }
+    try {
+        // Parse to intermediate object
+        var obj;
+        if (from === 'json') {
+            obj = JSON.parse(input);
+        } else if (from === 'yaml') {
+            obj = parseYaml(input);
+        } else if (from === 'xml') {
+            obj = parseXml(input);
+        } else if (from === 'csv') {
+            obj = parseCsv(input);
+        } else if (from === 'toml') {
+            obj = parseToml(input);
+        }
+        // Serialize
+        if (to === 'json') outEl.value = JSON.stringify(obj, null, 2);
+        else if (to === 'yaml') outEl.value = toYaml(obj);
+        else if (to === 'xml') outEl.value = toXml(obj);
+        else if (to === 'csv') outEl.value = toCsv(obj);
+        else if (to === 'toml') outEl.value = toToml(obj);
+    } catch(e) {
+        outEl.value = '转换失败: ' + e.message;
+    }
+}
+
+function copyFcResult() {
+    var v = document.getElementById('fcOutput').value;
+    if (!v) return;
+    navigator.clipboard.writeText(v).catch(function(){});
+}
+
+// ====== Mini parsers ======
+function parseYaml(text) {
+    var obj = {}, lines = text.split('\n');
+    var stack = [{obj:obj,indent:-1}];
+    var arrKey = null;
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        if (!line.trim() || line.trim().startsWith('#')) continue;
+        var indent = line.search(/\S/);
+        var content = line.trim();
+        // Array item
+        if (content.startsWith('- ')) {
+            content = content.slice(2);
+            while (stack.length > 1 && stack[stack.length-1].indent >= indent) stack.pop();
+            var cur = stack[stack.length-1].obj;
+            if (!Array.isArray(cur)) { cur = []; stack[stack.length-1].obj = cur; }
+            var kv = content.split(/:\s*(.*)/,2);
+            var val = kv.length>1 ? kv[1].replace(/^"/,'').replace(/"$/,'') : '';
+            if (kv.length > 1) {
+                var newObj = {};
+                setDeep(newObj, kv[0], autoType(val));
+                cur.push(newObj);
+                stack.push({obj:newObj,indent:indent});
+            } else {
+                cur.push(autoType(content));
+            }
+        } else {
+            var kv = content.split(/:\s*(.*)/,2);
+            if (kv.length < 2) continue;
+            while (stack.length > 1 && stack[stack.length-1].indent >= indent) stack.pop();
+            var parent = stack[stack.length-1].obj;
+            var key = kv[0], val = kv[1].replace(/^"/,'').replace(/"$/,'').trim();
+            if (val === '') {
+                var sub = {};
+                if (Array.isArray(parent) && parent.length>0) {
+                    parent[parent.length-1][key] = sub;
+                } else {
+                    parent[key] = sub;
+                }
+                stack.push({obj:sub,indent:indent});
+            } else {
+                setDeep(parent, key, autoType(val));
+            }
+        }
+    }
+    return obj;
+}
+
+function parseXml(text) {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(text, 'text/xml');
+    var err = doc.querySelector('parsererror');
+    if (err) throw new Error(err.textContent);
+    function nodeToObj(node) {
+        var obj = {};
+        for (var i = 0; i < node.children.length; i++) {
+            var child = node.children[i];
+            var name = child.tagName;
+            if (obj[name] !== undefined) {
+                if (!Array.isArray(obj[name])) obj[name] = [obj[name]];
+                obj[name].push(child.children.length ? nodeToObj(child) : child.textContent);
+            } else {
+                obj[name] = child.children.length ? nodeToObj(child) : child.textContent;
+            }
+        }
+        return obj;
+    }
+    return nodeToObj(doc.documentElement);
+}
+
+function parseCsv(text) {
+    var lines = text.split('\n').filter(function(l){ return l.trim(); });
+    if (lines.length < 2) return [];
+    var headers = lines[0].split(',').map(function(h){ return h.trim(); });
+    var result = [];
+    for (var i = 1; i < lines.length; i++) {
+        var vals = lines[i].split(',');
+        var obj = {};
+        for (var j = 0; j < headers.length; j++) obj[headers[j]] = autoType((vals[j]||'').trim());
+        result.push(obj);
+    }
+    return result;
+}
+
+function parseToml(text) {
+    // Simple TOML parser - handle basic key=value and [[array]]
+    var obj = {}, current = obj, lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line || line.startsWith('#')) continue;
+        if (line.startsWith('[[')) {
+            var arrName = line.slice(2,-2).trim();
+            if (!obj[arrName]) obj[arrName] = [];
+            current = {};
+            obj[arrName].push(current);
+        } else if (line.startsWith('[')) {
+            var secName = line.slice(1,-1).trim();
+            current = obj[secName] = {};
+        } else {
+            var eq = line.indexOf('=');
+            if (eq < 0) continue;
+            var key = line.slice(0,eq).trim();
+            var val = line.slice(eq+1).trim().replace(/^"/,'').replace(/"$/,'').replace(/^'/,'').replace(/'$/,'');
+            current[key] = autoType(val);
+        }
+    }
+    return obj;
+}
+
+function toYaml(obj, indent) {
+    indent = indent || 0;
+    if (obj === null || obj === undefined) return '';
+    if (typeof obj !== 'object') return String(obj);
+    if (Array.isArray(obj)) {
+        var s = '';
+        for (var i = 0; i < obj.length; i++) {
+            s += ' '.repeat(indent) + '- ';
+            if (typeof obj[i] === 'object' && obj[i] !== null) {
+                var keys = Object.keys(obj[i]);
+                if (keys.length === 0) s += '{}';
+                else {
+                    s += keys[0] + ': ' + (typeof obj[i][keys[0]]==='object'?'':String(obj[i][keys[0]]));
+                    for (var j = 1; j < keys.length; j++) {
+                        s += '\n' + ' '.repeat(indent+2) + keys[j] + ': ' + String(obj[i][keys[j]]);
+                    }
+                }
+            } else s += String(obj[i]);
+            s += '\n';
+        }
+        return s.trimEnd();
+    }
+    var s = '';
+    var keys = Object.keys(obj);
+    for (var i = 0; i < keys.length; i++) {
+        s += ' '.repeat(indent) + keys[i] + ': ';
+        if (typeof obj[keys[i]] === 'object' && obj[keys[i]] !== null) s += '\n' + toYaml(obj[keys[i]], indent+2);
+        else s += (typeof obj[keys[i]]==='string'?'"'+obj[keys[i]]+'"':String(obj[keys[i]])) + '\n';
+    }
+    return s.trimEnd();
+}
+
+function toXml(obj, root) {
+    root = root || 'root';
+    if (Array.isArray(obj)) {
+        var s = '';
+        for (var i = 0; i < obj.length; i++) s += toXml(obj[i], 'item');
+        return s;
+    }
+    if (typeof obj !== 'object' || obj === null) return String(obj);
+    var s = '<' + root + '>';
+    var keys = Object.keys(obj);
+    for (var i = 0; i < keys.length; i++) {
+        s += '<' + keys[i] + '>' + toXml(obj[keys[i]], keys[i]) + '</' + keys[i] + '>';
+    }
+    s += '</' + root + '>';
+    return s;
+}
+
+function toCsv(obj) {
+    if (!Array.isArray(obj) || obj.length === 0) return '';
+    var headers = Object.keys(obj[0]);
+    var csv = headers.join(',') + '\n';
+    for (var i = 0; i < obj.length; i++) {
+        csv += headers.map(function(h){ return String(obj[i][h]||''); }).join(',') + '\n';
+    }
+    return csv.trimEnd();
+}
+
+function toToml(obj) {
+    if (Array.isArray(obj)) {
+        var s = '';
+        for (var i = 0; i < obj.length; i++) {
+            s += '[[items]]\n';
+            var keys = Object.keys(obj[i]);
+            for (var j = 0; j < keys.length; j++) {
+                s += keys[j] + ' = ' + (typeof obj[i][keys[j]]==='string'?'"'+obj[i][keys[j]]+'"':String(obj[i][keys[j]])) + '\n';
+            }
+            s += '\n';
+        }
+        return s.trimEnd();
+    }
+    var s = '';
+    var keys = Object.keys(obj);
+    for (var i = 0; i < keys.length; i++) {
+        if (typeof obj[keys[i]] === 'object' && obj[keys[i]] !== null) {
+            s += '[' + keys[i] + ']\n';
+            var sub = Object.keys(obj[keys[i]]);
+            for (var j = 0; j < sub.length; j++) {
+                s += sub[j] + ' = ' + (typeof obj[keys[i]][sub[j]]==='string'?'"'+obj[keys[i]][sub[j]]+'"':String(obj[keys[i]][sub[j]])) + '\n';
+            }
+            s += '\n';
+        } else {
+            s += keys[i] + ' = ' + (typeof obj[keys[i]]==='string'?'"'+obj[keys[i]]+'"':String(obj[keys[i]])) + '\n';
+        }
+    }
+    return s.trimEnd();
+}
+
+function autoType(v) {
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    if (v === 'null' || v === '~') return null;
+    if (/^-?\d+$/.test(v)) return parseInt(v);
+    if (/^-?\d+\.\d+$/.test(v)) return parseFloat(v);
+    return v;
+}
+
+function setDeep(obj, key, val) {
+    var parts = key.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+        if (!cur[parts[i]]) cur[parts[i]] = {};
+        cur = cur[parts[i]];
+    }
+    cur[parts[parts.length-1]] = val;
+}
+
+// Load JSON sample by default
+setTimeout(function(){ loadFcSample('json'); convertFormat(); }, 200);
+</script>
+{% endblock %}

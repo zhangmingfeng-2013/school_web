@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}🪪 身份证 & 银行卡工具 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.it-wrap { max-width:800px;margin:0 auto }
+.it-result-card { background:#f9fafb;border-radius:12px;padding:20px;margin-top:12px;display:none;border:1px solid var(--border-light) }
+.it-result-card.show { display:block }
+.it-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px }
+.it-item { padding:12px 16px;background:var(--bs-body-bg);border-radius:8px;border:1px solid var(--border-light) }
+.it-item-label { font-size:.75rem;color:var(--text-muted);margin-bottom:2px }
+.it-item-val { font-size:1rem;font-weight:600 }
+.it-item-val.green { color:#10b981 }
+.it-item-val.red { color:#ef4444 }
+.it-bank-valid { font-size:1.5rem;font-weight:700;text-align:center;padding:16px }
+.bank-ok { color:#10b981 }
+.bank-fail { color:#ef4444 }
+</style>
+
+<div class="it-wrap">
+    <h2 class="mb-1">🪪 身份证 & 银行卡工具</h2>
+    <p class="text-muted mb-3">身份证号码解析 · 银行卡号校验（Luhn 算法）</p>
+
+    <!-- 身份证解析 -->
+    <div class="card mb-3"><div class="card-body">
+        <h6>🪪 身份证号码解析</h6>
+        <p style="font-size:.8rem;color:var(--text-muted)">支持 18 位二代身份证</p>
+        <div class="input-group mb-3">
+            <input type="text" class="form-control form-control-lg" id="idcardInput" placeholder="输入 18 位身份证号码..." style="font-family:monospace;font-size:1.1rem;letter-spacing:2px" maxlength="18">
+            <button class="btn btn-primary" data-csp-click="parseIDCard">解析</button>
+            <button class="btn btn-outline-secondary" data-csp-click="idcardDemo">示例</button>
+        </div>
+        <div class="it-result-card" id="idcardResult">
+            <div class="it-grid" id="idcardGrid"></div>
+        </div>
+    </div></div>
+
+    <!-- 银行卡校验 -->
+    <div class="card mb-3"><div class="card-body">
+        <h6>💳 银行卡号校验（Luhn 算法）</h6>
+        <p style="font-size:.8rem;color:var(--text-muted)">支持 16-19 位银行卡号</p>
+        <div class="input-group mb-3">
+            <input type="text" class="form-control form-control-lg" id="bankInput" placeholder="输入银行卡号..." style="font-family:monospace;font-size:1.1rem;letter-spacing:2px" maxlength="19">
+            <button class="btn btn-success" data-csp-click="checkBankCard">校验</button>
+            <button class="btn btn-outline-secondary" data-csp-click="bankDemo">示例</button>
+        </div>
+        <div class="it-result-card" id="bankResult">
+            <div class="it-bank-valid" id="bankValid"></div>
+            <div class="it-grid mt-2" id="bankGrid"></div>
+        </div>
+    </div></div>
+
+    <!-- 随机生成 -->
+    <div class="card"><div class="card-body">
+        <h6>🎲 随机生成测试数据</h6>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-primary btn-sm" data-csp-click="genRandomIDCard">生成随机身份证号</button>
+            <button class="btn btn-outline-success btn-sm" data-csp-click="genRandomBankCard">生成随机银行卡号</button>
+        </div>
+        <div class="it-result-card mt-2" id="genResult"></div>
+    </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// ====== 身份证解析 ======
+var IDCARD_PROVINCES = {
+    11:'北京市',12:'天津市',13:'河北省',14:'山西省',15:'内蒙古自治区',
+    21:'辽宁省',22:'吉林省',23:'黑龙江省',
+    31:'上海市',32:'江苏省',33:'浙江省',34:'安徽省',35:'福建省',36:'江西省',37:'山东省',
+    41:'河南省',42:'湖北省',43:'湖南省',44:'广东省',45:'广西壮族自治区',46:'海南省',
+    50:'重庆市',51:'四川省',52:'贵州省',53:'云南省',54:'西藏自治区',
+    61:'陕西省',62:'甘肃省',63:'青海省',64:'宁夏回族自治区',65:'新疆维吾尔自治区',
+    71:'台湾省',81:'香港特别行政区',82:'澳门特别行政区'
+};
+
+function idcardChecksum(id) {
+    var w = [7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2];
+    var check = '10X98765432';
+    var sum = 0;
+    for (var i = 0; i < 17; i++) sum += parseInt(id[i]) * w[i];
+    return check[sum % 11];
+}
+
+function parseIDCard() {
+    var id = document.getElementById('idcardInput').value.trim();
+    var el = document.getElementById('idcardResult');
+    var grid = document.getElementById('idcardGrid');
+    if (!/^\d{17}[\dXx]$/.test(id)) {
+        grid.innerHTML = '<div style="color:#ef4444;padding:8px">请输入正确的 18 位身份证号码</div>';
+        el.className = 'it-result-card show'; return;
+    }
+    id = id.toUpperCase();
+    var valid = idcardChecksum(id) === id[17];
+    var provCode = id.substring(0,2);
+    var cityCode = id.substring(0,4);
+    var districtCode = id.substring(0,6);
+    var birth = id.substring(6,14);
+    var year = birth.substring(0,4), month = birth.substring(4,6), day = birth.substring(6,8);
+    var gender = parseInt(id[16]) % 2 === 1 ? '男' : '女';
+    var age = new Date().getFullYear() - parseInt(year);
+    var zodiac = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'][(parseInt(year) - 4) % 12];
+    var constellation = getConstellation(parseInt(month), parseInt(day));
+
+    var items = [
+        {label:'校验结果', val:valid ? '✅ 合法' : '❌ 校验失败', cls:valid?'green':'red'},
+        {label:'省份', val:IDCARD_PROVINCES[provCode] || '未知'},
+        {label:'城市代码', val:cityCode},
+        {label:'区县代码', val:districtCode},
+        {label:'出生日期', val:year + '-' + month + '-' + day},
+        {label:'年龄', val:age + ' 岁'},
+        {label:'性别', val:gender},
+        {label:'生肖', val:zodiac},
+        {label:'星座', val:constellation}
+    ];
+    grid.innerHTML = items.map(function(it){
+        return '<div class="it-item"><div class="it-item-label">'+it.label+'</div><div class="it-item-val'+(it.cls?' '+it.cls:'')+'">'+it.val+'</div></div>';
+    }).join('');
+    el.className = 'it-result-card show';
+}
+
+function getConstellation(m, d) {
+    var c = ['摩羯','水瓶','双鱼','白羊','金牛','双子','巨蟹','狮子','处女','天秤','天蝎','射手'];
+    var e = [20,19,21,20,21,22,23,23,23,24,23,22];
+    return d < e[m-1] ? c[m-1] : c[m % 12];
+}
+
+function idcardDemo() {
+    document.getElementById('idcardInput').value = '110101199001011234';
+    parseIDCard();
+}
+
+// ====== 银行卡 Luhn 校验 ======
+function luhnCheck(num) {
+    var sum = 0; var alt = false;
+    for (var i = num.length - 1; i >= 0; i--) {
+        var d = parseInt(num[i]);
+        if (alt) { d *= 2; if (d > 9) d -= 9; }
+        sum += d; alt = !alt;
+    }
+    return sum % 10 === 0;
+}
+
+var BANK_BINS = {
+    '62':'中国银联','4':'Visa','5':'MasterCard','34':'AmEx','37':'AmEx',
+    '35':'JCB','60':'Discover','30':'Diners Club','36':'Diners Club'
+};
+
+function getBankInfo(num) {
+    for (var prefix in BANK_BINS) {
+        if (num.indexOf(prefix) === 0) return BANK_BINS[prefix];
+    }
+    return '未知卡组织';
+}
+
+function checkBankCard() {
+    var num = document.getElementById('bankInput').value.replace(/\s/g, '');
+    var el = document.getElementById('bankResult');
+    var ve = document.getElementById('bankValid');
+    var grid = document.getElementById('bankGrid');
+
+    if (!/^\d{13,19}$/.test(num)) {
+        ve.innerHTML = '<span style="color:#ef4444">请输入正确的银行卡号（13-19位数字）</span>';
+        grid.innerHTML = ''; el.className = 'it-result-card show'; return;
+    }
+
+    var valid = luhnCheck(num);
+    var issuer = getBankInfo(num);
+    ve.innerHTML = valid
+        ? '<span class="bank-ok">✅ 卡号有效</span>'
+        : '<span class="bank-fail">❌ 卡号无效</span>';
+    grid.innerHTML = [
+        {label:'卡号长度',val:num.length + ' 位'},
+        {label:'卡组织',val:issuer},
+        {label:'前6位(BIN)',val:num.substring(0,6)},
+        {label:'末4位',val:num.slice(-4)},
+        {label:'掩码卡号',val:'**** **** **** ' + num.slice(-4)}
+    ].map(function(it){
+        return '<div class="it-item"><div class="it-item-label">'+it.label+'</div><div class="it-item-val">'+it.val+'</div></div>';
+    }).join('');
+    el.className = 'it-result-card show';
+}
+
+function bankDemo() {
+    document.getElementById('bankInput').value = '6222021234567890';
+    checkBankCard();
+}
+
+// ====== 随机生成 ======
+function genRandomIDCard() {
+    var area = ['110101','310101','440103','320102','330102','500103'][Math.floor(Math.random()*6)];
+    var y = Math.floor(Math.random()*50)+1960;
+    var m = String(Math.floor(Math.random()*12)+1).padStart(2,'0');
+    var d = String(Math.floor(Math.random()*28)+1).padStart(2,'0');
+    var seq = String(Math.floor(Math.random()*999)).padStart(3,'0');
+    var base = area + y + m + d + seq;
+    var check = idcardChecksum(base);
+    var id = base + check;
+    document.getElementById('idcardInput').value = id;
+    parseIDCard();
+}
+
+function genRandomBankCard() {
+    var bins = ['622202','622848','621700','622588','621226','622262'];
+    var bin = bins[Math.floor(Math.random()*bins.length)];
+    var body = bin;
+    for (var i = 0; i < 9; i++) body += Math.floor(Math.random()*10);
+    // Calculate Luhn check digit
+    var sum = 0, alt = true;
+    for (var i = body.length - 1; i >= 0; i--) {
+        var d = parseInt(body[i]);
+        if (alt) { d *= 2; if (d > 9) d -= 9; }
+        sum += d; alt = !alt;
+    }
+    var check = (10 - (sum % 10)) % 10;
+    var card = body + check;
+    document.getElementById('bankInput').value = card;
+    checkBankCard();
+}
+</script>
+{% endblock %}

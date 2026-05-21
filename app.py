@@ -695,7 +695,7 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter"}
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
 CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/")
 
 @app.before_request
@@ -7577,6 +7577,66 @@ def countdown_page():
 @login_required
 def sql_formatter_page():
     return render_template("sql_formatter.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 模拟数据生成器 ----------
+@app.route("/mock_data")
+@login_required
+def mock_data_page():
+    return render_template("mock_data.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 随机工具 ----------
+@app.route("/random_tools")
+@login_required
+def random_tools_page():
+    return render_template("random_tools.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- Git 命令手册 ----------
+@app.route("/git_cheatsheet")
+@login_required
+def git_cheatsheet_page():
+    return render_template("git_cheatsheet.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 密码强度分析 ----------
+@app.route("/password_analyzer")
+@login_required
+def password_analyzer_page():
+    return render_template("password_analyzer.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 格式转换器 ----------
+@app.route("/file_converter")
+@login_required
+def file_converter_page():
+    return render_template("file_converter.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 摩尔斯电码 ----------
+@app.route("/morse_code")
+@login_required
+def morse_code_page():
+    return render_template("morse_code.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 身份证 & 银行卡工具 ----------
+@app.route("/idcard_tools")
+@login_required
+def idcard_tools_page():
+    return render_template("idcard_tools.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- Cron 表达式解析 ----------
+@app.route("/cron_parser")
+@login_required
+def cron_parser_page():
+    return render_template("cron_parser.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- UA 解析器 ----------
+@app.route("/ua_parser")
+@login_required
+def ua_parser_page():
+    return render_template("ua_parser.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---------- 代码格式化/压缩 ----------
+@app.route("/code_formatter")
+@login_required
+def code_formatter_page():
+    return render_template("code_formatter.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 
 # ---------- 启动 ----------
