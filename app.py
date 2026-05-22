@@ -16,6 +16,27 @@ import pymysql
 from collections import deque
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
+import bcrypt
+
+
+def safe_check_password_hash(pwhash: str, password: str) -> bool:
+    """安全地验证密码哈希，兼容 werkzeug (scrypt/pbkdf2) 和 bcrypt 格式。
+
+    数据库中可能存在旧版 bcrypt 哈希（以 $2a$/$2b$/$2y$ 开头），
+    werkzeug 3.x 不支持这些格式，直接调用 check_password_hash 会抛出 ValueError。
+    """
+    if not pwhash:
+        return False
+    try:
+        return check_password_hash(pwhash, password)
+    except ValueError:
+        # 非 werkzeug 格式，尝试 bcrypt
+        if pwhash.startswith("$2"):
+            try:
+                return bcrypt.checkpw(password.encode(), pwhash.encode())
+            except Exception:
+                return False
+        return False
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import io
 from flask import (
@@ -607,7 +628,7 @@ login_lockout = {}  # {username: (attempts, lockout_until)}
 rate_lock = threading.Lock()
 
 # ---------- IP 会话超时（2分钟无动作自动登出） ----------
-SESSION_IDLE_TIMEOUT = 150  # 秒
+SESSION_IDLE_TIMEOUT = 1800  # 秒（30 分钟空闲超时）
 ip_last_active = {}         # {ip: last_activity_timestamp}
 session_lock = threading.Lock()
 
@@ -1043,6 +1064,7 @@ def login_required(f):
     return decorated
 
 
+
 def csrf_required(f):
     """验证 CSRF token（用于非 GET 请求的表单提交）"""
     @wraps(f)
@@ -1128,7 +1150,7 @@ def fm_password_required(f):
                     result = cursor.fetchone()
                     cursor.close()
                     conn.close()
-                    if result and check_password_hash(result[0], pwd):
+                    if result and safe_check_password_hash(result[0], pwd):
                         session["fm_verified"] = True
                         return redirect(request.path)
                 except:
@@ -1165,15 +1187,31 @@ def login():
 
         username = sanitize_input(request.form.get("username", ""), 50)
         password = request.form.get("password", "").strip()
+        captcha_input = request.form.get("captcha", "").strip().lower()
+
+        # ---- 诊断日志：记录每次登录尝试的详细信息 ----
+        import logging
+        _login_logger = logging.getLogger('login_diag')
+        _login_logger.setLevel(logging.DEBUG)
+        if not _login_logger.handlers:
+            _h = logging.FileHandler('/tmp/login_diag.log')
+            _h.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+            _login_logger.addHandler(_h)
+        _login_logger.info(
+            f"LOGIN_ATTEMPT | user={username} | pwd_len={len(password)} | "
+            f"captcha_input='{captcha_input}' | captcha_session='{session.get('captcha_code','')}' | "
+            f"ip={client_ip} | ua={request.headers.get('User-Agent','?')[:80]}"
+        )
 
         if not username or not password:
+            _login_logger.info(f"LOGIN_FAIL | reason=empty_fields | user={username}")
             flash("用户名和密码不能为空", "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
 
         # 验证码校验
-        captcha_input = request.form.get("captcha", "").strip().lower()
         ok, err_msg = _verify_captcha(captcha_input)
         if not ok:
+            _login_logger.info(f"LOGIN_FAIL | reason=captcha | msg={err_msg} | user={username}")
             flash(err_msg, "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
 
@@ -1201,37 +1239,39 @@ def login():
             cursor.close()
             conn.close()
 
-            if result and check_password_hash(result[0], password):
-                # 登录成功：清除失败记录
-                login_lockout.pop(username, None)
-                session["username"] = username
-                session["permission"] = result[1]
-                session["csrf_token"] = os.urandom(32).hex()
-                write_log("用户登录", f"用户名: {username}, 权限: {result[1]}")
-                record_activity(username, "登录", 1)
-                flash(f"欢迎回来，{sanitize_input(username)}！", "success")
-                return redirect(url_for("dashboard"))
-            # 兼容旧版：尝试明文密码匹配，并自动升级为 hash
-            elif result and result[0] == password:
-                # 登录成功：清除失败记录
-                login_lockout.pop(username, None)
-                hashed = generate_password_hash(password)
-                try:
-                    cursor_upgrade = conn.cursor()
-                    cursor_upgrade.execute("UPDATE users SET User_Password=%s WHERE User_Name=%s", (hashed, username))
-                    conn.commit()
-                    cursor_upgrade.close()
-                except Exception:
-                    pass
-                session["username"] = username
-                session["permission"] = result[1]
-                session["csrf_token"] = os.urandom(32).hex()
-                write_log("用户登录(旧版密码升级hash)", f"用户名: {username}")
-                record_activity(username, "登录", 1)
-                flash(f"欢迎回来，{sanitize_input(username)}！密码已升级为更安全的存储方式", "success")
-                return redirect(url_for("dashboard"))
+            if result:
+                pwd_valid = safe_check_password_hash(result[0], password)
+                if not pwd_valid:
+                    # 回退：数据库中的密码可能是明文（旧版），尝试明文匹配
+                    pwd_valid = (result[0] == password)
+                _login_logger.info(f"LOGIN_DB_CHECK | user={username} | pwd_valid={pwd_valid} | perm={result[1]}")
+                if pwd_valid:
+                    # 登录成功：清除失败记录
+                    login_lockout.pop(username, None)
+                    session["username"] = username
+                    session["permission"] = result[1]
+                    session["csrf_token"] = os.urandom(32).hex()
+                    # 如果密码是明文匹配的，升级为 hash
+                    if result[0] == password:
+                        hashed = generate_password_hash(password)
+                        try:
+                            cursor_upgrade = conn.cursor()
+                            cursor_upgrade.execute("UPDATE users SET User_Password=%s WHERE User_Name=%s", (hashed, username))
+                            conn.commit()
+                            cursor_upgrade.close()
+                        except Exception:
+                            pass
+                        write_log("用户登录(旧版密码升级hash)", f"用户名: {username}")
+                        flash(f"欢迎回来，{sanitize_input(username)}！密码已升级为更安全的存储方式", "success")
+                    else:
+                        write_log("用户登录", f"用户名: {username}, 权限: {result[1]}")
+                        flash(f"欢迎回来，{sanitize_input(username)}！", "success")
+                    record_activity(username, "登录", 1)
+                    _login_logger.info(f"LOGIN_SUCCESS | user={username} | perm={result[1]} | redirect_to=/dashboard")
+                    return redirect(url_for("dashboard"))
             else:
                 # 登录失败：记录尝试次数
+                _login_logger.info(f"LOGIN_FAIL | reason=user_not_found | user={username}")
                 attempts, _ = login_lockout.get(username, (0, 0))
                 attempts += 1
                 if attempts >= 5:
@@ -1244,6 +1284,7 @@ def login():
                     write_log("登录失败", f"用户名: {username}, 剩余 {remaining} 次尝试")
                     flash(f"用户名或密码错误，还剩 {remaining} 次尝试机会", "danger")
         except pymysql.MySQLError as e:
+            _login_logger.info(f"LOGIN_FAIL | reason=db_error | error={e}")
             flash(f"数据库错误: {str(e)}", "danger")
 
     return render_template("login.html", csrf_token=session.get("csrf_token", ""))
@@ -1436,7 +1477,7 @@ def reset_password():
                     # 不允许和旧密码相同
                     cursor.execute("SELECT User_Password FROM users WHERE User_Name=%s", (username,))
                     old_pw = cursor.fetchone()
-                    if old_pw and check_password_hash(old_pw[0], new_pwd):
+                    if old_pw and safe_check_password_hash(old_pw[0], new_pwd):
                         flash("新密码不能与旧密码相同", "danger")
                     else:
                         hashed = generate_password_hash(new_pwd)
@@ -2621,7 +2662,7 @@ def api_table_delete(table, pk_val):
 
 
 # ---------- 路由：更改数据库（可视化） ----------
-@app.route("/db_update")
+@app.route("/db_update", methods=["GET", "POST"])
 @login_required
 @admin_required
 @db_captcha_required
@@ -4282,7 +4323,7 @@ def change_password():
                             (current_user,)
                         )
                         result = cursor.fetchone()
-                        if not result or not check_password_hash(result[0], old_pwd):
+                        if not result or not safe_check_password_hash(result[0], old_pwd):
                             flash("原密码错误", "danger")
                             cursor.close()
                             conn.close()
@@ -6908,7 +6949,6 @@ def _init_life_tables():
         conn.commit()
         cursor.close()
         conn.close()
-        print("  生活实用模块数据库表初始化完成")
     except pymysql.MySQLError as e:
         print(f"  生活实用模块数据库表初始化失败: {e}")
 

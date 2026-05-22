@@ -13,6 +13,8 @@
 .habit-day.today { border: 2px solid #3b82f6; }
 .progress { height: 8px; border-radius: 4px; }
 .progress-bar { border-radius: 4px; transition: width .3s; }
+.habit-progress-label { font-size: 0.8rem; color: var(--text-muted); }
+.habit-progress-pct { font-size: 0.8rem; font-weight: 600; }
 .habit-actions { display: flex; gap: 4px; }
 .icon-picker-item { display: inline-block; width: 36px; height: 36px; line-height: 36px; text-align: center; border-radius: 8px; cursor: pointer; border: 2px solid transparent; font-size: 1.2rem; transition: all .15s; }
 .icon-picker-item:hover { border-color: #3b82f6; background: rgba(59,130,246,.1); }
@@ -312,17 +314,29 @@ function renderHabits(habits) {
         }
         html += '</div>';
 
-        // Progress bar
+        // Progress bar (CSP-safe: use classes + data attrs, apply styles via DOM API below)
         var pct = Math.round((completedCount / habitDaysCount) * 100);
+        var hColor = h.color || '#10b981';
         html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-        html += '<span style="font-size:0.8rem;color:var(--text-muted);">' + completedCount + '/' + habitDaysCount + ' 天</span>';
-        html += '<span style="font-size:0.8rem;font-weight:600;color:' + (h.color||'#10b981') + ';">' + pct + '%</span>';
+        html += '<span class="habit-progress-label">' + completedCount + '/' + habitDaysCount + ' 天</span>';
+        html += '<span class="habit-progress-pct" data-color="' + hColor + '">' + pct + '%</span>';
         html += '</div>';
-        html += '<div class="progress"><div class="progress-bar" style="width:' + pct + '%;background:' + (h.color||'#10b981') + ';"></div></div>';
+        html += '<div class="progress"><div class="progress-bar" data-width="' + pct + '" data-bg="' + hColor + '"></div></div>';
 
         html += '</div>';
     }
     grid.innerHTML = html;
+
+    // CSP-safe: apply dynamic styles via DOM API after innerHTML
+    var bars = grid.querySelectorAll('.progress-bar');
+    for (var bi = 0; bi < bars.length; bi++) {
+        bars[bi].style.width = bars[bi].getAttribute('data-width') + '%';
+        bars[bi].style.background = bars[bi].getAttribute('data-bg');
+    }
+    var pcts = grid.querySelectorAll('.habit-progress-pct');
+    for (var pi = 0; pi < pcts.length; pi++) {
+        pcts[pi].style.color = pcts[pi].getAttribute('data-color');
+    }
 }
 
 // ====== 今日概览面板 ======

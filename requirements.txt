@@ -4,4 +4,8 @@ PyMySQL>=1.0
 psutil>=5.0
 requests>=2.0
 Pillow>=10.0
-gunicorn>=22.0
+gunicorn>=23.0.0
+
+DateTime~=6.0
+bcrypt~=5.0.0
+Werkzeug~=3.1.8

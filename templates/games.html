@@ -33,6 +33,8 @@
 .snake-controls { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 4px; margin-top: 1rem; }
 .snake-controls button { border-radius: 10px; border: 1px solid var(--border-light); background: var(--bs-body-bg); font-size: 1.3rem; cursor: pointer; color: var(--text-body); }
 .snake-controls button:active { background: var(--bg-card-hover); }
+.snake-hint { font-size: .8rem; }
+.snake-btn-start { font-size: .8rem !important; }
 @media (max-width: 400px) {
     .game-2048-board { width: 300px; height: 300px; gap: 6px; padding: 6px; }
     .game-2048-cell { font-size: 1.3rem; }
@@ -92,13 +94,13 @@
                     <button data-csp-click="snakeDir" data-csp-args='["up"]'>▲</button>
                     <div></div>
                     <button data-csp-click="snakeDir" data-csp-args='["left"]'>◀</button>
-                    <button class="btn btn-primary btn-sm" data-csp-click="resetSnake" style="font-size:.8rem;">开始</button>
+                    <button class="btn btn-primary btn-sm snake-btn-start" data-csp-click="resetSnake">开始</button>
                     <button data-csp-click="snakeDir" data-csp-args='["right"]'>▶</button>
                     <div></div>
                     <button data-csp-click="snakeDir" data-csp-args='["down"]'>▼</button>
                     <div></div>
                 </div>
-                <p class="text-muted mt-1" style="font-size:.8rem;">使用方向键或屏幕按钮控制</p>
+                <p class="text-muted mt-1 snake-hint">方向键 / WASD 控制移动 · 空格键开始</p>
             </div>
         </div></div>
     </div>
@@ -246,7 +248,7 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ========== 贪吃蛇 ==========
-var snakeCanvas, snakeCtx, snake, snakeDir, snakeNextDir, snakeFood, snakeScoreVal, snakeInterval, snakeRunning;
+var snakeCanvas, snakeCtx, snake, snakeCurrentDir, snakeNextDir, snakeFood, snakeScoreVal, snakeInterval, snakeRunning;
 function initSnake() {
     snakeCanvas = document.getElementById('snakeCanvas');
     snakeCtx = snakeCanvas.getContext('2d');
@@ -255,7 +257,7 @@ function initSnake() {
 function resetSnake() {
     if (snakeInterval) clearInterval(snakeInterval);
     snake = [{x:10, y:10}, {x:9, y:10}, {x:8, y:10}];
-    snakeDir = 'right';
+    snakeCurrentDir = 'right';
     snakeNextDir = 'right';
     snakeScoreVal = 0;
     snakeRunning = true;
@@ -274,12 +276,12 @@ function spawnFood() {
 }
 function snakeTick() {
     if (!snakeRunning) return;
-    snakeDir = snakeNextDir;
+    snakeCurrentDir = snakeNextDir;
     var head = {x: snake[0].x, y: snake[0].y};
-    if (snakeDir === 'up') head.y--;
-    else if (snakeDir === 'down') head.y++;
-    else if (snakeDir === 'left') head.x--;
-    else if (snakeDir === 'right') head.x++;
+    if (snakeCurrentDir === 'up') head.y--;
+    else if (snakeCurrentDir === 'down') head.y++;
+    else if (snakeCurrentDir === 'left') head.x--;
+    else if (snakeCurrentDir === 'right') head.x++;
     
     if (head.x < 0 || head.x >= 20 || head.y < 0 || head.y >= 20) { gameOverSnake(); return; }
     if (snake.some(function(s) { return s.x === head.x && s.y === head.y; })) { gameOverSnake(); return; }
@@ -327,15 +329,26 @@ function drawSnake() {
 }
 function snakeDir(direction) {
     var opposites = {up:'down', down:'up', left:'right', right:'left'};
-    if (opposites[direction] !== snakeDir) snakeNextDir = direction;
+    if (opposites[direction] !== snakeNextDir) snakeNextDir = direction;
 }
 document.addEventListener('keydown', function(e) {
     var activeTab = document.getElementById('snakeGame');
-    if (activeTab && activeTab.classList.contains('active') && snakeRunning) {
-        if (e.key === 'ArrowUp') { e.preventDefault(); snakeDir('up'); }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); snakeDir('down'); }
-        else if (e.key === 'ArrowLeft') { e.preventDefault(); snakeDir('left'); }
-        else if (e.key === 'ArrowRight') { e.preventDefault(); snakeDir('right'); }
+    if (!activeTab || !activeTab.classList.contains('active')) return;
+
+    // WASD / 方向键控制方向
+    if (snakeRunning) {
+        var dir = null;
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') dir = 'up';
+        else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') dir = 'down';
+        else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') dir = 'left';
+        else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') dir = 'right';
+        if (dir) { e.preventDefault(); snakeDir(dir); }
+    }
+
+    // 空格键：开始 / 重新开始
+    if (e.key === ' ') {
+        e.preventDefault();
+        resetSnake();
     }
 });
 
