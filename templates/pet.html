@@ -1,501 +1,275 @@
-     1|{% extends "base.html" %}
-     2|{% block title %}电子宠物 — 多合一工具箱{% endblock %}
-     3|
-     4|{% block content %}
-     5|<!-- Element Plus CSS from CDN (CSP允许 cdn.jsdelivr.net) -->
-     6|<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
-     7|
-     8|<!-- Pet-specific styles (CSP nonce applied) -->
-     9|<style nonce="{{ csp_nonce }}">
-    10|/* ===== 全局变量 ===== */
-    11|:root {
-    12|    --pet-primary: #8b5cf6;
-    13|    --pet-primary-light: #a78bfa;
-    14|    --pet-secondary: #f59e0b;
-    15|    --pet-success: #10b981;
-    16|    --pet-danger: #ef4444;
-    17|    --pet-info: #3b82f6;
-    18|    --pet-bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    19|}
-    20|
-    21|/* ===== 页面容器 ===== */
-    22|.pet-app-wrap {
-    23|    max-width: 780px;
-    24|    margin: 0 auto;
-    25|    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-    26|}
-    27|
-    28|/* ===== 宠物展示区 ===== */
-    29|.pet-hero {
-    30|    position: relative;
-    31|    text-align: center;
-    32|    padding: 2rem 1rem 1.5rem;
-    33|    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-    34|    border-radius: 24px;
-    35|    margin-bottom: 1.5rem;
-    36|    overflow: hidden;
-    37|    transition: background 0.5s;
-    38|}
-    39|[data-bs-theme="dark"] .pet-hero {
-    40|    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-    41|}
-    42|.pet-hero::before {
-    43|    content: '';
-    44|    position: absolute;
-    45|    top: -50%;
-    46|    left: -50%;
-    47|    width: 200%;
-    48|    height: 200%;
-    49|    background: radial-gradient(circle at 30% 40%, rgba(139,92,246,0.08) 0%, transparent 50%),
-    50|                radial-gradient(circle at 70% 60%, rgba(245,158,11,0.06) 0%, transparent 50%);
-    51|    animation: petHeroGlow 8s ease-in-out infinite;
-    52|    pointer-events: none;
-    53|}
-    54|@keyframes petHeroGlow {
-    55|    0%, 100% { transform: scale(1) rotate(0deg); }
-    56|    50% { transform: scale(1.05) rotate(1deg); }
-    57|}
-    58|
-    59|/* 宠物表情 */
-    60|.pet-emoji-display {
-    61|    position: relative;
-    62|    display: inline-block;
-    63|    cursor: pointer;
-    64|    transition: transform 0.3s;
-    65|    z-index: 1;
-    66|}
-    67|.pet-emoji-display:hover {
-    68|    transform: scale(1.12);
-    69|}
-    70|.pet-emoji-display .main-emoji {
-    71|    font-size: 5.5rem;
-    72|    display: inline-block;
-    73|    animation: petFloat 2.5s ease-in-out infinite;
-    74|    transition: all 0.5s;
-    75|}
-    76|@keyframes petFloat {
-    77|    0%, 100% { transform: translateY(0); }
-    78|    50% { transform: translateY(-8px); }
-    79|}
-    80|.pet-emoji-display.egg .main-emoji {
-    81|    animation: eggRock 1.5s ease-in-out infinite;
-    82|}
-    83|@keyframes eggRock {
-    84|    0%, 100% { transform: rotate(0deg); }
-    85|    25% { transform: rotate(-10deg); }
-    86|    75% { transform: rotate(10deg); }
-    87|}
-    88|/* 进化闪光 */
-    89|.evolution-flash {
-    90|    animation: evoFlash 1s ease-out !important;
-    91|}
-    92|@keyframes evoFlash {
-    93|    0% { transform: scale(1); filter: brightness(1); }
-    94|    50% { transform: scale(1.5); filter: brightness(2.5); }
-    95|    100% { transform: scale(1); filter: brightness(1); }
-    96|}
-    97|
-    98|/* 装扮定位 */
-    99|.pet-acc {
-   100|    position: absolute;
-   101|    pointer-events: none;
-   102|    z-index: 2;
-   103|}
-   104|.pet-acc.top { top: -12px; left: 50%; transform: translateX(-50%); font-size: 1.6rem; }
-   105|.pet-acc.top2 { top: 5px; left: 50%; transform: translateX(-50%) translateY(3px); font-size: 1.4rem; }
-   106|.pet-acc.eyes { top: 42%; left: 50%; transform: translate(-50%, -50%); font-size: 1.3rem; }
-   107|.pet-acc.neck { bottom: 18%; left: 50%; transform: translateX(-50%); font-size: 1.1rem; }
-   108|.pet-acc.side { top: 28%; left: -18px; font-size: 2rem; }
-   109|
-   110|/* 对话气泡 */
-   111|.dialogue-pop {
-   112|    display: inline-block;
-   113|    background: var(--pet-primary);
-   114|    color: #fff;
-   115|    border-radius: 16px;
-   116|    padding: 8px 18px;
-   117|    font-size: 0.88rem;
-   118|    margin-top: 0.75rem;
-   119|    position: relative;
-   120|    z-index: 1;
-   121|    box-shadow: 0 4px 16px rgba(139,92,246,0.3);
-   122|    max-width: 300px;
-   123|}
-   124|.dialogue-pop::after {
-   125|    content: '';
-   126|    position: absolute;
-   127|    top: -8px;
-   128|    left: 50%;
-   129|    transform: translateX(-50%);
-   130|    border-left: 8px solid transparent;
-   131|    border-right: 8px solid transparent;
-   132|    border-bottom: 8px solid var(--pet-primary);
-   133|}
-   134|
-   135|/* ===== 信息行 ===== */
-   136|.pet-meta-row {
-   137|    display: flex;
-   138|    justify-content: center;
-   139|    align-items: center;
-   140|    gap: 0.75rem;
-   141|    flex-wrap: wrap;
-   142|    margin-top: 0.5rem;
-   143|    z-index: 1;
-   144|    position: relative;
-   145|}
-   146|.pet-meta-row .el-tag {
-   147|    font-weight: 500;
-   148|}
-   149|
-   150|/* ===== 进化预览 ===== */
-   151|.evo-timeline {
-   152|    display: flex;
-   153|    align-items: center;
-   154|    justify-content: center;
-   155|    gap: 0.5rem;
-   156|    margin-top: 0.5rem;
-   157|    z-index: 1;
-   158|    position: relative;
-   159|}
-   160|.evo-node {
-   161|    text-align: center;
-   162|    padding: 0.4rem 0.6rem;
-   163|    border-radius: 12px;
-   164|    border: 2px solid #e5e7eb;
-   165|    background: var(--bs-body-bg, #fff);
-   166|    transition: all 0.3s;
-   167|    min-width: 70px;
-   168|    cursor: default;
-   169|}
-   170|[data-bs-theme="dark"] .evo-node {
-   171|    border-color: #374151;
-   172|    background: #1f2937;
-   173|}
-   174|.evo-node.active {
-   175|    border-color: var(--pet-primary);
-   176|    background: rgba(139,92,246,0.1);
-   177|    box-shadow: 0 0 12px rgba(139,92,246,0.2);
-   178|}
-   179|.evo-node .evo-icon {
-   180|    font-size: 1.6rem;
-   181|    display: block;
-   182|}
-   183|.evo-node .evo-title {
-   184|    font-size: 0.7rem;
-   185|    color: var(--text-muted, #6b7280);
-   186|    margin-top: 0.1rem;
-   187|}
-   188|.evo-arrow {
-   189|    font-size: 1.2rem;
-   190|    color: #9ca3af;
-   191|}
-   192|
-   193|/* ===== 状态条区域 ===== */
-   194|.stats-section {
-   195|    display: flex;
-   196|    flex-direction: column;
-   197|    gap: 0.6rem;
-   198|    margin: 1rem 0;
-   199|}
-   200|.stat-row {
-   201|    display: flex;
-   202|    align-items: center;
-   203|    gap: 0.5rem;
-   204|}
-   205|.stat-label {
-   206|    width: 60px;
-   207|    font-size: 0.82rem;
-   208|    font-weight: 500;
-   209|    color: var(--text-body, #374151);
-   210|    text-align: right;
-   211|    flex-shrink: 0;
-   212|}
-   213|.stat-bar-wrap {
-   214|    flex: 1;
-   215|}
-   216|.stat-value {
-   217|    width: 32px;
-   218|    font-size: 0.75rem;
-   219|    color: var(--text-muted, #9ca3af);
-   220|    text-align: left;
-   221|    flex-shrink: 0;
-   222|}
-   223|
-   224|/* XP 条 */
-   225|.xp-section {
-   226|    margin-bottom: 1rem;
-   227|}
-   228|.xp-label {
-   229|    font-size: 0.78rem;
-   230|    color: var(--text-muted, #9ca3af);
-   231|    margin-bottom: 0.2rem;
-   232|}
-   233|
-   234|/* ===== 动作按钮区 ===== */
-   235|.action-buttons {
-   236|    display: flex;
-   237|    justify-content: center;
-   238|    gap: 1.25rem;
-   239|    margin: 1.25rem 0;
-   240|    flex-wrap: wrap;
-   241|}
-   242|.pet-action-btn {
-   243|    width: 72px !important;
-   244|    height: 72px !important;
-   245|    border-radius: 50% !important;
-   246|    font-size: 1.8rem !important;
-   247|    box-shadow: 0 4px 14px rgba(0,0,0,0.08) !important;
-   248|    transition: all 0.3s !important;
-   249|}
-   250|.pet-action-btn:hover {
-   251|    transform: translateY(-4px) scale(1.08) !important;
-   252|    box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
-   253|}
-   254|.btn-feed { background: linear-gradient(135deg, #fef3c7, #fde68a) !important; border: none !important; color: #b45309 !important; }
-   255|.btn-play { background: linear-gradient(135deg, #dbeafe, #bfdbfe) !important; border: none !important; color: #1d4ed8 !important; }
-   256|.btn-sleep { background: linear-gradient(135deg, #e0e7ff, #c7d2fe) !important; border: none !important; color: #4338ca !important; }
-   257|.btn-feed:hover { background: linear-gradient(135deg, #fde68a, #fcd34d) !important; }
-   258|.btn-play:hover { background: linear-gradient(135deg, #bfdbfe, #93c5fd) !important; }
-   259|.btn-sleep:hover { background: linear-gradient(135deg, #c7d2fe, #a5b4fc) !important; }
-   260|.pet-action-label {
-   261|    font-size: 0.7rem;
-   262|    color: var(--text-muted, #9ca3af);
-   263|    text-align: center;
-   264|    margin-top: 0.25rem;
-   265|}
-   266|
-   267|/* ===== 孵化区 ===== */
-   268|.hatch-container {
-   269|    text-align: center;
-   270|    padding: 2rem 1rem;
-   271|}
-   272|.hatch-title {
-   273|    font-size: 1.1rem;
-   274|    color: var(--text-muted, #6b7280);
-   275|    margin-bottom: 1rem;
-   276|}
-   277|.hatch-types {
-   278|    display: flex;
-   279|    gap: 1rem;
-   280|    justify-content: center;
-   281|    margin: 1.5rem 0;
-   282|    flex-wrap: wrap;
-   283|}
-   284|.hatch-card {
-   285|    cursor: pointer;
-   286|    transition: all 0.3s;
-   287|    border: 2px solid #e5e7eb;
-   288|    border-radius: 16px;
-   289|    padding: 1rem 1.5rem;
-   290|    text-align: center;
-   291|    font-size: 2rem;
-   292|    background: var(--bs-body-bg, #fff);
-   293|    position: relative;
-   294|}
-   295|[data-bs-theme="dark"] .hatch-card {
-   296|    border-color: #374151;
-   297|    background: #1f2937;
-   298|}
-   299|.hatch-card:hover {
-   300|    border-color: var(--pet-primary);
-   301|    background: rgba(139,92,246,0.06);
-   302|    transform: translateY(-2px);
-   303|}
-   304|.hatch-card.selected {
-   305|    border-color: var(--pet-primary) !important;
-   306|    background: rgba(139,92,246,0.12) !important;
-   307|    box-shadow: 0 0 16px rgba(139,92,246,0.2);
-   308|}
-   309|.hatch-card .card-type {
-   310|    font-size: 0.8rem;
-   311|    margin-top: 0.35rem;
-   312|    color: var(--text-muted, #6b7280);
-   313|}
-   314|
-   315|/* ===== 商店 ===== */
-   316|.shop-header {
-   317|    display: flex;
-   318|    justify-content: space-between;
-   319|    align-items: center;
-   320|    margin-bottom: 1rem;
-   321|}
-   322|.shop-grid {
-   323|    display: grid;
-   324|    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-   325|    gap: 0.75rem;
-   326|}
-   327|.shop-item-card {
-   328|    cursor: pointer;
-   329|    transition: all 0.3s;
-   330|    text-align: center;
-   331|    border: 2px solid #e5e7eb;
-   332|    border-radius: 14px;
-   333|    padding: 1rem 0.6rem;
-   334|}
-   335|[data-bs-theme="dark"] .shop-item-card {
-   336|    border-color: #374151;
-   337|}
-   338|.shop-item-card:hover {
-   339|    border-color: var(--pet-primary);
-   340|    transform: translateY(-3px);
-   341|    box-shadow: 0 6px 20px rgba(139,92,246,0.12);
-   342|}
-   343|.shop-item-card.owned {
-   344|    border-color: var(--pet-success);
-   345|    background: rgba(16,185,129,0.05);
-   346|}
-   347|.shop-item-card.equipped {
-   348|    border-color: var(--pet-primary);
-   349|    background: rgba(139,92,246,0.08);
-   350|    box-shadow: 0 0 14px rgba(139,92,246,0.15);
-   351|}
-   352|.shop-item-icon {
-   353|    font-size: 2.2rem;
-   354|    display: block;
-   355|    margin-bottom: 0.3rem;
-   356|}
-   357|.shop-item-name {
-   358|    font-size: 0.82rem;
-   359|    font-weight: 500;
-   360|    color: var(--text-body, #374151);
-   361|}
-   362|.shop-item-cost {
-   363|    font-size: 0.78rem;
-   364|    color: var(--pet-secondary);
-   365|    font-weight: 600;
-   366|    margin-top: 0.15rem;
-   367|}
-   368|.shop-item-status {
-   369|    font-size: 0.7rem;
-   370|    margin-top: 0.15rem;
-   371|    font-weight: 500;
-   372|}
-   373|
-   374|/* ===== 社区 ===== */
-   375|.community-header {
-   376|    display: flex;
-   377|    justify-content: space-between;
-   378|    align-items: center;
-   379|    margin-bottom: 1rem;
-   380|}
-   381|.community-grid {
-   382|    display: flex;
-   383|    flex-direction: column;
-   384|    gap: 0.6rem;
-   385|}
-   386|.community-card {
-   387|    cursor: pointer;
-   388|    transition: all 0.3s;
-   389|    border-radius: 14px;
-   390|}
-   391|.community-card:hover {
-   392|    transform: translateY(-2px);
-   393|    box-shadow: 0 4px 16px rgba(139,92,246,0.1);
-   394|    border-color: var(--pet-primary);
-   395|}
-   396|.comm-avatar {
-   397|    font-size: 2.8rem;
-   398|    flex-shrink: 0;
-   399|}
-   400|.comm-info {
-   401|    flex: 1;
-   402|    min-width: 0;
-   403|}
-   404|.comm-name {
-   405|    font-weight: 600;
-   406|    font-size: 0.95rem;
-   407|    color: var(--text-body, #374151);
-   408|}
-   409|.comm-meta {
-   410|    font-size: 0.78rem;
-   411|    color: var(--text-muted, #6b7280);
-   412|    display: flex;
-   413|    gap: 0.5rem;
-   414|    align-items: center;
-   415|    flex-wrap: wrap;
-   416|}
-   417|.comm-level {
-   418|    font-weight: 700;
-   419|    font-size: 0.95rem;
-   420|    color: var(--pet-primary);
-   421|    flex-shrink: 0;
-   422|}
-   423|
-   424|/* ===== 成就网格 ===== */
-   425|.achieve-grid {
-   426|    display: grid;
-   427|    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-   428|    gap: 0.5rem;
-   429|}
-   430|.achieve-card {
-   431|    transition: all 0.3s;
-   432|    border-radius: 12px;
-   433|}
-   434|.achieve-card.locked {
-   435|    opacity: 0.4;
-   436|    filter: grayscale(80%);
-   437|}
-   438|.achieve-card.unlocked {
-   439|    border-color: var(--pet-secondary);
-   440|    background: rgba(245,158,11,0.06);
-   441|}
-   442|.achieve-icon {
-   443|    font-size: 1.6rem;
-   444|    flex-shrink: 0;
-   445|}
-   446|.achieve-info {
-   447|    line-height: 1.3;
-   448|}
-   449|.achieve-name {
-   450|    font-weight: 600;
-   451|    font-size: 0.82rem;
-   452|    color: var(--text-body, #374151);
-   453|}
-   454|.achieve-desc {
-   455|    font-size: 0.7rem;
-   456|    color: var(--text-muted, #9ca3af);
-   457|}
-   458|
-   459|/* ===== 日记 ===== */
-   460|.diary-list {
-   461|    display: flex;
-   462|    flex-direction: column;
-   463|    gap: 0.4rem;
-   464|}
-   465|
-   466|/* ===== 日志 ===== */
-   467|.activity-log {
-   468|    margin-top: 1.5rem;
-   469|}
-   470|.log-header {
-   471|    font-size: 0.88rem;
-   472|    font-weight: 600;
-   473|    color: var(--text-muted, #6b7280);
-   474|    margin-bottom: 0.5rem;
-   475|}
-   476|.log-item {
-   477|    display: flex;
-   478|    gap: 0.5rem;
-   479|    padding: 5px 0;
-   480|    font-size: 0.82rem;
-   481|    color: var(--text-body, #374151);
-   482|    border-bottom: 1px solid #f3f4f6;
-   483|}
-   484|[data-bs-theme="dark"] .log-item {
-   485|    border-color: #1f2937;
-   486|}
-   487|.log-item:last-child {
-   488|    border-bottom: none;
-   489|}
-   490|.log-time {
-   491|    color: var(--text-muted, #9ca3af);
-   492|    font-size: 0.72rem;
-   493|    flex-shrink: 0;
-   494|    min-width: 65px;
-   495|}
-   496|
-   497|/* ===== 游戏区 ===== */
-   498|.game-container {
-   499|    text-align: center;
-   500|}
-   501|
+{% extends "base.html" %}
+{% block title %}电子宠物 — 多合一工具箱{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
+<style nonce="{{ csp_nonce }}">
+:root{--pet-primary:#8b5cf6;--pet-secondary:#f59e0b;--pet-success:#10b981;--pet-danger:#ef4444;--pet-info:#3b82f6;}
+.pet-app-wrap{max-width:780px;margin:0 auto;}
+.pet-hero{position:relative;text-align:center;padding:2rem 1rem 1.5rem;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:24px;margin-bottom:1.5rem;overflow:hidden;}
+[data-bs-theme=dark] .pet-hero{background:linear-gradient(135deg,#1e1b4b,#312e81);}
+.pet-emoji-display{position:relative;display:inline-block;cursor:pointer;z-index:1;}
+.pet-emoji-display .main-emoji{font-size:5.5rem;display:inline-block;animation:petFloat 2.5s ease-in-out infinite;}
+@keyframes petFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.evolution-flash{animation:evoFlash 1s ease-out!important}
+@keyframes evoFlash{0%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.5);filter:brightness(2.5)}100%{transform:scale(1);filter:brightness(1)}}
+.pet-acc{position:absolute;pointer-events:none;z-index:2}
+.pet-acc.top{top:-12px;left:50%;transform:translateX(-50%);font-size:1.6rem}
+.pet-acc.top2{top:5px;left:50%;transform:translateX(-50%) translateY(3px);font-size:1.4rem}
+.pet-acc.eyes{top:42%;left:50%;transform:translate(-50%,-50%);font-size:1.3rem}
+.pet-acc.neck{bottom:18%;left:50%;transform:translateX(-50%);font-size:1.1rem}
+.pet-acc.side{top:28%;left:-18px;font-size:2rem}
+.dialogue-pop{display:inline-block;background:var(--pet-primary);color:#fff;border-radius:16px;padding:8px 18px;font-size:.88rem;margin-top:.75rem;box-shadow:0 4px 16px rgba(139,92,246,.3);max-width:300px}
+.pet-meta-row{display:flex;justify-content:center;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:.5rem}
+.evo-timeline{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.5rem}
+.evo-node{text-align:center;padding:.4rem .6rem;border-radius:12px;border:2px solid #e5e7eb;background:var(--bs-body-bg,#fff);min-width:70px}
+.evo-node.active{border-color:var(--pet-primary);background:rgba(139,92,246,.1);box-shadow:0 0 12px rgba(139,92,246,.2)}
+.evo-node .evo-icon{font-size:1.6rem;display:block}
+.evo-node .evo-title{font-size:.7rem;color:var(--text-muted,#6b7280)}
+.evo-arrow{font-size:1.2rem;color:#9ca3af}
+.stats-section{display:flex;flex-direction:column;gap:.6rem;margin:1rem 0}
+.stat-row{display:flex;align-items:center;gap:.5rem}
+.stat-label{width:60px;font-size:.82rem;font-weight:500;text-align:right;flex-shrink:0}
+.stat-bar-wrap{flex:1}
+.stat-value{width:32px;font-size:.75rem;color:var(--text-muted,#9ca3af);flex-shrink:0}
+.xp-label{font-size:.78rem;color:var(--text-muted,#9ca3af);margin-bottom:.2rem}
+.action-buttons{display:flex;justify-content:center;gap:1.25rem;margin:1.25rem 0;flex-wrap:wrap}
+.pet-action-btn{width:72px!important;height:72px!important;border-radius:50%!important;font-size:1.8rem!important;box-shadow:0 4px 14px rgba(0,0,0,.08)!important;transition:all .3s!important}
+.pet-action-btn:hover{transform:translateY(-4px) scale(1.08)!important}
+.btn-feed{background:linear-gradient(135deg,#fef3c7,#fde68a)!important;border:none!important;color:#b45309!important}
+.btn-play{background:linear-gradient(135deg,#dbeafe,#bfdbfe)!important;border:none!important;color:#1d4ed8!important}
+.btn-sleep{background:linear-gradient(135deg,#e0e7ff,#c7d2fe)!important;border:none!important;color:#4338ca!important}
+.pet-action-label{font-size:.7rem;color:var(--text-muted,#9ca3af);text-align:center;margin-top:.25rem}
+.hatch-card{cursor:pointer;border:2px solid #e5e7eb;border-radius:16px;padding:1rem 1.5rem;text-align:center;font-size:2rem;background:var(--bs-body-bg,#fff)}
+.hatch-card:hover{border-color:var(--pet-primary);background:rgba(139,92,246,.06);transform:translateY(-2px)}
+.hatch-card.selected{border-color:var(--pet-primary)!important;background:rgba(139,92,246,.12)!important}
+.hatch-card .card-type{font-size:.8rem;margin-top:.35rem;color:var(--text-muted,#6b7280)}
+.shop-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.75rem}
+.shop-item-card{cursor:pointer;text-align:center;border:2px solid #e5e7eb;border-radius:14px;padding:1rem .6rem;transition:all .3s}
+.shop-item-card:hover{border-color:var(--pet-primary);transform:translateY(-3px)}
+.shop-item-card.owned{border-color:var(--pet-success);background:rgba(16,185,129,.05)}
+.shop-item-card.equipped{border-color:var(--pet-primary);background:rgba(139,92,246,.08)}
+.shop-item-icon{font-size:2.2rem;display:block;margin-bottom:.3rem}
+.shop-item-name{font-size:.82rem;font-weight:500}
+.shop-item-cost{font-size:.78rem;color:var(--pet-secondary);font-weight:600}
+.community-grid{display:flex;flex-direction:column;gap:.6rem}
+.community-card{cursor:pointer;transition:all .3s;border-radius:14px}
+.community-card:hover{transform:translateY(-2px);border-color:var(--pet-primary)}
+.comm-avatar{font-size:2.8rem;flex-shrink:0}
+.comm-name{font-weight:600;font-size:.95rem}
+.comm-meta{font-size:.78rem;color:var(--text-muted,#6b7280);display:flex;gap:.5rem;flex-wrap:wrap}
+.comm-level{font-weight:700;font-size:.95rem;color:var(--pet-primary);flex-shrink:0}
+.achieve-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem}
+.achieve-card{transition:all .3s;border-radius:12px}
+.achieve-card.locked{opacity:.4;filter:grayscale(80%)}
+.achieve-card.unlocked{border-color:var(--pet-secondary);background:rgba(245,158,11,.06)}
+.log-header{font-size:.88rem;font-weight:600;color:var(--text-muted,#6b7280);margin-bottom:.5rem}
+.log-item{display:flex;gap:.5rem;padding:5px 0;font-size:.82rem;border-bottom:1px solid #f3f4f6}
+[data-bs-theme=dark] .log-item{border-color:#1f2937}
+.log-item:last-child{border-bottom:none}
+.log-time{color:var(--text-muted,#9ca3af);font-size:.72rem;flex-shrink:0;min-width:65px}
+.game-canvas{border:2px solid #e5e7eb;border-radius:16px;background:linear-gradient(180deg,#e0f2fe,#ecfdf5);display:block;margin:.5rem auto}
+[data-bs-theme=dark] .game-canvas{background:linear-gradient(180deg,#0f172a,#064e3b);border-color:#374151}
+.game-hud{display:flex;justify-content:center;gap:1.5rem;margin:.5rem 0;font-size:.9rem;flex-wrap:wrap}
+.game-tip{font-size:.75rem;color:var(--text-muted,#9ca3af);margin-top:.5rem}
+.rename-row{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap}
+.pet-app-wrap .el-card{border-radius:16px}
+.pet-app-wrap .el-tabs__item{font-size:.9rem;font-weight:500;padding:0 1rem;height:40px;line-height:40px;border-radius:12px;margin:0 2px}
+.pet-app-wrap .el-tabs__item.is-active{color:#fff!important;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-radius:12px}
+.pet-app-wrap .el-progress-bar__outer{border-radius:8px;background:#f3f4f6}
+[data-bs-theme=dark] .pet-app-wrap .el-progress-bar__outer{background:#374151}
+.achievement-notify{background:linear-gradient(135deg,#fbbf24,#f59e0b)!important;border:none!important;border-radius:14px!important}
+.achievement-notify .el-notification__title{color:#1a1a2e;font-weight:700}
+.pet-m-0{margin:0!important}.pet-my-4{margin:1rem 0!important}.pet-mb-4{margin-bottom:1rem!important}.pet-mt-3{margin-top:.75rem!important}
+.pet-text-center{text-align:center!important}.pet-text-left{text-align:left!important}.pet-text-xs{font-size:.7rem!important}
+.pet-text-sm{font-size:.85rem!important}.pet-text-md{font-size:.9rem!important}
+.pet-text-muted-sm{font-size:.82rem!important;color:var(--text-muted,#9ca3af)!important}
+.pet-text-gold{color:#f59e0b!important}.pet-text-purple{color:#8b5cf6!important}.pet-text-green{color:#10b981!important}
+.pet-font-bold{font-weight:700!important}.pet-name{font-size:1.15rem!important;font-weight:700!important}
+.pet-edit-btn{font-size:.78rem!important;opacity:.6!important}.pet-input-sm{width:160px!important}
+.pet-hatch-btn{background:linear-gradient(135deg,#8b5cf6,#6d28d9)!important;border:none!important;padding:12px 40px!important;font-size:1rem!important;font-weight:600!important}
+.pet-hatch-desc{font-size:.85rem!important;color:var(--text-muted,#6b7280)!important;margin-bottom:.75rem!important}
+.pet-coin-tag{color:#f59e0b!important;border-color:#f59e0b!important}
+.pet-flex-center{display:flex!important;align-items:center!important;gap:.75rem!important}
+.pet-flex-sm{display:flex!important;align-items:center!important;gap:.5rem!important}
+.pet-flex-wrap-center{display:flex!important;gap:.5rem!important;justify-content:center!important;flex-wrap:wrap!important}
+.pet-game-controls{margin-top:.5rem!important;display:flex!important;gap:.5rem!important;justify-content:center!important}
+.pet-visit-emoji{font-size:5rem!important;margin:.5rem 0!important}
+.pet-visit-recent{text-align:left!important;margin-top:1rem!important}
+.pet-section-title{font-size:.92rem!important;color:var(--text-body)!important}
+@media(max-width:640px){.pet-emoji-display .main-emoji{font-size:4rem}.pet-hero{padding:1.5rem .75rem 1rem}.shop-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}.game-canvas{width:100%;height:auto}}
+</style>
+
+<div id="petApp" class="pet-app-wrap">
+    <el-card v-if="!petData||!petData.has_pet" class="hatch-container">
+        <template #header><h3 class="pet-m-0">🥚 你还没有宠物</h3></template>
+        <p class="pet-hatch-desc">选择一个可爱的宠物，开始你的陪伴之旅吧！</p>
+        <div class="pet-emoji-display egg pet-my-4"><span class="main-emoji">🥚</span></div>
+        <p class="pet-hatch-desc">选择宠物类型：</p>
+        <div style="display:flex;gap:1rem;justify-content:center;margin:1.5rem 0;flex-wrap:wrap">
+            <div v-for="pt in petTypes" :key="pt.key" class="hatch-card" :class="{selected:selectedHatchType===pt.key}" @click="selectedHatchType=pt.key">[[pt.emoji]]<div class="card-type">[[pt.name]]</div></div>
+        </div>
+        <el-button type="primary" size="large" round class="pet-hatch-btn" @click="hatchPet" :loading="hatching">✨ 孵化</el-button>
+    </el-card>
+
+    <template v-if="petData&&petData.has_pet">
+        <div class="pet-hero">
+            <div class="pet-emoji-display" @click="petTalk">
+                <span class="main-emoji">[[evoEmoji]]</span>
+                <span class="pet-acc top" v-if="accByPos.top&&accByPos.top[0]">[[accByPos.top[0]]]</span>
+                <span class="pet-acc top2" v-if="accByPos.top&&accByPos.top[1]">[[accByPos.top[1]]]</span>
+                <span class="pet-acc eyes" v-if="accByPos.eyes&&accByPos.eyes[0]">[[accByPos.eyes[0]]]</span>
+                <span class="pet-acc neck" v-if="accByPos.neck&&accByPos.neck[0]">[[accByPos.neck[0]]]</span>
+                <span class="pet-acc side" v-if="accByPos.side&&accByPos.side[0]">[[accByPos.side[0]]]</span>
+            </div>
+            <transition name="el-fade-in"><div v-if="dialogueText" class="dialogue-pop">[[dialogueText]]</div></transition>
+            <div class="pet-meta-row">
+                <span class="pet-name">[[petData.pet.pet_name]]<el-button link type="primary" size="small" class="pet-edit-btn" @click="showRename=!showRename">✏️</el-button></span>
+                <el-tag size="small" type="info" effect="plain">Lv.[[petData.pet.level]]</el-tag>
+                <el-tag size="small" effect="plain" class="pet-coin-tag">🪙 [[petData.pet.coins||0]]</el-tag>
+                <el-tag v-if="petData.pet.personality" size="small" type="primary" effect="light">[[petData.pet.personality]]</el-tag>
+            </div>
+            <div v-if="showRename" class="pet-mt-3"><div class="rename-row">
+                <el-input v-model="renameName" placeholder="新名字" maxlength="30" size="small" class="pet-input-sm"/>
+                <el-radio-group v-model="renameType" size="small"><el-radio-button v-for="pt in petTypes" :key="pt.key" :value="pt.key">[[pt.emoji]] [[pt.name]]</el-radio-button></el-radio-group>
+                <el-button type="primary" size="small" @click="saveRename" :loading="renaming">保存</el-button>
+                <el-button size="small" @click="showRename=false">取消</el-button>
+            </div></div>
+            <div class="evo-timeline"><template v-for="(s,i) in evolutionPath" :key="i">
+                <div class="evo-node" :class="{active:s.stage===currentEvolution.stage}"><span class="evo-icon">[[s.emoji]]</span><span class="evo-title">[[s.name]]<br>Lv.[[s.min_level]]+</span></div>
+                <span v-if="i<evolutionPath.length-1" class="evo-arrow">→</span>
+            </template></div>
+        </div>
+
+        <el-card shadow="hover" class="pet-mb-4">
+            <div class="stats-section">
+                <div class="stat-row"><span class="stat-label">❤️ 饥饿</span><div class="stat-bar-wrap"><el-progress :percentage="petData.pet.hunger" :stroke-width="14" :color="hungerColor" :show-text="false"/></div><span class="stat-value">[[petData.pet.hunger]]</span></div>
+                <div class="stat-row"><span class="stat-label">😊 快乐</span><div class="stat-bar-wrap"><el-progress :percentage="petData.pet.happiness" :stroke-width="14" :color="happinessColor" :show-text="false"/></div><span class="stat-value">[[petData.pet.happiness]]</span></div>
+                <div class="stat-row"><span class="stat-label">⚡ 精力</span><div class="stat-bar-wrap"><el-progress :percentage="petData.pet.energy" :stroke-width="14" :color="energyColor" :show-text="false"/></div><span class="stat-value">[[petData.pet.energy]]</span></div>
+            </div>
+            <div><div class="xp-label">经验 — Lv.[[petData.pet.level]]</div><el-progress :percentage="petData.pet.xp" :stroke-width="8" color="#8b5cf6" :show-text="false"/></div>
+        </el-card>
+
+        <div class="action-buttons">
+            <div><el-button class="pet-action-btn btn-feed" circle @click="doAction('feed')" :loading="actionLoading==='feed'" :disabled="actionLoading!==null">🍖</el-button><div class="pet-action-label">喂食</div></div>
+            <div><el-button class="pet-action-btn btn-play" circle @click="doAction('play')" :loading="actionLoading==='play'" :disabled="actionLoading!==null">🎾</el-button><div class="pet-action-label">玩耍</div></div>
+            <div><el-button class="pet-action-btn btn-sleep" circle @click="doAction('sleep')" :loading="actionLoading==='sleep'" :disabled="actionLoading!==null">💤</el-button><div class="pet-action-label">睡觉</div></div>
+        </div>
+
+        <el-card shadow="hover" class="pet-mb-4">
+            <el-tabs v-model="activeTab" @tab-change="onTabChange" type="border-card">
+                <el-tab-pane name="game"><template #label><span>🎮 游戏</span></template>
+                    <div class="pet-text-center">
+                        <div class="game-hud"><el-tag type="warning" size="small">⭐ [[gameScore]]</el-tag><el-tag type="info" size="small">⏱️ [[gameTimeLeft]]秒</el-tag><el-tag type="success" size="small">🪙 +[[estCoins]]</el-tag></div>
+                        <canvas ref="gameCanvasRef" class="game-canvas" width="360" height="400"></canvas>
+                        <div class="pet-game-controls"><el-button type="success" size="small" round @click="startGame" v-if="!gameRunning" :disabled="actionLoading!==null">🎮 开始游戏</el-button><el-button type="danger" size="small" round @click="endGame" v-if="gameRunning">⏹ 结束游戏</el-button></div>
+                        <p class="game-tip">← → 方向键移动篮子接食物，30秒后自动结算！</p>
+                    </div>
+                </el-tab-pane>
+                <el-tab-pane name="shop"><template #label><span>🛍️ 装扮</span></template>
+                    <div><div class="shop-header"><span class="pet-section-title">🪙 硬币：<strong class="pet-text-gold">[[shopCoins]]</strong></span><el-button size="small" link type="primary" @click="refreshAfterShop">刷新</el-button></div>
+                    <div class="shop-grid"><div v-for="item in shopItems" :key="item.key" class="shop-item-card" :class="{owned:item.owned&&!item.equipped,equipped:item.equipped}" @click="handleShopItem(item)"><span class="shop-item-icon">[[item.emoji]]</span><div class="shop-item-name">[[item.name]]</div><div v-if="item.equipped" class="pet-text-purple">✅ 已装备</div><div v-else-if="item.owned" class="pet-text-green">已拥有</div><div v-else class="shop-item-cost">🪙 [[item.cost]]</div></div></div>
+                    <el-empty v-if="shopItems.length===0" description="暂无装扮"/></div>
+                </el-tab-pane>
+                <el-tab-pane name="community"><template #label><span>🌐 社区</span></template>
+                    <div><div class="shop-header"><span class="pet-section-title">宠物社区 · 排行榜</span><el-button size="small" link type="primary" @click="loadCommunity" :loading="communityLoading">刷新</el-button></div>
+                    <div class="community-grid"><el-card v-for="pet in communityPets" :key="pet.username" class="community-card" shadow="hover" @click="visitPet(pet.username)"><div class="pet-flex-center"><span class="comm-avatar">[[pet.evolution_emoji]]</span><div style="flex:1"><div class="comm-name">[[pet.pet_name]]</div><div class="comm-meta"><span>[[pet.evolution_name]]</span><span v-if="pet.personality">· [[pet.personality]]</span><span>· 👀 [[pet.visit_count]]</span></div></div><span class="comm-level">Lv.[[pet.level]]</span></div></el-card></div>
+                    <el-empty v-if="communityPets.length===0" description="暂无其他宠物~"/></div>
+                </el-tab-pane>
+                <el-tab-pane name="diary"><template #label><span>📖 日记</span></template>
+                    <div><el-timeline v-if="diaryEntries.length>0"><el-timeline-item v-for="entry in diaryEntries" :key="entry.time" :timestamp="entry.time" placement="top" size="small">[[diaryIcons[entry.event_type]||'📝']] [[entry.detail]]</el-timeline-item></el-timeline>
+                    <el-empty v-else description="暂无日记~"/></div>
+                </el-tab-pane>
+                <el-tab-pane name="achievements"><template #label><span>🏆 成就</span></template>
+                    <div><div class="achieve-grid"><el-card v-for="ach in achievements" :key="ach.key" class="achieve-card" :class="{unlocked:ach.unlocked,locked:!ach.unlocked}" shadow="hover"><div class="pet-flex-sm"><span style="font-size:1.6rem;flex-shrink:0">[[ach.icon]]</span><div><div style="font-weight:600;font-size:.82rem">[[ach.name]]</div><div style="font-size:.7rem;color:var(--text-muted,#9ca3af)">[[ach.desc]]</div></div></div></el-card></div>
+                    <el-empty v-if="achievements.length===0" description="暂无成就数据"/></div>
+                </el-tab-pane>
+            </el-tabs>
+        </el-card>
+
+        <el-card shadow="hover" style="margin-top:1.5rem"><div class="log-header">📋 活动记录</div>
+            <div v-if="petLogs.length===0" class="pet-text-muted-sm">暂无记录</div>
+            <div v-for="log in petLogs" :key="log.created_at" class="log-item"><span class="log-time">[[log.created_at]]</span><span>[[logActionIcon(log.action)]] [[log.detail]]</span></div>
+        </el-card>
+
+        <el-dialog v-model="visitDialogVisible" :title="'🐾 '+visitPetData.pet_name" width="420px" top="5vh" destroy-on-close align-center>
+            <div v-if="visitPetData.pet" class="pet-text-center">
+                <div class="pet-visit-emoji">[[visitPetData.pet.evolution_emoji]]</div>
+                <p>等级：<strong>Lv.[[visitPetData.pet.level]]</strong> · [[visitPetData.pet.evolution_name]] · [[visitPetData.pet.personality||'性格未定']]</p>
+                <p class="pet-text-md">❤️ [[visitPetData.pet.hunger]] | 😊 [[visitPetData.pet.happiness]] | ⚡ [[visitPetData.pet.energy]]</p>
+                <p class="pet-text-sm">🪙 [[visitPetData.pet.coins]] · 👀 被访问 [[visitPetData.pet.visit_count]] 次</p>
+                <div v-if="visitPetData.recent_visits&&visitPetData.recent_visits.length>0" class="pet-visit-recent"><el-divider content-position="left"><span class="pet-text-muted-sm">最近来访</span></el-divider>
+                    <div v-for="v in visitPetData.recent_visits" :key="v.time" class="pet-text-muted-sm" style="padding:2px 0">· [[v.visitor]] — [[v.message]] <span class="pet-text-xs">[[v.time]]</span></div></div>
+                <el-divider/><div class="pet-flex-wrap-center">
+                    <el-button type="warning" size="small" round @click="sendGift(visitUsername,'coins',5)">🪙 送5硬币</el-button>
+                    <el-button type="warning" size="small" round @click="sendGift(visitUsername,'coins',20)">🪙 送20硬币</el-button>
+                </div>
+            </div>
+        </el-dialog>
+    </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/vue@3.4/dist/vue.global.prod.js" nonce="{{ csp_nonce }}"></script>
+<script src="https://unpkg.com/element-plus" nonce="{{ csp_nonce }}"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
+(function(){var Vue=window.Vue;var cA=Vue.createApp,ref=Vue.ref,reactive=Vue.reactive,computed=Vue.computed,onMounted=Vue.onMounted,onUnmounted=Vue.onUnmounted,nextTick=Vue.nextTick;
+var PT=[{key:'cat',name:'小猫',emoji:'🐱'},{key:'dog',name:'小狗',emoji:'🐶'},{key:'rabbit',name:'兔子',emoji:'🐰'},{key:'panda',name:'熊猫',emoji:'🐼'}];
+var EC={cat:[{stage:0,emoji:'🐱',name:'幼猫',min_level:1},{stage:1,emoji:'😺',name:'成猫',min_level:10},{stage:2,emoji:'🦁',name:'狮猫',min_level:25}],dog:[{stage:0,emoji:'🐶',name:'幼犬',min_level:1},{stage:1,emoji:'🐕',name:'成犬',min_level:10},{stage:2,emoji:'🐺',name:'狼犬',min_level:25}],rabbit:[{stage:0,emoji:'🐰',name:'幼兔',min_level:1},{stage:1,emoji:'🐇',name:'成兔',min_level:10},{stage:2,emoji:'🦄',name:'月兔',min_level:25}],panda:[{stage:0,emoji:'🐼',name:'幼熊猫',min_level:1},{stage:1,emoji:'🐻',name:'成熊猫',min_level:10},{stage:2,emoji:'🐲',name:'龙猫',min_level:25}]};
+var AM={hat_magic:{emoji:'🎩',position:'top'},crown:{emoji:'👑',position:'top'},ribbon:{emoji:'🎀',position:'top'},halo:{emoji:'😇',position:'top'},glasses:{emoji:'👓',position:'eyes'},monocle:{emoji:'🧐',position:'eyes'},scarf:{emoji:'🧣',position:'neck'},bowtie:{emoji:'🎀',position:'neck'},wings:{emoji:'🪽',position:'side'}};
+var GD=30,dIcons={hatch:'🥚',feed:'🍖',play:'🎾',sleep:'💤',level_up:'⬆️',evolution:'✨',achievement:'🏆',visit:'🚪',gift:'🎁',shop:'🛍️',game:'🎮'};
+
+var app=cA({delimiters:['[[',']]'],setup:function(){
+var pd=ref(null),pl=ref([]),dt=ref(''),dTimer=null,sht=ref('cat'),hatching=ref(false),sr=ref(false),rn=ref(''),rt=ref(''),renaming=ref(false),al=ref(null),tab=ref('game');
+var si=ref([]),sc=ref(0),cp=ref([]),cl=ref(false),vdv=ref(false),vu=ref(''),vpd=reactive({pet:null,pet_name:'',recent_visits:[]}),de=ref([]),ach=ref([]);
+var gcr=ref(null),gr=ref(false),gs=ref(0),gtl=ref(GD),gaId=null,gst=0,gbX=150,gItems=[],gFrame=0;
+
+function sD(t){dt.value=t;if(dTimer)clearTimeout(dTimer);dTimer=setTimeout(function(){dt.value=''},4000)}
+function sAT(ach){ElementPlus.ElNotification({title:ach.icon+' 解锁成就！',message:ach.name||'',type:'success',duration:3000,customClass:'achievement-notify',offset:80})}
+function lAI(a){var m={hatch:'🥚',feed:'🍖',play:'🎾',sleep:'💤',rename:'✏️'};return m[a]||'📝'}
+async function api(p,o){var opts=o||{};if(!opts.headers)opts.headers={};opts.headers['Content-Type']='application/json';var r=await fetch(p,opts);return r.json()}
+
+async function lP(){var d=await api('/api/pet');if(d.has_pet){var p=d.pet;p.hunger=Math.max(0,Math.min(100,p.hunger));p.happiness=Math.max(0,Math.min(100,p.happiness));p.energy=Math.max(0,Math.min(100,p.energy));p.xp=Math.max(0,Math.min(99,p.xp));p.level=Math.max(1,p.level);p.coins=Math.max(0,p.coins);pd.value=d;pl.value=d.logs||[];sc.value=p.coins;if(p.dialogue)sD(p.dialogue)}else{pd.value=d}}
+async function hP(){hatching.value=true;try{var d=await api('/api/pet/hatch',{method:'POST',body:JSON.stringify({pet_type:sht.value})});if(d.ok){await lP()}else{ElementPlus.ElMessage.error(d.error||'孵化失败')}}catch(e){ElementPlus.ElMessage.error('网络错误')}hatching.value=false}
+async function sR(){if(!rn.value.trim()){ElementPlus.ElMessage.warning('名字不能为空');return}renaming.value=true;try{var b={pet_name:rn.value.trim()};if(rt.value)b.pet_type=rt.value;var d=await api('/api/pet/rename',{method:'POST',body:JSON.stringify(b)});if(d.ok){sr.value=false;await lP();ElementPlus.ElMessage.success('重命名成功！')}else{ElementPlus.ElMessage.error(d.error||'重命名失败')}}catch(e){ElementPlus.ElMessage.error('网络错误')}renaming.value=false}
+async function pT(){if(!pd.value||!pd.value.has_pet)return;try{var d=await api('/api/pet/dialogue');sD(d.dialogue)}catch(e){}}
+async function dA(a){if(al.value)return;al.value=a;try{var d=await api('/api/pet/action',{method:'POST',body:JSON.stringify({action:a})});if(d.ok){var ms=[];if(d.level_up)ms.push('🎉 升级啦！');if(d.evolution&&d.evolution_info){ms.push('✨ 进化成 '+d.evolution_info.emoji+' '+d.evolution_info.name+'！');await nextTick();var el=document.querySelector('.pet-emoji-display .main-emoji');if(el){el.classList.add('evolution-flash');setTimeout(function(){el.classList.remove('evolution-flash')},1000)}}if(d.coins_earned)ms.push('🪙 +'+d.coins_earned);if(d.personality)ms.push('🎭 性格：'+d.personality);if(d.new_achievements&&d.new_achievements.length>0){d.new_achievements.forEach(function(a){sAT(a)})}if(ms.length>0)sD(ms.join(' '));await lP()}else{ElementPlus.ElMessage.warning(d.error||'操作失败')}}catch(e){ElementPlus.ElMessage.error('网络错误')}al.value=null}
+function oTC(n){if(n==='shop')lSh();if(n==='community')lC();if(n==='diary')lDi();if(n==='achievements')lAc();if(n==='game')rGU()}
+async function lSh(){try{var d=await api('/api/pet/shop');si.value=d.items||[];sc.value=d.coins||0}catch(e){}}
+async function hSI(item){if(item.equipped){var d=await api('/api/pet/accessory/equip',{method:'POST',body:JSON.stringify({item_key:item.key,equip:false})});if(d.ok){await lSh();await lP()}}else if(item.owned){var d=await api('/api/pet/accessory/equip',{method:'POST',body:JSON.stringify({item_key:item.key,equip:true})});if(d.ok){await lSh();await lP()}}else{var d=await api('/api/pet/shop/buy',{method:'POST',body:JSON.stringify({item_key:item.key})});if(d.ok){await lSh();await lP();ElementPlus.ElMessage.success('购买成功！剩余硬币：'+d.coins_left)}else{ElementPlus.ElMessage.error(d.error||'购买失败')}}}
+function rAS(){lSh();lP()}
+async function lC(){cl.value=true;try{var d=await api('/api/pet/community');cp.value=d.pets||[]}catch(e){}cl.value=false}
+async function vP(u){try{var d=await api('/api/pet/visit/'+u);if(!d.ok){ElementPlus.ElMessage.warning(d.error);return}vu.value=u;vpd.pet=d.pet;vpd.pet_name=d.pet.pet_name;vpd.recent_visits=d.recent_visits||[];vdv.value=true}catch(e){ElementPlus.ElMessage.error('网络错误')}}
+async function sG(receiver,ik,amount){var b={receiver:receiver,item_key:ik};if(amount)b.amount=amount;try{var d=await api('/api/pet/gift',{method:'POST',body:JSON.stringify(b)});if(d.ok){ElementPlus.ElMessage.success('礼物已送出！');vdv.value=false}else{ElementPlus.ElMessage.error(d.error||'赠送失败')}}catch(e){ElementPlus.ElMessage.error('网络错误')}}
+async function lDi(){try{var d=await api('/api/pet/diary');de.value=d.entries||[]}catch(e){}}
+async function lAc(){try{var d=await api('/api/pet/achievements/list');ach.value=d.achievements||[]}catch(e){}}
+function rGU(){gr.value=false;gs.value=0;gtl.value=GD;if(gaId){cancelAnimationFrame(gaId);gaId=null}}
+function sGm(){if(gr.value)return;var c=gcr.value;if(!c)return;gr.value=true;gs.value=0;gtl.value=GD;gItems=[];gFrame=0;gst=Date.now();gbX=c.width/2-30;var ctx=c.getContext('2d');gL(ctx)}
+function gL(ctx){if(!gr.value)return;var c=gcr.value;if(!c)return;var W=c.width,H=c.height;ctx.clearRect(0,0,W,H);gFrame++;if(gFrame%30===0||(gFrame<150&&gFrame%25===0)){var f=['🍎','🍕','🍗','🍩','🍓','🧁','🍔','🍦','💩'];gItems.push({x:Math.random()*(W-40)+20,y:-30,emoji:f[Math.floor(Math.random()*f.length)],speed:1.5+Math.random()*2.5})}ctx.fillStyle='#8b5cf6';ctx.beginPath();ctx.moveTo(gbX,H-40);ctx.lineTo(gbX+60,H-40);ctx.lineTo(gbX+50,H-10);ctx.lineTo(gbX+10,H-10);ctx.closePath();ctx.fill();ctx.font='18px sans-serif';ctx.fillText('🧺',gbX+10,H-45);for(var i=gItems.length-1;i>=0;i--){var it=gItems[i];it.y+=it.speed;ctx.font='28px sans-serif';ctx.fillText(it.emoji,it.x,it.y);if(it.y>H-50&&it.y<H-5&&it.x>gbX-10&&it.x<gbX+70){if(it.emoji==='💩'){gs.value=Math.max(0,gs.value-15)}else{gs.value+=10}gItems.splice(i,1)}else if(it.y>H+30){gItems.splice(i,1)}}var el=Math.floor((Date.now()-gst)/1000);gtl.value=Math.max(0,GD-el);if(gtl.value<=0){eG();return}gaId=requestAnimationFrame(function(){gL(ctx)})}
+async function eG(){gr.value=false;if(gaId){cancelAnimationFrame(gaId);gaId=null}var s=gs.value;gtl.value=0;if(s>0){try{var d=await api('/api/pet/game/score',{method:'POST',body:JSON.stringify({score:s})});if(d.ok){gs.value=s;ElementPlus.ElMessage.success('🎮 游戏结束！得分：'+s+'，获得 🪙 '+d.coins_earned+' 硬币！');if(pd.value&&pd.value.pet){pd.value.pet.coins=d.total_coins;sc.value=d.total_coins}await lP()}else{ElementPlus.ElMessage.warning('得分：'+s+'，但提交失败：'+(d.error||'未知错误'))}}catch(e){ElementPlus.ElMessage.warning('得分：'+s+'，网络错误')}}else{ElementPlus.ElMessage.info('游戏结束！得分：0')}}
+function hKD(e){if(!gr.value)return;if(e.key==='ArrowLeft'){gbX=Math.max(0,gbX-20);e.preventDefault()}if(e.key==='ArrowRight'){var c=gcr.value;if(c)gbX=Math.min(c.width-70,gbX+20);e.preventDefault()}}
+
+var evoE=computed(function(){if(!pd.value||!pd.value.pet)return'🐱';var e=pd.value.pet.evolution;return e?e.emoji:(pd.value.pet.pet_type==='dog'?'🐶':pd.value.pet.pet_type==='rabbit'?'🐰':pd.value.pet.pet_type==='panda'?'🐼':'🐱')});
+var curE=computed(function(){if(!pd.value||!pd.value.pet)return{stage:0,emoji:'🐱',name:'幼猫'};return pd.value.pet.evolution||{stage:0,emoji:'🐱',name:'幼猫'}});
+var evoP=computed(function(){var pt=pd.value&&pd.value.pet?pd.value.pet.pet_type:'cat';return EC[pt]||EC.cat});
+var abP=computed(function(){var acc=pd.value&&pd.value.pet?pd.value.pet.accessories||[]:[];var r={top:[],eyes:[],neck:[],side:[]};acc.forEach(function(k){var it=AM[k];if(it&&r[it.position]){r[it.position].push(it.emoji)}});return r});
+var huC=computed(function(){var v=(pd.value&&pd.value.pet?pd.value.pet.hunger:100)||100;if(v<=20)return'#ef4444';if(v<=50)return'#f97316';return{color:'#10b981',trackColor:'#e5e7eb'}});
+var haC=computed(function(){var v=(pd.value&&pd.value.pet?pd.value.pet.happiness:100)||100;if(v<=20)return'#f97316';if(v<=50)return'#f59e0b';return{color:'#8b5cf6',trackColor:'#e5e7eb'}});
+var enC=computed(function(){var v=(pd.value&&pd.value.pet?pd.value.pet.energy:100)||100;if(v<=20)return'#ef4444';if(v<=50)return'#06b6d4';return{color:'#3b82f6',trackColor:'#e5e7eb'}});
+var eC=computed(function(){return Math.max(1,Math.floor(gs.value/10))});
+
+onMounted(function(){lP();document.addEventListener('keydown',hKD)});
+onUnmounted(function(){if(dTimer)clearTimeout(dTimer);if(gaId)cancelAnimationFrame(gaId);document.removeEventListener('keydown',hKD)});
+
+return{petData:pd,petLogs:pl,dialogueText:dt,petTypes:PT,selectedHatchType:sht,hatching:hatching,showRename:sr,renameName:rn,renameType:rt,renaming:renaming,actionLoading:al,activeTab:tab,shopItems:si,shopCoins:sc,communityPets:cp,communityLoading:cl,visitDialogVisible:vdv,visitUsername:vu,visitPetData:vpd,diaryEntries:de,diaryIcons:dIcons,achievements:ach,gameCanvasRef:gcr,gameRunning:gr,gameScore:gs,gameTimeLeft:gtl,estCoins:eC,evoEmoji:evoE,currentEvolution:curE,evolutionPath:evoP,accByPos:abP,hungerColor:huC,happinessColor:haC,energyColor:enC,hatchPet:hP,saveRename:sR,petTalk:pT,doAction:dA,onTabChange:oTC,loadCommunity:lC,visitPet:vP,sendGift:sG,loadShop:lSh,handleShopItem:hSI,refreshAfterShop:rAS,startGame:sGm,endGame:eG,resetGameUI:rGU,logActionIcon:lAI}
+}});
+if(window.ElementPlusIconsVue){for(var k in window.ElementPlusIconsVue){if(window.ElementPlusIconsVue.hasOwnProperty(k)){app.component(k,window.ElementPlusIconsVue[k])}}}
+var zh=(ElementPlus.locale&&ElementPlus.locale.zhCn)||{};
+app.use(ElementPlus,{locale:zh});
+app.mount('#petApp');
+})();
+</script>
+{% endblock %}
