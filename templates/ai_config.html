@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}AI 配置 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.aic-container { max-width: 640px; margin: 0 auto; }
+.aic-card {
+    background: var(--bs-body-bg); border: 1.5px solid var(--bs-border-color);
+    border-radius: 16px; padding: 2rem;
+}
+.aic-card h2 { font-size: 1.4rem; margin-bottom: .25rem; }
+.aic-card .subtitle { color: var(--text-muted); font-size: .9rem; margin-bottom: 1.5rem; }
+.aic-field { margin-bottom: 1.25rem; }
+.aic-field label { font-weight: 600; font-size: .88rem; margin-bottom: .35rem; display: block; color: var(--bs-body-color); }
+.aic-field input {
+    width: 100%; padding: .65rem .9rem; border-radius: 8px; border: 1.5px solid var(--bs-border-color);
+    background: var(--bs-body-bg); color: var(--bs-body-color); font-size: .92rem;
+    transition: border-color .2s;
+}
+.aic-field input:focus { border-color: #6366f1; outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+.aic-field small { display: block; font-size: .78rem; color: var(--text-muted); margin-top: .3rem; }
+.aic-status {
+    display: flex; align-items: center; gap: .5rem; padding: .75rem 1rem;
+    border-radius: 8px; font-size: .88rem; margin-bottom: 1.5rem;
+}
+.aic-status.saved { background: rgba(16,185,129,.1); color: #059669; border: 1px solid rgba(16,185,129,.2); }
+.aic-status.empty { background: rgba(239,68,68,.08); color: #dc2626; border: 1px solid rgba(239,68,68,.15); }
+.aic-divider { border-top: 1.5px solid var(--bs-border-color); margin: 1.5rem 0 1rem; }
+.aic-test-result {
+    padding: .75rem 1rem; border-radius: 8px; font-size: .85rem; margin-top: .75rem;
+}
+.aic-test-result.success { background: rgba(16,185,129,.1); color: #059669; border: 1px solid rgba(16,185,129,.2); }
+.aic-test-result.fail { background: rgba(239,68,68,.08); color: #dc2626; border: 1px solid rgba(239,68,68,.15); }
+.aic-actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+.aic-actions button { font-weight: 600; border-radius: 8px; }
+.btn-test { background: var(--bs-body-bg); border: 1.5px solid var(--bs-border-color); color: var(--bs-body-color); }
+.btn-test:hover { border-color: #6366f1; color: #6366f1; }
+.btn-test:disabled { opacity: .5; cursor: not-allowed; }
+.aic-links { margin-top: 1.5rem; display: flex; gap: 1.5rem; font-size: .85rem; }
+.aic-links a { color: var(--text-muted); text-decoration: none; }
+.aic-links a:hover { color: #6366f1; }
+</style>
+
+<div class="aic-container">
+    <div class="aic-card">
+        <h2>⚙️ AI 配置</h2>
+        <p class="subtitle">配置 AI API 连接，供 AI 写作助手和 AI 聊天使用</p>
+
+        <!-- 当前状态 -->
+        <div class="aic-status" id="aicStatus">
+            <span id="aicStatusIcon">⏳</span>
+            <span id="aicStatusText">加载中...</span>
+        </div>
+
+        <!-- 配置表单 -->
+        <div class="aic-field">
+            <label for="aicUrl">API 地址</label>
+            <input type="text" id="aicUrl" placeholder="https://api.openai.com/v1" maxlength="500">
+            <small>支持任何 OpenAI 兼容接口（如 DeepSeek、通义千问、智谱、硅基流动等）</small>
+        </div>
+
+        <div class="aic-field">
+            <label for="aicModel">模型名称</label>
+            <input type="text" id="aicModel" placeholder="gpt-4o-mini" maxlength="100">
+            <small>例如 gpt-4o-mini, deepseek-chat, qwen-plus, glm-4-flash</small>
+        </div>
+
+        <div class="aic-field">
+            <label for="aicKey">API Key</label>
+            <input type="password" id="aicKey" placeholder="sk-..." maxlength="200">
+            <small id="aicKeyHint">首次配置请填写 API Key</small>
+        </div>
+
+        <div class="aic-actions">
+            <button class="btn btn-primary px-4" data-csp-click="aicSave">
+                💾 保存配置
+            </button>
+            <button class="btn btn-test px-4" id="aicTestBtn" data-csp-click="aicTest" disabled>
+                🔍 测试连接
+            </button>
+        </div>
+
+        <div id="aicTestResult"></div>
+
+        <div class="aic-divider"></div>
+
+        <div class="aic-links">
+            <a href="/ai_writing">✍️ AI 写作助手 →</a>
+            <a href="/chat">💬 AI 聊天 →</a>
+            <a href="/dashboard">🏠 返回首页 →</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var hasSavedKey = false;
+
+// 加载当前配置
+async function loadConfig() {
+    var statusEl = document.getElementById('aicStatus');
+    var statusIcon = document.getElementById('aicStatusIcon');
+    var statusText = document.getElementById('aicStatusText');
+    var testBtn = document.getElementById('aicTestBtn');
+
+    try {
+        var cfg = await fetch('/api/chat/ai/config', { credentials: 'include' }).then(r => r.json());
+        document.getElementById('aicUrl').value = cfg.provider_url || '';
+        document.getElementById('aicModel').value = cfg.model_name || 'gpt-3.5-turbo';
+        document.getElementById('aicKey').value = '';
+        hasSavedKey = cfg.has_key;
+
+        if (cfg.provider_url && cfg.has_key) {
+            statusEl.className = 'aic-status saved';
+            statusIcon.textContent = '✅';
+            statusText.textContent = 'AI 配置已完成 — API: ' + (cfg.model_name || '已设置');
+            document.getElementById('aicKey').placeholder = '已保存 (留空则不更新)';
+            document.getElementById('aicKeyHint').textContent = '如需更换 Key 请重新输入，留空则保持当前密钥不变';
+            testBtn.disabled = false;
+        } else if (cfg.provider_url && !cfg.has_key) {
+            statusEl.className = 'aic-status empty';
+            statusIcon.textContent = '⚠️';
+            statusText.textContent = 'API 地址已设置，但尚未保存 API Key';
+            document.getElementById('aicKeyHint').textContent = '请填写 API Key';
+            testBtn.disabled = true;
+        } else {
+            statusEl.className = 'aic-status empty';
+            statusIcon.textContent = '❌';
+            statusText.textContent = '尚未配置 AI，请填写下方信息';
+            document.getElementById('aicKeyHint').textContent = '请填写 API Key';
+            testBtn.disabled = true;
+        }
+    } catch(e) {
+        statusEl.className = 'aic-status empty';
+        statusIcon.textContent = '❌';
+        statusText.textContent = '加载配置失败: ' + e.message;
+    }
+}
+
+// 保存配置
+async function aicSave() {
+    var url = document.getElementById('aicUrl').value.trim();
+    var model = document.getElementById('aicModel').value.trim();
+    var key = document.getElementById('aicKey').value.trim();
+
+    if (!url) { alert('请填写 API 地址'); return; }
+    if (!key && !hasSavedKey) { alert('请填写 API Key'); return; }
+
+    var payload = { provider_url: url, model_name: model || 'gpt-3.5-turbo' };
+    if (key) payload.api_key = key;
+
+    var resp = await fetch('/api/chat/ai/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+    }).then(r => r.json());
+
+    if (resp.success) {
+        alert('✅ AI 配置已保存！');
+        loadConfig();
+    } else {
+        alert('保存失败: ' + (resp.error || '未知错误'));
+    }
+}
+
+// 测试连接
+async function aicTest() {
+    var resultEl = document.getElementById('aicTestResult');
+    var btn = document.getElementById('aicTestBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ 测试中...';
+    resultEl.innerHTML = '';
+
+    try {
+        var resp = await fetch('/api/chat/ai/test', {
+            method: 'POST',
+            credentials: 'include'
+        }).then(r => r.json());
+
+        if (resp.success) {
+            resultEl.className = 'aic-test-result success';
+            resultEl.textContent = '✅ 连接成功！模型「' + (resp.model || 'N/A') + '」响应正常，延迟 ' + (resp.latency_ms || '?') + 'ms';
+        } else {
+            resultEl.className = 'aic-test-result fail';
+            resultEl.textContent = '❌ 连接失败: ' + (resp.error || '未知错误');
+        }
+    } catch(e) {
+        resultEl.className = 'aic-test-result fail';
+        resultEl.textContent = '❌ 网络错误: ' + e.message;
+    }
+
+    btn.disabled = false;
+    btn.textContent = '🔍 测试连接';
+}
+
+loadConfig();
+</script>
+{% endblock %}

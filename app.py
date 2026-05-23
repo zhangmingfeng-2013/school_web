@@ -2316,6 +2316,15 @@ def ai_writing_page():
                            permission=session.get("permission", "guest"))
 
 
+# ---------- 路由：AI 配置页面 ----------
+@app.route("/ai_config")
+@login_required
+def ai_config_page():
+    return render_template("ai_config.html",
+                           username=session.get("username", ""),
+                           permission=session.get("permission", "guest"))
+
+
 # ---------- 路由：智能翻译 ----------
 @app.route("/translator")
 @login_required
@@ -4474,6 +4483,59 @@ def api_chat_ai_clear():
     cursor.close()
     conn.close()
     return jsonify({"success": True})
+
+
+@app.route("/api/chat/ai/test", methods=["POST"])
+@login_required
+def api_chat_ai_test():
+    """测试 AI 连接是否正常"""
+    import time
+    user = session["username"]
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"success": False, "error": "数据库连接失败"}), 500
+    cursor = conn.cursor()
+    cursor.execute("SELECT provider_url, api_key_encrypted, model_name FROM ai_config WHERE username=%s", (user,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row:
+        return jsonify({"success": False, "error": "请先配置 AI 连接信息"}), 400
+
+    provider_url, api_key_encrypted, model_name = row
+    try:
+        api_key = _ai_decrypt(api_key_encrypted)
+    except Exception:
+        return jsonify({"success": False, "error": "API Key 解密失败，请重新设置"}), 500
+
+    api_url = provider_url.rstrip("/")
+    if not api_url.endswith("/chat/completions"):
+        api_url += "/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 5
+    }
+
+    start = time.time()
+    try:
+        resp = requests.post(api_url, json=payload, headers=headers, timeout=15)
+        latency = int((time.time() - start) * 1000)
+        if resp.status_code == 200:
+            result = resp.json()
+            return jsonify({"success": True, "model": result.get("model", model_name), "latency_ms": latency})
+        else:
+            err_text = resp.text[:200]
+            return jsonify({"success": False, "error": f"API 返回 {resp.status_code}: {err_text}", "latency_ms": latency})
+    except Exception as e:
+        latency = int((time.time() - start) * 1000)
+        return jsonify({"success": False, "error": f"连接失败: {str(e)}", "latency_ms": latency})
 
 
 # ---- AI 写作助手 ----
