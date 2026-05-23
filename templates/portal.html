@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}信息门户 - {{ _('app_title') }}{% endblock %}
+{% block content %}
+
+<style nonce="{{ csp_nonce }}">
+.portal-hero {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    padding: 2.5rem 2rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+.portal-hero h2 { font-weight: 700; margin-bottom: .5rem; }
+.portal-hero .stats { display: flex; justify-content: center; gap: 2rem; margin-top: 1.2rem; flex-wrap: wrap; }
+.portal-hero .stat-item { text-align: center; }
+.portal-hero .stat-num { font-size: 2rem; font-weight: 800; }
+.portal-hero .stat-label { font-size: .8rem; opacity: .85; }
+
+.portal-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+@media (max-width: 900px) { .portal-grid { grid-template-columns: 1fr; } }
+
+.announce-item, .post-item-mini, .event-item {
+    padding: .9rem 1rem;
+    border-radius: 10px;
+    margin-bottom: .5rem;
+    border: 1px solid var(--border-light);
+    cursor: pointer;
+    transition: box-shadow .15s, border-color .15s;
+}
+.announce-item:hover, .post-item-mini:hover, .event-item:hover {
+    box-shadow: var(--card-shadow);
+    border-color: #667eea50;
+}
+.announce-item { border-left: 3px solid #f59e0b; background: rgba(245,158,11,.04); }
+.announce-header { display: flex; align-items: center; gap: 8px; margin-bottom: .3rem; font-weight: 600; }
+.announce-content { font-size: .85rem; color: var(--text-muted); }
+
+.post-item-mini-title { font-weight: 600; font-size: .9rem; margin-bottom: .2rem; }
+.post-item-mini-meta { font-size: .75rem; color: var(--text-muted); }
+
+.event-item { display: flex; gap: 1rem; align-items: center; }
+.event-date-badge {
+    flex-shrink: 0;
+    width: 52px; height: 52px;
+    border-radius: 10px;
+    background: rgba(102,126,234,.12);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: .7rem;
+    color: #667eea;
+    line-height: 1.2;
+}
+.event-date-badge .day { font-size: 1.2rem; }
+.event-info { flex: 1; min-width: 0; }
+.event-info .title { font-weight: 600; font-size: .9rem; }
+.event-info .desc { font-size: .78rem; color: var(--text-muted); }
+
+.empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+.empty-state .icon { font-size: 3rem; margin-bottom: .5rem; }
+
+/* 深色主题适配 */
+[data-bs-theme="dark"] .portal-hero { background: linear-gradient(135deg, #4c51bf 0%, #553c9a 100%); }
+[data-bs-theme="dark"] .announce-item { background: rgba(245,158,11,.06); }
+[data-bs-theme="dark"] .event-date-badge { background: rgba(102,126,234,.2); }
+</style>
+
+<div class="portal-hero">
+    <h2>🏫 校友信息门户</h2>
+    <p style="opacity:.9;">母校动态 · 校友公告 · 活动通知 · 论坛热帖</p>
+    <div class="stats" id="portalStats">
+        <div class="stat-item"><div class="stat-num" id="statAlumni">--</div><div class="stat-label">已注册校友</div></div>
+        <div class="stat-item"><div class="stat-num" id="statPosts">--</div><div class="stat-label">论坛帖子</div></div>
+        <div class="stat-item"><div class="stat-num" id="statEvents">--</div><div class="stat-label">近期活动</div></div>
+    </div>
+</div>
+
+<div class="portal-grid">
+    <!-- 左侧：公告 + 最新帖子 -->
+    <div>
+        <!-- 公告区 -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center" style="background:transparent;border-bottom:1px solid var(--border-light);">
+                <h6 class="mb-0">📢 最新公告</h6>
+                <a href="/forum" class="btn btn-sm btn-outline-primary">论坛 →</a>
+            </div>
+            <div class="card-body" id="announceList">
+                <div class="empty-state"><div class="icon">📭</div><p>暂无公告</p></div>
+            </div>
+        </div>
+
+        <!-- 最新帖子 -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center" style="background:transparent;border-bottom:1px solid var(--border-light);">
+                <h6 class="mb-0">🔥 最新讨论</h6>
+                <a href="/forum" class="btn btn-sm btn-outline-secondary">更多 →</a>
+            </div>
+            <div class="card-body" id="latestPosts">
+                <div class="empty-state"><div class="icon">💬</div><p>暂无帖子</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：活动 + 快捷入口 -->
+    <div>
+        <!-- 近期活动 -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center" style="background:transparent;border-bottom:1px solid var(--border-light);">
+                <h6 class="mb-0">📅 近期活动</h6>
+                <a href="/calendar" class="btn btn-sm btn-outline-secondary">日历 →</a>
+            </div>
+            <div class="card-body" id="eventsList">
+                <div class="empty-state"><div class="icon">📅</div><p>暂无活动</p></div>
+            </div>
+        </div>
+
+        <!-- 快捷入口 -->
+        <div class="card">
+            <div class="card-body">
+                <h6 class="mb-3">⚡ 快捷入口</h6>
+                <a href="/forum" class="btn btn-outline-primary btn-sm w-100 mb-2">💬 校友论坛</a>
+                <a href="/alumni" class="btn btn-outline-success btn-sm w-100 mb-2">📋 校友名录</a>
+                <a href="/album" class="btn btn-outline-info btn-sm w-100">🖼️ 校友相册</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/api/portal/summary')
+        .then(r => r.json())
+        .then(d => {
+            renderAnnouncements(d.announcements);
+            renderPosts(d.latest_posts);
+            renderEvents(d.events);
+            document.getElementById('statAlumni').textContent = d.alumni_count;
+            document.getElementById('statPosts').textContent = d.announcements.length + d.latest_posts.length;
+            document.getElementById('statEvents').textContent = d.events.length;
+        })
+        .catch(function() {
+            document.querySelectorAll('#announceList, #latestPosts, #eventsList').forEach(function(el) {
+                el.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+            });
+        });
+});
+
+function renderAnnouncements(items) {
+    var el = document.getElementById('announceList');
+    if (!items.length) return;
+    var html = '';
+    items.forEach(function(a) {
+        html += '<div class="announce-item" data-csp-click="viewPost" data-csp-args=\'[' + a.id + ']\'>'
+            + '<div class="announce-header">📢 ' + escapeHtml(a.title) + '</div>'
+            + '<div class="announce-content">' + escapeHtml(a.content) + '</div>'
+            + '<div style="font-size:.73rem;color:var(--text-muted);margin-top:.3rem;">' + escapeHtml(a.username) + ' · ' + a.created_at.substring(0, 16) + '</div>'
+            + '</div>';
+    });
+    el.innerHTML = html;
+}
+
+function renderPosts(items) {
+    var el = document.getElementById('latestPosts');
+    if (!items.length) return;
+    var html = '';
+    items.forEach(function(p) {
+        html += '<div class="post-item-mini" data-csp-click="viewPost" data-csp-args=\'[' + p.id + ']\'>'
+            + '<div class="post-item-mini-title">' + p.cat_icon + ' ' + escapeHtml(p.title) + '</div>'
+            + '<div class="post-item-mini-meta">' + escapeHtml(p.username) + ' · ' + p.created_at.substring(0, 16) + ' · 💬 ' + p.reply_count + '</div>'
+            + '</div>';
+    });
+    el.innerHTML = html;
+}
+
+function renderEvents(items) {
+    var el = document.getElementById('eventsList');
+    if (!items.length) return;
+    var html = '';
+    items.forEach(function(e) {
+        var dateParts = e.event_date.split('-');
+        var monthDay = dateParts.length >= 3 ? dateParts[1] + '/' + dateParts[2] : e.event_date;
+        var day = dateParts.length >= 3 ? dateParts[2] : '';
+        html += '<div class="event-item">'
+            + '<div class="event-date-badge"><span class="day">' + day + '</span>' + monthDay + '</div>'
+            + '<div class="event-info">'
+            + '<div class="title">' + escapeHtml(e.title) + '</div>'
+            + '<div class="desc">' + escapeHtml(e.description) + (e.event_time ? ' · ' + e.event_time.substring(0,5) : '') + '</div>'
+            + '</div></div>';
+    });
+    el.innerHTML = html;
+}
+
+// 跳转到论坛查看帖子
+window.viewPost = function(pid) {
+    window.location.href = '/forum';
+};
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}校友名录 - {{ _('app_title') }}{% endblock %}
+{% block content %}
+
+<style nonce="{{ csp_nonce }}">
+.alumni-header {
+    background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+    border-radius: 16px;
+    padding: 2rem 1.5rem;
+    color: #fff;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+.alumni-search { position: relative; max-width: 500px; margin: 1rem auto 0; }
+.alumni-search input { padding-right: 45px; border-radius: 25px; border: none; }
+.alumni-search .btn { position: absolute; right: 3px; top: 3px; bottom: 3px; border-radius: 22px; }
+
+.alumni-layout { display: flex; gap: 1.5rem; }
+.alumni-filter { width: 180px; flex-shrink: 0; }
+.alumni-grid-main { flex: 1; min-width: 0; }
+
+.year-filter { list-style: none; padding: 0; margin: 0; }
+.year-filter li {
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    font-size: .85rem; transition: background .15s;
+    display: flex; justify-content: space-between;
+}
+.year-filter li:hover { background: var(--bg-card-hover); }
+.year-filter li.active { background: rgba(14,165,233,.12); font-weight: 600; color: #0ea5e9; }
+.year-filter li .count { color: var(--text-muted); font-size: .75rem; }
+
+.alumni-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: .8rem;
+}
+.alumni-card {
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 1rem;
+    display: flex; gap: .85rem;
+    align-items: flex-start;
+    transition: box-shadow .15s;
+}
+.alumni-card:hover { box-shadow: var(--card-shadow); }
+.alumni-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1rem;
+    flex-shrink: 0;
+}
+.alumni-info { flex: 1; min-width: 0; }
+.alumni-name { font-weight: 600; font-size: .92rem; margin-bottom: .15rem; }
+.alumni-detail { font-size: .78rem; color: var(--text-muted); line-height: 1.5; }
+.alumni-bio { font-size: .78rem; color: var(--text-muted); margin-top: .25rem; font-style: italic; }
+
+.pagination-bar { display: flex; justify-content: center; gap: .4rem; margin-top: 1.5rem; }
+
+/* 编辑资料弹窗 */
+.profile-modal .form-label { font-size: .85rem; font-weight: 600; }
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .alumni-layout { flex-direction: column; }
+    .alumni-filter { width: 100%; margin-bottom: 1rem; }
+    .year-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+    .year-filter li { font-size: .75rem; padding: 4px 8px; }
+}
+
+[data-bs-theme="dark"] .alumni-header { background: linear-gradient(135deg, #0369a1, #0891b2); }
+</style>
+
+<div class="alumni-header">
+    <h2 style="display:flex;align-items:center;justify-content:center;gap:8px;">📋 校友名录</h2>
+    <p style="opacity:.9;font-size:.95rem;" id="alumniTotal">共 -- 位校友</p>
+    <div class="alumni-search">
+        <input type="text" class="form-control" id="searchInput" placeholder="搜索姓名、班级、城市..." data-csp-enter="searchAlumni">
+        <button class="btn btn-light" data-csp-click="searchAlumni">🔍</button>
+    </div>
+</div>
+
+<div class="alumni-layout">
+    <!-- 左侧：毕业年份筛选 -->
+    <div class="alumni-filter">
+        <div class="card">
+            <div class="card-body py-2 px-3">
+                <h6 class="mb-2" style="font-size:.8rem;letter-spacing:.5px;">📅 毕业年份（届）</h6>
+                <ul class="year-filter" id="yearFilter">
+                    <li class="active" data-year="" data-csp-click="filterByYear" data-csp-args='[0]'>
+                        全部 <span class="count" id="yearTotal">--</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="mt-2 text-center">
+            <button class="btn btn-sm btn-outline-primary w-100" data-csp-click="showEditProfile">
+                ✏️ 完善我的资料
+            </button>
+            <small class="text-muted d-block mt-1" style="font-size:.7rem;">填写毕业信息后出现在名录中</small>
+        </div>
+    </div>
+
+    <!-- 右侧：校友卡片 -->
+    <div class="alumni-grid-main">
+        <div class="alumni-grid" id="alumniGrid">
+            <div class="text-center text-muted py-5 w-100">加载中...</div>
+        </div>
+        <div class="pagination-bar" id="pagination"></div>
+    </div>
+</div>
+
+<!-- ===== 编辑资料弹窗 ===== -->
+<div class="modal fade profile-modal" id="editProfileModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">✏️ 完善校友资料</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">填写你的信息，方便老同学找到你 🌟</p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">姓名 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="profNickname" placeholder="你的真实姓名">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">毕业年份 <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="profYear" placeholder="如 2008" min="1950" max="2099">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">班级</label>
+                        <input type="text" class="form-control" id="profClass" placeholder="如 六年级(1)班">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">目前城市</label>
+                        <input type="text" class="form-control" id="profCity" placeholder="如 重庆">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">微信号（选填）</label>
+                        <input type="text" class="form-control" id="profWechat" placeholder="方便同学加你">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">个人留言</label>
+                        <textarea class="form-control" id="profBio" rows="3" placeholder="想对老同学说的话..."></textarea>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="profPublic" checked>
+                            <label class="form-check-label" for="profPublic">公开显示在名录中</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" data-csp-click="saveProfile">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+var state = { currentYear: 0, currentPage: 1, keyword: '' };
+var bsEditModal = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    bsEditModal = new bootstrap.Modal(document.getElementById('editProfileModal'));
+    loadStats();
+    loadAlumni();
+});
+
+// ===== 加载统计 =====
+function loadStats() {
+    fetch('/api/alumni/stats')
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('alumniTotal').textContent = '共 ' + d.total + ' 位校友';
+            document.getElementById('yearTotal').textContent = d.total;
+            var html = '<li class="active" data-year="" data-csp-click="filterByYear" data-csp-args=\'[0]\'>全部 <span class="count">' + d.total + '</span></li>';
+            d.year_stats.forEach(function(s) {
+                html += '<li data-year="' + s.year + '" data-csp-click="filterByYear" data-csp-args=\'[' + s.year + ']\'>' + s.year + '届 <span class="count">' + s.count + '</span></li>';
+            });
+            document.getElementById('yearFilter').innerHTML = html;
+        });
+}
+
+// ===== 筛选年份 =====
+window.filterByYear = function(year) {
+    state.currentYear = year;
+    state.currentPage = 1;
+    state.keyword = '';
+    document.getElementById('searchInput').value = '';
+    document.querySelectorAll('.year-filter li').forEach(function(li) {
+        li.classList.toggle('active', parseInt(li.getAttribute('data-year')) === year || (year === 0 && li.getAttribute('data-year') === ''));
+    });
+    loadAlumni();
+};
+
+// ===== 搜索 =====
+window.searchAlumni = function() {
+    state.keyword = document.getElementById('searchInput').value.trim();
+    state.currentPage = 1;
+    loadAlumni();
+};
+
+// ===== 加载列表 =====
+function loadAlumni() {
+    var params = '?page=' + state.currentPage;
+    if (state.currentYear > 0) params += '&year=' + state.currentYear;
+    if (state.keyword) params += '&keyword=' + encodeURIComponent(state.keyword);
+
+    fetch('/api/alumni/list' + params)
+        .then(r => r.json())
+        .then(d => {
+            renderGrid(d.alumni);
+            renderPagination(d.page, d.total_pages, d.total);
+        });
+}
+
+function renderGrid(alumni) {
+    var html = '';
+    if (!alumni.length) {
+        html = '<div class="text-center text-muted py-5 w-100">暂无校友资料 📭<br><small>点击"完善我的资料"成为第一位</small></div>';
+    }
+    alumni.forEach(function(a) {
+        var details = [];
+        if (a.graduation_year) details.push(a.graduation_year + '届');
+        if (a.class_name) details.push(a.class_name);
+        if (a.city) details.push('📍 ' + a.city);
+        html += '<div class="alumni-card">'
+            + '<div class="alumni-avatar">' + a.avatar + '</div>'
+            + '<div class="alumni-info">'
+            + '<div class="alumni-name">' + escapeHtml(a.nickname)
+            + ' <small class="text-muted" style="font-weight:400;">@' + escapeHtml(a.username) + '</small></div>'
+            + '<div class="alumni-detail">' + details.join(' · ') + '</div>'
+            + (a.bio ? '<div class="alumni-bio">"' + escapeHtml(a.bio) + '"</div>' : '')
+            + '</div></div>';
+    });
+    document.getElementById('alumniGrid').innerHTML = html;
+}
+
+function renderPagination(page, totalPages, total) {
+    var html = '';
+    if (totalPages <= 1) { document.getElementById('pagination').innerHTML = html; return; }
+    html += '<button class="btn btn-sm btn-outline-secondary" data-csp-click="goPage" data-csp-args=\'[' + Math.max(1, page-1) + ']\'' + (page <= 1 ? ' disabled' : '') + '>‹</button>';
+
+    var start = Math.max(1, page - 2);
+    var end = Math.min(totalPages, page + 2);
+    for (var i = start; i <= end; i++) {
+        html += '<button class="btn btn-sm ' + (i === page ? 'btn-primary' : 'btn-outline-secondary') + '" data-csp-click="goPage" data-csp-args=\'[' + i + ']\'>' + i + '</button>';
+    }
+    html += '<button class="btn btn-sm btn-outline-secondary" data-csp-click="goPage" data-csp-args=\'[' + Math.min(totalPages, page+1) + ']\'' + (page >= totalPages ? ' disabled' : '') + '>›</button>';
+    document.getElementById('pagination').innerHTML = html;
+}
+
+window.goPage = function(p) {
+    state.currentPage = p;
+    loadAlumni();
+    document.getElementById('alumniGrid').scrollIntoView({behavior: 'smooth'});
+};
+
+// ===== 编辑资料弹窗 =====
+window.showEditProfile = function() {
+    fetch('/api/alumni/profile')
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('profNickname').value = d.nickname || '';
+            document.getElementById('profYear').value = d.graduation_year || '';
+            document.getElementById('profClass').value = d.class_name || '';
+            document.getElementById('profCity').value = d.city || '';
+            document.getElementById('profWechat').value = d.wechat || '';
+            document.getElementById('profBio').value = d.bio || '';
+            document.getElementById('profPublic').checked = d.public_profile !== false;
+            bsEditModal.show();
+        });
+};
+
+window.saveProfile = function() {
+    var nickname = document.getElementById('profNickname').value.trim();
+    if (!nickname) { alert('请填写姓名'); return; }
+
+    var btn = document.querySelector('[data-csp-click="saveProfile"]');
+    btn.disabled = true; btn.textContent = '保存中...';
+
+    var data = {
+        nickname: nickname,
+        graduation_year: parseInt(document.getElementById('profYear').value) || null,
+        class_name: document.getElementById('profClass').value.trim(),
+        city: document.getElementById('profCity').value.trim(),
+        wechat: document.getElementById('profWechat').value.trim(),
+        bio: document.getElementById('profBio').value.trim(),
+        public_profile: document.getElementById('profPublic').checked
+    };
+
+    fetch('/api/alumni/profile', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.ok) {
+            bsEditModal.hide();
+            loadStats();
+            loadAlumni();
+        } else {
+            alert(d.error || '保存失败');
+        }
+    })
+    .catch(function() { alert('网络错误'); })
+    .finally(function() { btn.disabled = false; btn.textContent = '保存'; });
+};
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+</script>
+
+{% endblock %}

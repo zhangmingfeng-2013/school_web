@@ -790,6 +790,7 @@ function showAdminRequests() {
     fetch('/api/admin-requests')
         .then(r => r.json())
         .then(d => {
+            if (d.error) { alert(d.error); return; }
             if (!d.requests || !d.requests.length) { alert('暂无申请记录'); return; }
             var html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>用户</th><th>积分</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>';
             d.requests.forEach(function(r) {

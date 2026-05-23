@@ -185,6 +185,37 @@
     </div>
 
     <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('portal_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(102,126,234,.3)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(102,126,234,.12),rgba(118,75,162,.12))!important;"><span style="font-size:2rem;">🏫</span></div>
+                <h5>信息门户</h5>
+                <p class="text-muted small">母校动态、校友公告、活动汇总</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('alumni_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(14,165,233,.3)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(14,165,233,.12),rgba(6,182,212,.12))!important;"><span style="font-size:2rem;">📋</span></div>
+                <h5>校友名录</h5>
+                <p class="text-muted small">毕业年份、班级分组、搜索联系</p>
+            </div></div>
+        </a>
+    </div>
+
+    <!-- 校友论坛入口（保留） -->
+    <div class="col-md-6 col-lg-4">
+        <a href="{{ url_for('forum_page') }}" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(16,185,129,.3)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(5,150,105,.12))!important;"><span style="font-size:2rem;">💬</span></div>
+                <h5>校友社区</h5>
+                <p class="text-muted small">校友论坛，版块分类，发帖交流</p>
+            </div></div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('album') }}" class="text-decoration-none text-dark">
             <div class="card h-100" style="border:2px solid rgba(64,158,255,.3)"><div class="card-body text-center">
                 <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(64,158,255,.12),rgba(103,194,58,.12))!important;"><span style="font-size:2rem;">🎓</span></div>
@@ -649,6 +680,7 @@ function requestVIP() {
 }
 function showAdminRequests() {
     fetch('/api/admin-requests').then(r => r.json()).then(d => {
+        if (d.error) { alert(d.error); return; }
         if (!d.requests || !d.requests.length) { alert('No applications'); return; }
         var html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>User</th><th>Score</th><th>Status</th><th>Time</th><th>Action</th></tr></thead><tbody>';
         d.requests.forEach(function(r) {
