@@ -9868,13 +9868,13 @@ def api_pet_v2():
     evolution_stage = row[15] if len(row) > 15 else 0
     coins_val = row[16] if len(row) > 16 else 0
     mood = row[17] if len(row) > 17 else "开心"
-    accessories_str = row[18] if len(row) > 18 else "[]"
-    visit_count = row[19] if len(row) > 19 else 0
-    action_count = row[20] if len(row) > 20 else 0
-    feed_count = row[21] if len(row) > 21 else 0
-    play_count = row[22] if len(row) > 22 else 0
-    sleep_count = row[23] if len(row) > 23 else 0
-    last_slept = row[25] if len(row) > 25 else None
+    visit_count = row[18] if len(row) > 18 else 0
+    action_count = row[19] if len(row) > 19 else 0
+    feed_count = row[20] if len(row) > 20 else 0
+    play_count = row[21] if len(row) > 21 else 0
+    sleep_count = row[22] if len(row) > 22 else 0
+    accessories_str = row[24] if len(row) > 24 else "[]"
+    last_slept = row[23] if len(row) > 23 else None
     now = datetime.datetime.utcnow()
     if hatched:
         if last_fed:
@@ -9980,10 +9980,10 @@ def api_pet_action_v2():
     personality = row[14] if len(row) > 14 else None
     evolution_stage = row[15] if len(row) > 15 else 0
     coins_val = row[16] if len(row) > 16 else 0
-    action_count = row[20] if len(row) > 20 else 0
-    feed_count = row[21] if len(row) > 21 else 0
-    play_count = row[22] if len(row) > 22 else 0
-    sleep_count = row[23] if len(row) > 23 else 0
+    action_count = (row[19] or 0) if len(row) > 19 else 0
+    feed_count = (row[20] or 0) if len(row) > 20 else 0
+    play_count = (row[21] or 0) if len(row) > 21 else 0
+    sleep_count = (row[22] or 0) if len(row) > 22 else 0
     now = datetime.datetime.utcnow()
     if action == "feed":
         if hunger >= 95:
