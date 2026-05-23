@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}安全响应中心 - 规则{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    .src-container { max-width: 900px; margin: 0 auto; }
+    .src-header {
+        background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        margin-bottom: 2rem;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+    }
+    .src-header::before {
+        content: '';
+        position: absolute;
+        top: -50%; left: -50%;
+        width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(0,198,255,.08) 0%, transparent 70%);
+        animation: srcPulse 8s ease-in-out infinite;
+    }
+    @keyframes srcPulse {
+        0%,100% { transform: translate(0,0); }
+        50% { transform: translate(20px,-20px); }
+    }
+    .src-header h1 { position: relative; font-size: 1.8rem; font-weight: 700; margin-bottom: .5rem; }
+    .src-header p { position: relative; opacity: .7; font-size: .95rem; }
+    .src-header .nav-links { position: relative; margin-top: 1rem; }
+    .src-header .nav-links a {
+        color: rgba(255,255,255,.7); text-decoration: none;
+        padding: .4rem 1rem; border-radius: 20px;
+        border: 1px solid rgba(255,255,255,.15);
+        font-size: .85rem; margin-right: .5rem; transition: all .2s;
+    }
+    .src-header .nav-links a:hover, .src-header .nav-links a.active {
+        background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.3);
+    }
+    .rule-card {
+        background: var(--bs-body-bg);
+        border-radius: 16px;
+        border: 1px solid var(--border-light);
+        box-shadow: var(--card-shadow);
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.2rem;
+        transition: all .2s;
+    }
+    .rule-card:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,0,0,.08); }
+    .rule-card .rule-icon { font-size: 2rem; margin-right: .8rem; }
+    .rule-card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: .8rem; display: flex; align-items: center; }
+    .rule-card ul { margin-bottom: 0; padding-left: 1.2rem; }
+    .rule-card li { margin-bottom: .5rem; line-height: 1.7; font-size: .9rem; }
+    .rule-card li:last-child { margin-bottom: 0; }
+    .severity-table { width: 100%; font-size: .88rem; }
+    .severity-table th {
+        background: var(--bg-card-hover);
+        padding: .6rem .8rem; font-weight: 600; font-size: .8rem;
+        text-transform: uppercase; letter-spacing: .5px;
+    }
+    .severity-table td { padding: .65rem .8rem; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+    .sev-badge {
+        display: inline-block; padding: .2rem .6rem; border-radius: 4px;
+        font-size: .75rem; font-weight: 700;
+    }
+    .sev-critical { background: rgba(220,53,69,.12); color: #dc3545; }
+    .sev-high { background: rgba(253,126,20,.12); color: #fd7e14; }
+    .sev-medium { background: rgba(255,193,7,.12); color: #b8860b; }
+    .sev-low { background: rgba(25,135,84,.12); color: #198754; }
+    .sev-info { background: rgba(108,117,125,.12); color: #6c757d; }
+    .highlight-box {
+        background: linear-gradient(135deg, rgba(13,110,253,.06), rgba(13,110,253,.02));
+        border-left: 4px solid #0d6efd;
+        border-radius: 0 12px 12px 0;
+        padding: 1rem 1.5rem; margin: 1.2rem 0;
+        font-size: .88rem; line-height: 1.7;
+    }
+    .warn-box {
+        background: linear-gradient(135deg, rgba(220,53,69,.06), rgba(220,53,69,.02));
+        border-left: 4px solid #dc3545;
+        border-radius: 0 12px 12px 0;
+        padding: 1rem 1.5rem; margin: 1.2rem 0;
+        font-size: .88rem; line-height: 1.7;
+    }
+    .toc { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .toc a {
+        display: inline-block; padding: .35rem .9rem; border-radius: 20px;
+        font-size: .8rem; text-decoration: none; font-weight: 500;
+        background: var(--bg-card-hover); color: var(--bs-body-color);
+        border: 1px solid var(--border-light); transition: all .2s;
+    }
+    .toc a:hover { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+</style>
+
+<div class="src-container">
+    <!-- Header -->
+    <div class="src-header">
+        <div style="position:relative;">
+            <h1>📜 安全响应中心规则</h1>
+            <p>了解漏洞提交规范、评级标准和奖励制度</p>
+            <div class="nav-links">
+                <a href="/src">📝 提交漏洞</a>
+                <a href="/src/my">📋 我的报告</a>
+                <a href="/src/rules" class="active">📜 规则</a>
+                {% if permission == 'administrator' %}
+                <a href="/src/admin">⚙️ 管理后台</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 目录 -->
+    <div class="toc">
+        <a href="#scope">🎯 测试范围</a>
+        <a href="#severity">📊 漏洞评级</a>
+        <a href="#reward">💰 奖励规则</a>
+        <a href="#submit">📝 提交要求</a>
+        <a href="#forbidden">🚫 禁止行为</a>
+        <a href="#process">🔄 处理流程</a>
+    </div>
+
+    <!-- 1. 测试范围 -->
+    <div class="rule-card" id="scope">
+        <h3><span class="rule-icon">🎯</span> 测试范围</h3>
+        <p class="text-muted mb-3" style="font-size:.88rem;">以下域名和应用属于安全测试的授权范围：</p>
+        <div class="highlight-box">
+            <strong>✅ 授权测试范围：</strong>
+            <ul class="mt-2">
+                <li>多合一工具箱 Web 版（当前站点）</li>
+                <li>所有子域名和关联服务</li>
+                <li>站内开放的 API 接口</li>
+                <li>Web 应用的前后端功能模块</li>
+            </ul>
+        </div>
+        <div class="warn-box">
+            <strong>❌ 不在测试范围内：</strong>
+            <ul class="mt-2">
+                <li>第三方托管的基础设施（CDN、云服务商等）</li>
+                <li>其他用户的个人数据</li>
+                <li>非本站拥有的域名和 IP</li>
+                <li>物理安全 / 社会工程学攻击</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 2. 漏洞评级标准 -->
+    <div class="rule-card" id="severity">
+        <h3><span class="rule-icon">📊</span> 漏洞评级标准</h3>
+        <p class="text-muted mb-3" style="font-size:.88rem;">漏洞危害等级根据 CVSS 3.0 标准并结合实际业务影响进行评定：</p>
+        <div style="overflow-x:auto;">
+        <table class="severity-table">
+            <thead>
+                <tr>
+                    <th style="width:12%;">等级</th>
+                    <th style="width:15%;">标签</th>
+                    <th>定义</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="sev-badge sev-critical">严重</span></td>
+                    <td>🔴 Critical</td>
+                    <td>可直接获取服务器权限、任意代码执行、核心数据库泄露、无需交互的远程漏洞。例如：SQL 注入导致数据泄露、RCE、任意文件上传 getshell</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-high">高危</span></td>
+                    <td>🟠 High</td>
+                    <td>越权访问敏感数据、认证绕过、存储型 XSS、SSRF 访问内网、任意用户密码重置</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-medium">中危</span></td>
+                    <td>🟡 Medium</td>
+                    <td>反射型 XSS、CSRF（敏感操作）、信息泄露（含部分敏感信息）、目录遍历、逻辑漏洞导致普通用户越权</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-low">低危</span></td>
+                    <td>🟢 Low</td>
+                    <td>低风险信息泄露（如版本号）、CSRF（非敏感操作）、点击劫持（低影响）、未设置安全 HTTP 头</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-info">信息</span></td>
+                    <td>ℹ️ Info</td>
+                    <td>最佳实践建议、配置增强建议、无直接影响的安全建议</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <!-- 3. 奖励规则 -->
+    <div class="rule-card" id="reward">
+        <h3><span class="rule-icon">💰</span> 奖励规则</h3>
+        <p class="text-muted mb-3" style="font-size:.88rem;">漏洞审核通过后根据危害等级发放相应奖励：</p>
+        <div style="overflow-x:auto;">
+        <table class="severity-table">
+            <thead>
+                <tr>
+                    <th>等级</th>
+                    <th>奖金范围</th>
+                    <th>积分</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="sev-badge sev-critical">严重</span></td>
+                    <td>¥400 - ¥1000</td>
+                    <td>100 分</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-high">高危</span></td>
+                    <td>¥200 - ¥400</td>
+                    <td>50 分</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-medium">中危</span></td>
+                    <td>¥50 - ¥200</td>
+                    <td>20 分</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-low">低危</span></td>
+                    <td>¥20 - ¥50</td>
+                    <td>5 分</td>
+                </tr>
+                <tr>
+                    <td><span class="sev-badge sev-info">信息</span></td>
+                    <td>¥1 - ¥20</td>
+                    <td>1 分</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        <div class="highlight-box mt-3">
+            <strong>💡 奖励说明：</strong>
+            <ul class="mt-2 mb-0">
+                <li>同一漏洞以<strong>最先提交者</strong>为准，后续重复报告不计入奖励</li>
+                <li>提供完整 PoC 和详细复现步骤可获得额外奖金加成（最高 +30%）</li>
+                <li>高质量报告（截图 + 视频 + 修复建议）可获得额外积分</li>
+                <li>奖金通过微信或支付宝发放，请确保提交时填写正确的联系方式</li>
+                <li>管理员对漏洞等级评定和奖金有最终解释权</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 4. 提交要求 -->
+    <div class="rule-card" id="submit">
+        <h3><span class="rule-icon">📝</span> 提交要求</h3>
+        <ul>
+            <li><strong>漏洞标题：</strong>简洁明确地描述漏洞类型和影响范围，不超过 500 字</li>
+            <li><strong>漏洞描述：</strong>详细说明漏洞成因、原理和可能造成的危害</li>
+            <li><strong>复现步骤：</strong>提供清晰的步骤，使管理员能够复现问题。包含：访问路径、操作步骤、预期结果与实际结果对比</li>
+            <li><strong>受影响 URL：</strong>明确标注漏洞所在的具体页面地址或 API 接口</li>
+            <li><strong>附件：</strong>鼓励提交截图、录屏、PoC 代码等辅助材料</li>
+            <li><strong>联系方式：</strong>准确填写微信或支付宝信息，确保奖金能够顺利发放</li>
+        </ul>
+        <div class="warn-box mt-3">
+            <strong>⚠️ 注意事项：</strong>
+            <ul class="mt-2 mb-0">
+                <li>不得在未授权的情况下利用漏洞获取、修改、删除他人数据</li>
+                <li>测试过程中避免影响正常业务运行（如 DDoS、大量并发请求）</li>
+                <li>发现漏洞后请立即报告，不要公开披露</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 5. 禁止行为 -->
+    <div class="rule-card" id="forbidden">
+        <h3><span class="rule-icon">🚫</span> 禁止行为</h3>
+        <ul>
+            <li><strong>禁止数据窃取：</strong>不得下载、复制、传播通过漏洞获取的任何用户数据</li>
+            <li><strong>禁止权限维持：</strong>不得植入后门、Webshell 或任何持久化访问手段</li>
+            <li><strong>禁止横向移动：</strong>不得利用已发现的漏洞攻击其他系统或网络</li>
+            <li><strong>禁止破坏性测试：</strong>不得进行可能导致服务中断或数据损坏的测试</li>
+            <li><strong>禁止社会工程学：</strong>不得通过钓鱼、欺骗等方式获取凭证</li>
+            <li><strong>禁止自动化扫描：</strong>未经授权不得使用自动化扫描工具进行大规模探测</li>
+            <li><strong>禁止虚假报告：</strong>不得提交虚构、夸大或不存在的漏洞</li>
+            <li><strong>禁止公开披露：</strong>在漏洞修复前不得公开漏洞详情</li>
+        </ul>
+        <div class="warn-box mt-3">
+            <strong>⚖️ 法律声明：</strong>违反上述规定的行为将导致报告被拒绝、奖励取消。恶意行为将依法追究法律责任。
+        </div>
+    </div>
+
+    <!-- 6. 处理流程 -->
+    <div class="rule-card" id="process">
+        <h3><span class="rule-icon">🔄</span> 处理流程</h3>
+        <div style="font-size:.88rem;line-height:1.8;">
+            <table class="severity-table">
+                <thead>
+                    <tr><th style="width:15%;">阶段</th><th style="width:18%;">状态</th><th>说明</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1️⃣ 提交</td>
+                        <td><span class="badge bg-warning text-dark">待审核</span></td>
+                        <td>白帽子提交漏洞报告，系统自动记录提交时间</td>
+                    </tr>
+                    <tr>
+                        <td>2️⃣ 审核</td>
+                        <td><span class="badge bg-primary">审核中</span></td>
+                        <td>管理员对漏洞进行验证和评级（5 个工作日内）</td>
+                    </tr>
+                    <tr>
+                        <td>3️⃣ 确认</td>
+                        <td><span class="badge bg-success">已接受</span></td>
+                        <td>漏洞确认真实有效，安排修复计划并联系发放奖金</td>
+                    </tr>
+                    <tr>
+                        <td>4️⃣ 修复</td>
+                        <td><span class="badge bg-info">已修复</span></td>
+                        <td>开发团队完成修复，白帽子可进行复测验证</td>
+                    </tr>
+                    <tr>
+                        <td>5️⃣ 关闭</td>
+                        <td><span class="badge bg-secondary">已关闭</span></td>
+                        <td>流程完结。如为重复报告则标注为<span class="badge bg-light text-dark">重复报告</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 底部号召 -->
+    <div class="text-center py-4">
+        <p class="text-muted mb-3" style="font-size:.9rem;">已阅读并同意以上规则？</p>
+        <a href="/src" class="btn btn-primary px-4 py-2" style="border-radius:10px;font-weight:600;">
+            🚀 立即提交漏洞
+        </a>
+    </div>
+</div>
+{% endblock %}

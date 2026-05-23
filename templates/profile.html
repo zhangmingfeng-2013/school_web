@@ -1,8 +1,22 @@
 {% extends "base.html" %}
 {% block title %}个人资料 - 多合一工具箱{% endblock %}
 {% block content %}
+<style nonce="{{ csp_nonce }}">
+    .security-card { margin-top: 1.5rem; }
+    .security-card .card-header {
+        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        color: #fff;
+    }
+    .security-badge {
+        font-size: .75rem; padding: .25rem .6rem; border-radius: 12px;
+    }
+    .security-badge.set { background: rgba(25,135,84,.15); color: #198754; }
+    .security-badge.unset { background: rgba(220,53,69,.12); color: #dc3545; }
+</style>
+
 <h2 class="mb-4">👤 个人资料</h2>
 
+<!-- 基本信息 -->
 <div class="card">
     <div class="card-body">
         <form method="POST">
@@ -40,4 +54,166 @@
         </form>
     </div>
 </div>
+
+<!-- 安全问题设置 -->
+<div class="card security-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>🔒 安全问题设置</span>
+        <span class="security-badge {{ 'set' if has_security else 'unset' }}">
+            {{ '✅ 已设置' if has_security else '⚠️ 未设置' }}
+        </span>
+    </div>
+    <div class="card-body">
+        {% if not has_security %}
+        <div class="alert alert-warning mb-3" role="alert">
+            <strong>⚠️ 重要：</strong>设置安全问题后，忘记密码时需要正确回答安全问题才能重置密码。
+            如果您不设置安全问题，将<strong>无法自助重置密码</strong>，只能联系管理员。
+        </div>
+        {% endif %}
+
+        <p class="text-muted small mb-3">安全问题用于验证您的身份。请选择或输入一个只有您知道答案的问题。</p>
+
+        <div class="mb-3">
+            <label class="form-label">安全问题</label>
+            <select class="form-select mb-2" id="securityQuestionSelect" data-csp-change="onQuestionSelect">
+                <option value="">-- 选择预设问题 --</option>
+                <option value="您的出生城市是？">您的出生城市是？</option>
+                <option value="您的小学班主任叫什么名字？">您的小学班主任叫什么名字？</option>
+                <option value="您最喜欢的老师的名字是？">您最喜欢的老师的名字是？</option>
+                <option value="您最好的朋友叫什么名字？">您最好的朋友叫什么名字？</option>
+                <option value="您的宠物叫什么名字？">您的宠物叫什么名字？</option>
+                <option value="您母亲的姓名是？">您母亲的姓名是？</option>
+                <option value="您最喜欢的书是什么？">您最喜欢的书是什么？</option>
+                <option value="自定义问题...">自定义问题...</option>
+            </select>
+            <input type="text" id="securityQuestionCustom" class="form-control mb-2"
+                   placeholder="输入您自定义的安全问题" style="display:none;" maxlength="200"
+                   value="{% if has_security and security_question not in ('您的出生城市是？','您的小学班主任叫什么名字？','您最喜欢的老师的名字是？','您最好的朋友叫什么名字？','您的宠物叫什么名字？','您母亲的姓名是？','您最喜欢的书是什么？') %}{{ security_question }}{% endif %}">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">您的答案</label>
+            <input type="text" id="securityAnswer" class="form-control" placeholder="请输入您的答案（区分大小写）" maxlength="200">
+            <div class="form-text">答案不区分大小写，请牢记您的答案</div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-warning" id="saveSecurityBtn" data-csp-click="saveSecurity">🔒 保存安全问题</button>
+            {% if has_security %}
+            <button class="btn btn-outline-danger" id="clearSecurityBtn" data-csp-click="clearSecurity">🗑️ 清除安全问题</button>
+            {% endif %}
+        </div>
+        <div id="securityMsg" class="mt-2"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var currentQuestion = {{ security_question|tojson }};
+
+// 初始化：如果有预设问题，选中它
+(function() {
+    if (currentQuestion) {
+        var sel = document.getElementById('securityQuestionSelect');
+        for (var i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === currentQuestion) {
+                sel.selectedIndex = i;
+                return;
+            }
+        }
+        // 如果没有匹配的预设，显示自定义
+        sel.value = '自定义问题...';
+        var customInput = document.getElementById('securityQuestionCustom');
+        customInput.style.display = 'block';
+        customInput.value = currentQuestion;
+    }
+})();
+
+function onQuestionSelect() {
+    var sel = document.getElementById('securityQuestionSelect');
+    var customInput = document.getElementById('securityQuestionCustom');
+    if (sel.value === '自定义问题...') {
+        customInput.style.display = 'block';
+        customInput.focus();
+    } else {
+        customInput.style.display = 'none';
+    }
+}
+
+async function saveSecurity() {
+    var sel = document.getElementById('securityQuestionSelect');
+    var customInput = document.getElementById('securityQuestionCustom');
+    var answer = document.getElementById('securityAnswer').value.trim();
+    var msgDiv = document.getElementById('securityMsg');
+
+    // 确定问题文本
+    var question;
+    if (sel.value === '自定义问题...') {
+        question = customInput.value.trim();
+    } else if (sel.value) {
+        question = sel.value;
+    } else {
+        question = '';
+    }
+
+    if (!question) {
+        msgDiv.innerHTML = '<div class="alert alert-danger py-2">请选择或输入安全问题</div>';
+        return;
+    }
+    if (!answer || answer.length < 2) {
+        msgDiv.innerHTML = '<div class="alert alert-danger py-2">请输入答案（至少2个字符）</div>';
+        return;
+    }
+
+    msgDiv.innerHTML = '<div class="text-muted small">保存中...</div>';
+
+    try {
+        var resp = await fetch('/api/profile/security', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ security_question: question, security_answer: answer })
+        });
+        var data = await resp.json();
+        if (data.ok) {
+            msgDiv.innerHTML = '<div class="alert alert-success py-2">✅ ' + data.message + '，刷新页面查看状态</div>';
+            // 清除答案输入
+            document.getElementById('securityAnswer').value = '';
+            // 更新 currentQuestion
+            currentQuestion = question;
+        } else {
+            msgDiv.innerHTML = '<div class="alert alert-danger py-2">❌ ' + (data.error || '保存失败') + '</div>';
+        }
+    } catch(e) {
+        msgDiv.innerHTML = '<div class="alert alert-danger py-2">网络错误，请重试</div>';
+    }
+}
+
+async function clearSecurity() {
+    if (!confirm('确定要清除安全问题吗？清除后将无法自助重置密码。')) return;
+
+    var msgDiv = document.getElementById('securityMsg');
+    try {
+        var resp = await fetch('/api/profile/security', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ security_question: '', security_answer: '' })
+        });
+        var data = await resp.json();
+        if (data.ok) {
+            msgDiv.innerHTML = '<div class="alert alert-success py-2">✅ 安全问题已清除，刷新页面查看状态</div>';
+            currentQuestion = '';
+        } else {
+            msgDiv.innerHTML = '<div class="alert alert-danger py-2">❌ ' + (data.error || '操作失败') + '</div>';
+        }
+    } catch(e) {
+        msgDiv.innerHTML = '<div class="alert alert-danger py-2">网络错误，请重试</div>';
+    }
+}
+
+// 注册到 window 供 CSP 事件调度器使用
+window.onQuestionSelect = onQuestionSelect;
+window.saveSecurity = saveSecurity;
+window.clearSecurity = clearSecurity;
+</script>
 {% endblock %}

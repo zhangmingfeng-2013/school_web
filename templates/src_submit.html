@@ -90,6 +90,7 @@
             <div class="nav-links">
                 <a href="/src" class="active">📝 提交漏洞</a>
                 <a href="/src/my">📋 我的报告</a>
+                <a href="/src/rules">📜 规则</a>
                 {% if permission == 'administrator' %}
                 <a href="/src/admin">⚙️ 管理后台</a>
                 {% endif %}
@@ -191,7 +192,7 @@
             <div class="section-title">💰 联系方式（用于发放奖金）</div>
 
             <div class="mb-3">
-                <label for="srcWechat">微信手机号 / 微信号</label>
+                <label for="srcWechat">微信手机号 / 微信号 / 支付宝手机号</label>
                 <input type="text" class="form-control" id="srcWechat"
                        placeholder="请输入微信绑定的手机号或微信号，管理员审核通过后将通过此联系方式发放奖金"
                        maxlength="100">
@@ -206,7 +207,7 @@
                         <li>请确保漏洞真实存在，不要提交虚假报告</li>
                         <li>提供详细的复现步骤有助于获得更高评级</li>
                         <li>请勿在未授权的情况下利用漏洞获取他人数据</li>
-                        <li>提交后管理员会在 3 个工作日内审核</li>
+                        <li>提交后管理员会在 5 个工作日内审核</li>
                         <li>同一漏洞以最先提交者为准</li>
                     </ul>
                 </div>

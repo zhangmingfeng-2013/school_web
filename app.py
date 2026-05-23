@@ -275,6 +275,7 @@ def _init_db_once():
         _init_reset_table()
         _init_marketplace_table()
         _init_src_table()
+        _init_announcement_table()
         _init_life_tables()
         _init_forum_tables()
         _init_db_done = True
@@ -436,6 +437,29 @@ def _init_src_table():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_src_user (username),
             INDEX idx_src_status (status)
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError:
+        pass
+
+
+def _init_announcement_table():
+    """确保 dashboard_announcements 表存在 — 仪表盘公告栏"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS dashboard_announcements (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                content TEXT NOT NULL,
+                created_by VARCHAR(50) NOT NULL,
+                is_active TINYINT DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         conn.commit()
@@ -738,8 +762,8 @@ def check_session_idle_timeout():
 
 
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/")
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/admin/reset_requests", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/src/rules", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements")
 
 @app.before_request
 def check_global_captcha():
@@ -1415,38 +1439,152 @@ _reset_rate = {}  # {ip: (count, last_time)} 防滥用
 @app.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
     _init_db_once()
+    _generate_captcha()  # 预生成验证码，避免图片加载失败导致 captcha_code 不存在
     # 生成 CSRF token
     if "csrf_token" not in session:
         session["csrf_token"] = os.urandom(32).hex()
+
+    security_question = None  # 展示给用户的安全问题
+    reset_token = None        # 生成的重置令牌
+
     if request.method == "POST":
-        username = sanitize_input(request.form.get("username", ""), 50)
-        captcha_input = request.form.get("captcha", "").strip().lower()
-        stored = session.get("captcha_code", "")
         ip = request.remote_addr or "0.0.0.0"
         now = time.time()
 
-        # 速率限制：每 IP 3分钟内最多3次
+        # 速率限制：每 IP 3分钟内最多3次尝试
         cnt, last = _reset_rate.get(ip, (0, 0))
         if cnt >= 3 and now - last < 180:
             remaining = int(180 - (now - last))
             flash(f"操作过于频繁，请 {remaining} 秒后重试", "danger")
-            return render_template("forgot_password.html", csrf_token=session.get("csrf_token", ""))
+            return render_template("forgot_password.html",
+                                   csrf_token=session.get("csrf_token", ""),
+                                   security_question=None, reset_token=None)
 
-        if not username:
-            flash("请输入用户名", "danger")
-        elif captcha_input != stored:
-            session.pop("captcha_code", None)
-            flash("验证码错误", "danger")
-        else:
-            session.pop("captcha_code", None)
-            _reset_rate[ip] = (cnt + 1, now)
+        # 验证码校验
+        captcha_input = request.form.get("captcha", "").strip().lower()
+        ok, err_msg = _verify_captcha(captcha_input)
+        if not ok:
+            flash(err_msg, "danger")
+            return render_template("forgot_password.html",
+                                   csrf_token=session.get("csrf_token", ""),
+                                   security_question=None, reset_token=None)
+
+        # 判断是第一步（输入用户名）还是第二步（回答安全问题）
+        step = request.form.get("step", "1")
+
+        if step == "1":
+            # 第一步：验证用户名，查找安全问题
+            username = sanitize_input(request.form.get("username", ""), 50)
+            if not username:
+                flash("请输入用户名", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None)
+
             conn = get_db()
-            if conn:
-                cursor = conn.cursor()
-                cursor.execute("UPDATE password_reset_tokens SET used=1 WHERE username=%s AND used=0", (username,))
-                cursor.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW()")
-                cursor.execute("SELECT User_Name FROM users WHERE User_Name=%s", (username,))
-                if cursor.fetchone():
+            if not conn:
+                flash("数据库连接失败", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None)
+
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT security_question FROM users WHERE User_Name=%s", (username,)
+            )
+            row = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if not row:
+                flash("用户名不存在", "danger")
+            elif not row[0] or not row[0].strip():
+                # 无安全问题 → 设置 session 并显示管理员申请表单
+                _reset_rate[ip] = (cnt + 1, now)
+                session["reset_username"] = username
+                session["reset_attempts"] = 0
+                flash("该用户未设置安全问题，请通过管理员申请重置密码", "warning")
+            else:
+                _reset_rate[ip] = (cnt + 1, now)
+                session["reset_username"] = username
+                session["reset_attempts"] = 0  # 重置错误尝试次数
+                security_question = row[0]
+                flash("请回答您的安全问题以验证身份", "info")
+
+        elif step == "2":
+            # 第二步：验证安全问题答案
+            username = session.get("reset_username", "")
+            if not username:
+                flash("会话已过期，请重新操作", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None)
+
+            security_answer = request.form.get("security_answer", "").strip()
+            if not security_answer:
+                flash("请输入安全问题的答案", "danger")
+                # 重新获取安全问题
+                conn = get_db()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT security_question FROM users WHERE User_Name=%s", (username,)
+                    )
+                    row = cursor.fetchone()
+                    cursor.close()
+                    conn.close()
+                    security_question = row[0] if row else None
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=security_question, reset_token=None)
+
+            conn = get_db()
+            if not conn:
+                flash("数据库连接失败", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None)
+
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT security_question, security_answer FROM users WHERE User_Name=%s",
+                (username,)
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                flash("用户不存在", "danger")
+                session.pop("reset_username", None)
+            else:
+                stored_answer = (row[1] or "").strip()
+                # 大小写不敏感比较，使用 hmac 防时序攻击
+                if not hmac.compare_digest(
+                    security_answer.lower().strip(),
+                    stored_answer.lower()
+                ):
+                    # 错误次数限制：最多 5 次
+                    attempts = session.get("reset_attempts", 0) + 1
+                    session["reset_attempts"] = attempts
+                    remaining = 5 - attempts
+                    if attempts >= 5:
+                        session.pop("reset_username", None)
+                        session.pop("reset_attempts", None)
+                        flash("安全问题答案错误次数过多，请重新操作", "danger")
+                    else:
+                        flash(f"安全问题答案错误，还剩 {remaining} 次机会", "danger")
+                        security_question = row[0]
+                else:
+                    # 验证通过！生成重置令牌
+                    _reset_rate[ip] = (cnt + 1, now)
+                    session.pop("reset_attempts", None)
+                    session.pop("reset_username", None)
+
+                    # 作废旧令牌
+                    cursor.execute(
+                        "UPDATE password_reset_tokens SET used=1 WHERE username=%s AND used=0",
+                        (username,)
+                    )
+                    cursor.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW()")
                     token = uuid.uuid4().hex
                     expires = datetime.datetime.now() + datetime.timedelta(minutes=10)
                     cursor.execute(
@@ -1454,19 +1592,80 @@ def forgot_password():
                         (username, token, expires)
                     )
                     conn.commit()
-                    write_log("密码重置申请", f"用户名: {username}, IP: {ip}")
-                    flash(f"重置令牌（请完整复制）: {token}", "info")
-                else:
-                    flash("用户名不存在", "danger")
-                cursor.close()
-                conn.close()
+                    write_log("密码重置申请（安全问题验证通过）", f"用户名: {username}, IP: {ip}")
+                    reset_token = token
+                    flash("身份验证通过！请复制下方令牌前往重置密码页面", "success")
 
-    return render_template("forgot_password.html", csrf_token=session.get("csrf_token", ""))
+            cursor.close()
+            conn.close()
+
+        elif step == "3":
+            # 第三步：提交管理员重置申请
+            username = session.get("reset_username", "")
+            if not username:
+                flash("会话已过期，请重新操作", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None,
+                                       admin_reset_needed=False)
+
+            reason = sanitize_input(request.form.get("reason", ""), 500)
+            contact = sanitize_input(request.form.get("contact", ""), 100)
+            if not reason:
+                flash("请填写申请理由", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None,
+                                       admin_reset_needed=True)
+
+            _reset_rate[ip] = (cnt + 1, now)
+            conn = get_db()
+            if not conn:
+                flash("数据库连接失败", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None,
+                                       admin_reset_needed=True)
+
+            cursor = conn.cursor()
+            # 作废旧申请
+            cursor.execute(
+                "UPDATE password_reset_tokens SET request_status='cancelled' WHERE username=%s AND request_status='pending'",
+                (username,)
+            )
+            cursor.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW()")
+            # 创建新的待审核申请（token 为 NULL，等待管理员审核）
+            cursor.execute(
+                "INSERT INTO password_reset_tokens (username, token, used, request_reason, request_status, expires_at) VALUES (%s, NULL, 0, %s, 'pending', DATE_ADD(NOW(), INTERVAL 7 DAY))",
+                (username, f"联系方式: {contact or '未提供'}\n申请理由: {reason}")
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+
+            session.pop("reset_username", None)
+            session.pop("reset_attempts", None)
+            write_log("管理员重置申请", f"用户名: {username}, IP: {ip}, 理由: {reason}")
+            flash("申请已提交，管理员审核通过后请重新访问此页面获取令牌。", "success")
+
+    # 判断是否需要显示管理员申请表单
+    admin_needed = bool(
+        session.get("reset_username") and
+        not security_question and
+        not reset_token
+    )
+
+    return render_template("forgot_password.html",
+                           csrf_token=session.get("csrf_token", ""),
+                           security_question=security_question,
+                           reset_token=reset_token,
+                           admin_reset_needed=admin_needed)
 
 
 @app.route("/reset_password", methods=["GET", "POST"])
 def reset_password():
     _init_db_once()
+    _generate_captcha()  # 预生成验证码
     # 生成 CSRF token
     if "csrf_token" not in session:
         session["csrf_token"] = os.urandom(32).hex()
@@ -1476,13 +1675,12 @@ def reset_password():
         new_pwd = request.form.get("new_pwd", "").strip()
         confirm_pwd = request.form.get("confirm_pwd", "").strip()
         captcha_input = request.form.get("captcha", "").strip().lower()
-        stored_captcha = session.get("captcha_code", "")
+        ok_captcha, err_captcha = _verify_captcha(captcha_input)
 
         if not username or not token:
             flash("用户名和重置令牌不能为空", "danger")
-        elif captcha_input != stored_captcha:
-            session.pop("captcha_code", None)
-            flash("验证码错误", "danger")
+        elif not ok_captcha:
+            flash(err_captcha, "danger")
         elif new_pwd != confirm_pwd:
             flash("两次密码不一致", "danger")
         elif len(new_pwd) < 8:
@@ -1492,7 +1690,6 @@ def reset_password():
         elif not re.search(r"[0-9]", new_pwd):
             flash("密码需包含数字", "danger")
         else:
-            session.pop("captcha_code", None)
             conn = get_db()
             if conn:
                 cursor = conn.cursor()
@@ -2009,13 +2206,80 @@ def profile():
     cols = [d[0] for d in cursor.description]
     row = cursor.fetchone()
     profile_data = dict(zip(cols, row)) if row else {}
+
+    # 获取安全问题信息
+    cursor.execute(
+        "SELECT security_question, security_answer FROM users WHERE User_Name=%s",
+        (session["username"],)
+    )
+    sec_row = cursor.fetchone()
+    has_security = sec_row and sec_row[0] and sec_row[0].strip()
+
     cursor.close()
     conn.close()
     return render_template("profile.html",
                            username=session["username"],
                            permission=session["permission"],
                            profile=profile_data,
+                           security_question=sec_row[0] if has_security else "",
+                           has_security=has_security,
                            csrf_token=session.get("csrf_token", ""))
+
+
+# ---------- API：设置安全问题 ----------
+@app.route("/api/profile/security", methods=["POST"])
+@login_required
+def api_set_security():
+    """设置或更新用户的安全问题及答案"""
+    data = request.get_json(silent=True) or {}
+    security_question = sanitize_input(data.get("security_question", ""), 200)
+    security_answer = sanitize_input(data.get("security_answer", ""), 200)
+
+    if not security_question or not security_answer:
+        # 允许清除安全问题（两个都为空）
+        if security_question == "" and security_answer == "":
+            conn = get_db()
+            if not conn:
+                return jsonify({"ok": False, "error": "数据库连接失败"})
+            try:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE users SET security_question=NULL, security_answer=NULL WHERE User_Name=%s",
+                    (session["username"],)
+                )
+                conn.commit()
+                cursor.close()
+                conn.close()
+                write_log("安全问题清除", f"用户名: {session['username']}")
+                return jsonify({"ok": True, "message": "安全问题已清除"})
+            except pymysql.MySQLError as e:
+                return jsonify({"ok": False, "error": f"操作失败: {str(e)}"})
+        return jsonify({"ok": False, "error": "安全问题和答案不能为空"})
+
+    if len(security_answer) < 2:
+        return jsonify({"ok": False, "error": "答案至少需要2个字符"})
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"})
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET security_question=%s, security_answer=%s WHERE User_Name=%s",
+            (security_question, security_answer, session["username"])
+        )
+        conn.commit()
+        affected = cursor.rowcount
+        cursor.close()
+        conn.close()
+        if affected:
+            write_log("安全问题设置", f"用户名: {session['username']}")
+            return jsonify({"ok": True, "message": "安全问题已设置"})
+        else:
+            return jsonify({"ok": False, "error": "用户不存在"})
+    except pymysql.MySQLError as e:
+        return jsonify({"ok": False, "error": f"保存失败: {str(e)}"})
 
 
 # ---------- 路由：关于作者 ----------
@@ -4456,12 +4720,15 @@ def calculator_net():
 @admin_required
 def admin_dashboard():
     pending_admin_reqs = 0
+    pending_reset_reqs = 0
     try:
         conn = get_db()
         if conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM admin_requests WHERE status='pending'")
             pending_admin_reqs = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM password_reset_tokens WHERE request_status='pending'")
+            pending_reset_reqs = cursor.fetchone()[0]
             cursor.close()
             conn.close()
     except Exception:
@@ -4471,7 +4738,18 @@ def admin_dashboard():
                            username=session["username"],
                            permission=session["permission"],
                            leaderboard=leaderboard,
-                           pending_admin_reqs=pending_admin_reqs)
+                           pending_admin_reqs=pending_admin_reqs,
+                           pending_reset_reqs=pending_reset_reqs)
+
+
+@app.route("/admin/reset_requests")
+@login_required
+@admin_required
+def admin_reset_requests():
+    """管理员审核密码重置申请页面"""
+    return render_template("admin_reset_requests.html",
+                           username=session["username"],
+                           permission=session["permission"])
 
 
 @app.route("/api/admin/ip_stats")
@@ -6719,6 +6997,15 @@ def src_admin():
                            status_labels=STATUS_LABELS)
 
 
+@app.route("/src/rules")
+@login_required
+def src_rules():
+    """安全响应中心 - 规则页面（任何登录用户可访问）"""
+    return render_template("src_rules.html",
+                           username=session["username"],
+                           permission=session["permission"])
+
+
 @app.route("/api/src/submit", methods=["POST"])
 @login_required
 def api_src_submit():
@@ -6925,6 +7212,95 @@ def api_src_stats():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ---------- API：管理员审核密码重置申请 ----------
+@app.route("/api/admin/reset_requests")
+@login_required
+@admin_required
+def api_admin_reset_requests():
+    """获取待审核的密码重置申请列表"""
+    conn = get_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, username, request_reason, request_status, created_at
+            FROM password_reset_tokens
+            WHERE request_status IN ('pending', 'approved', 'rejected')
+            ORDER BY FIELD(request_status, 'pending', 'approved', 'rejected'), created_at DESC
+            LIMIT 50
+        """)
+        cols = [d[0] for d in cursor.description]
+        rows = [dict(zip(cols, r)) for r in cursor.fetchall()]
+        cursor.close(); conn.close()
+        for r in rows:
+            if r.get("created_at"):
+                r["created_at"] = str(r["created_at"])
+        return jsonify({"ok": True, "requests": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/reset_requests/<int:req_id>/approve", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_reset_approve(req_id):
+    """管理员审核通过，生成令牌"""
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, username, request_status FROM password_reset_tokens WHERE id=%s", (req_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "申请不存在"})
+        if row[2] != "pending":
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": f"申请状态不是待审核"})
+        token = uuid.uuid4().hex
+        expires = datetime.datetime.now() + datetime.timedelta(minutes=30)
+        cursor.execute(
+            "UPDATE password_reset_tokens SET token=%s, request_status='approved', expires_at=%s WHERE id=%s",
+            (token, expires, req_id)
+        )
+        conn.commit()
+        username = row[1]
+        cursor.close(); conn.close()
+        write_log("管理员重置审核通过", f"用户名: {username}, 操作人: {session['username']}")
+        return jsonify({"ok": True, "message": "已通过", "token": token, "username": username})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/admin/reset_requests/<int:req_id>/reject", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_reset_reject(req_id):
+    """管理员拒绝密码重置申请"""
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE password_reset_tokens SET request_status='rejected' WHERE id=%s AND request_status='pending'",
+            (req_id,)
+        )
+        conn.commit()
+        affected = cursor.rowcount
+        cursor.close(); conn.close()
+        if affected:
+            write_log("管理员重置审核拒绝", f"申请ID: {req_id}, 操作人: {session['username']}")
+            return jsonify({"ok": True, "message": "已拒绝"})
+        return jsonify({"ok": False, "error": "申请不存在或已处理"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 
@@ -8013,6 +8389,81 @@ def _log_activity_local(username, action, points):
             ac.commit(); acu.close(); ac.close()
     except Exception:
         pass
+
+
+# ==============================================================
+#  仪表盘公告栏 API
+# ==============================================================
+
+@app.route("/api/announcements", methods=["GET"])
+@login_required
+def api_announcements_list():
+    """获取所有活跃公告（所有登录用户可见）"""
+    _init_announcement_table()
+    conn = get_db()
+    if not conn:
+        return jsonify({"announcements": []})
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, content, created_by, created_at
+            FROM dashboard_announcements
+            WHERE is_active=1
+            ORDER BY created_at DESC
+        """)
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        announcements = [{"id": r[0], "content": r[1], "created_by": r[2], "created_at": str(r[3])} for r in rows]
+        return jsonify({"announcements": announcements})
+    except Exception:
+        return jsonify({"announcements": []})
+
+
+@app.route("/api/announcements", methods=["POST"])
+@login_required
+def api_announcements_create():
+    """发布公告（仅管理员）"""
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    data = request.get_json() or {}
+    content = (data.get("content") or "").strip()
+    if not content:
+        return jsonify({"ok": False, "error": "公告内容不能为空"}), 400
+    _init_announcement_table()
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO dashboard_announcements (content, created_by) VALUES (%s, %s)",
+            (content, session["username"])
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": new_id})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/announcements/<int:aid>", methods=["DELETE"])
+@login_required
+def api_announcements_delete(aid):
+    """删除公告（仅管理员）——软删除（is_active=0）"""
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    _init_announcement_table()
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE dashboard_announcements SET is_active=0 WHERE id=%s", (aid,))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ==============================================================

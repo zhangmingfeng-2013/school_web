@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}密码重置申请审核 - 管理后台{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    .admin-container { max-width: 900px; margin: 0 auto; }
+    .page-header {
+        background: linear-gradient(135deg, #1a1a2e, #16213e);
+        border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem;
+        color: #fff;
+    }
+    .page-header h1 { font-size: 1.5rem; font-weight: 700; }
+    .request-card {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--border-light);
+        border-radius: 12px; padding: 1.2rem 1.5rem; margin-bottom: .8rem;
+        transition: all .15s;
+    }
+    .request-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+    .request-card.pending { border-left: 4px solid #f59e0b; }
+    .request-card.approved { border-left: 4px solid #198754; }
+    .request-card.rejected { border-left: 4px solid #dc3545; opacity: .7; }
+    .request-card .meta { font-size: .78rem; color: #888; }
+    .request-card .reason { font-size: .88rem; line-height: 1.7; white-space: pre-wrap; margin: .5rem 0; }
+    .request-card .actions { margin-top: .8rem; }
+    .token-reveal {
+        background: #fefce8; border: 2px dashed #f59e0b; border-radius: 8px;
+        padding: .8rem; margin: .5rem 0; display: none;
+    }
+    .token-reveal .token-text {
+        font-family: 'Courier New', monospace; font-size: .95rem;
+        font-weight: 700; color: #d97706; word-break: break-all;
+        user-select: all; background: #fff; padding: .4rem .6rem;
+        border-radius: 4px; display: block;
+    }
+    .empty-state { text-align: center; padding: 3rem 1rem; color: #999; }
+    .empty-state .icon { font-size: 3rem; display: block; margin-bottom: 1rem; }
+    .filter-bar { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .filter-bar .filter-btn {
+        padding: .35rem 1rem; border-radius: 20px; border: 1px solid var(--border-light);
+        background: var(--bs-body-bg); cursor: pointer; font-size: .82rem; transition: all .15s;
+    }
+    .filter-bar .filter-btn.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+    .badge-pending { background: #f59e0b; color: #000; font-size: .7rem; }
+    .badge-approved { background: #198754; color: #fff; font-size: .7rem; }
+    .badge-rejected { background: #dc3545; color: #fff; font-size: .7rem; }
+</style>
+
+<div class="admin-container">
+    <div class="page-header">
+        <h1>🔐 密码重置申请审核</h1>
+        <p style="opacity:.7;margin:0;">审核用户提交的密码重置请求</p>
+    </div>
+
+    <!-- 筛选 -->
+    <div class="filter-bar" id="filterBar">
+        <button class="filter-btn active" data-status="pending">⏳ 待审核</button>
+        <button class="filter-btn" data-status="approved">✅ 已通过</button>
+        <button class="filter-btn" data-status="rejected">❌ 已拒绝</button>
+        <button class="filter-btn" data-status="">📋 全部</button>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" id="refreshBtn">🔄 刷新</button>
+    </div>
+
+    <!-- 列表 -->
+    <div id="requestsList">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2 text-muted">加载中...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var currentFilter = 'pending';
+var allRequests = [];
+
+// 加载数据
+async function loadRequests() {
+    try {
+        var resp = await fetch('/api/admin/reset_requests', { credentials: 'include' });
+        var data = await resp.json();
+        if (data.error) {
+            document.getElementById('requestsList').innerHTML =
+                '<div class="empty-state"><span class="icon">❌</span><p>' + escapeHtml(data.error) + '</p></div>';
+            return;
+        }
+        allRequests = data.requests || [];
+        renderRequests();
+    } catch(e) {
+        document.getElementById('requestsList').innerHTML =
+            '<div class="empty-state"><span class="icon">❌</span><p>加载失败: ' + e.message + '</p></div>';
+    }
+}
+
+function renderRequests() {
+    var filtered = allRequests;
+    if (currentFilter) {
+        filtered = allRequests.filter(function(r) { return r.request_status === currentFilter; });
+    }
+
+    if (!filtered.length) {
+        var emptyMsg = currentFilter === 'pending' ? '暂无待审核的申请 🎉' : '暂无数据';
+        document.getElementById('requestsList').innerHTML =
+            '<div class="empty-state"><span class="icon">📭</span><p>' + emptyMsg + '</p></div>';
+        return;
+    }
+
+    var html = filtered.map(function(r) {
+        var statusClass = r.request_status;
+        var statusLabel = r.request_status === 'pending' ? '⏳ 待审核' :
+                          r.request_status === 'approved' ? '✅ 已通过' : '❌ 已拒绝';
+        var badgeClass = 'badge-' + r.request_status;
+
+        var actionsHtml = '';
+        if (r.request_status === 'pending') {
+            actionsHtml = `
+                <button class="btn btn-sm btn-success" data-csp-click="approveRequest" data-csp-args='[${r.id},"${escapeHtml(r.username)}"]'>✅ 通过</button>
+                <button class="btn btn-sm btn-outline-danger" data-csp-click="rejectRequest" data-csp-args='[${r.id}]'>❌ 拒绝</button>
+            `;
+        } else if (r.request_status === 'approved') {
+            actionsHtml = `<span class="text-success small">令牌已生成</span>`;
+        }
+
+        return `<div class="request-card ${statusClass}">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <strong>👤 ${escapeHtml(r.username)}</strong>
+                        <span class="badge ${badgeClass}">${statusLabel}</span>
+                    </div>
+                    <div class="meta">🕐 ${r.created_at ? r.created_at.slice(0,19) : '-'} · ID: #${r.id}</div>
+                    <div class="reason">${escapeHtml(r.request_reason || '(未填写理由)')}</div>
+                </div>
+            </div>
+            <div class="actions" id="actions-${r.id}">
+                ${actionsHtml}
+            </div>
+            <div class="token-reveal" id="token-${r.id}"></div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('requestsList').innerHTML = html;
+}
+
+async function approveRequest(reqId, username) {
+    if (!confirm('确定通过 ' + username + ' 的密码重置申请吗？')) return;
+
+    try {
+        var resp = await fetch('/api/admin/reset_requests/' + reqId + '/approve', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        var data = await resp.json();
+        if (data.ok) {
+            // 显示生成的令牌
+            var tokenDiv = document.getElementById('token-' + reqId);
+            tokenDiv.style.display = 'block';
+            tokenDiv.innerHTML = `
+                <p class="fw-bold mb-1">✅ 已通过！重置令牌：</p>
+                <span class="token-text">${data.token}</span>
+                <p class="small text-muted mt-1 mb-0">令牌有效期 30 分钟 · 请将此令牌告知用户</p>
+                <button class="btn btn-sm btn-outline-secondary mt-2" data-csp-click="copyToken" data-csp-args='["${data.token}"]'>📋 复制令牌</button>
+            `;
+            // 更新状态
+            var card = tokenDiv.closest('.request-card');
+            card.classList.remove('pending');
+            card.classList.add('approved');
+            document.getElementById('actions-' + reqId).innerHTML =
+                '<span class="text-success small">✅ 令牌已生成</span>';
+        } else {
+            alert('❌ ' + (data.error || '操作失败'));
+        }
+    } catch(e) {
+        alert('网络错误: ' + e.message);
+    }
+}
+
+async function rejectRequest(reqId) {
+    if (!confirm('确定拒绝该申请吗？')) return;
+    try {
+        var resp = await fetch('/api/admin/reset_requests/' + reqId + '/reject', {
+            method: 'POST',
+            credentials: 'include'
+        });
+        var data = await resp.json();
+        if (data.ok) {
+            loadRequests();
+        } else {
+            alert('❌ ' + (data.error || '操作失败'));
+        }
+    } catch(e) {
+        alert('网络错误: ' + e.message);
+    }
+}
+
+function copyToken(token) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(token).then(function() {
+            alert('✅ 令牌已复制');
+        });
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = token;
+        ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('✅ 令牌已复制');
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+// 筛选按钮
+document.querySelectorAll('.filter-btn[data-status]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        currentFilter = this.dataset.status;
+        renderRequests();
+    });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', loadRequests);
+
+// 注册到 window
+window.approveRequest = approveRequest;
+window.rejectRequest = rejectRequest;
+window.copyToken = copyToken;
+
+loadRequests();
+</script>
+{% endblock %}

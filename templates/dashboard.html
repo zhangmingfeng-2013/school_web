@@ -8,6 +8,22 @@
     </span>
 </div>
 
+<!-- 公告栏 -->
+<div id="announcementBar" class="announcement-bar">
+    <div class="announcement-inner">
+        <span class="announcement-icon">📢</span>
+        <div class="announcement-content" id="announcementText"></div>
+        <div class="announcement-nav">
+            <button class="announcement-nav-btn" id="announcePrev" title="上一条">◀</button>
+            <span class="announcement-dots" id="announceDots"></span>
+            <button class="announcement-nav-btn" id="announceNext" title="下一条">▶</button>
+        </div>
+        {% if permission == 'administrator' %}
+        <button class="announcement-add-btn" data-csp-click="showAnnounceModal" title="发布公告">＋</button>
+        {% endif %}
+    </div>
+</div>
+
 {% if leaderboard %}
 <div class="card mt-4" style="border:none;box-shadow:0 4px 24px rgba(0,0,0,.08);">
     <div class="card-body">
@@ -741,8 +757,8 @@ function refreshLeaderboard() {
 
         // 更新排名徽章
         if (badge) {
-            if (rankData && rankData.rank) {
-                badge.textContent = rankLabel + ': #' + rankData.rank + ' (' + rankData.score + rankScoreUnit + ')';
+            if (rankData && rankData.rank && rankData.rank.rank) {
+                badge.textContent = rankLabel + ': #' + rankData.rank.rank + ' (' + rankData.rank.score + rankScoreUnit + ')';
                 badge.style.display = '';
             } else {
                 badge.style.display = 'none';
@@ -751,7 +767,7 @@ function refreshLeaderboard() {
 
         // 更新管理员申请按钮区域
         if (adminArea && curPermission !== 'administrator') {
-            if (rankData && rankData.rank === 1) {
+            if (rankData && rankData.rank && rankData.rank.rank === 1) {
                 if (pendingReq) {
                     adminArea.innerHTML = '<div class="alert alert-info mb-0 py-2">⏳ ' + adminReqText + loadingText + '</div>';
                 } else {
@@ -779,6 +795,224 @@ function escapeHtml(str) {
 
 // 每30秒刷新一次
 setInterval(refreshLeaderboard, 30000);
+
+// ====== 公告栏 ======
+var announceList = [];
+var announceIdx = 0;
+function loadAnnouncements() {
+    fetch('/api/announcements?_=' + Date.now(), { credentials: 'include', cache: 'no-store' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            announceList = d.announcements || [];
+            announceIdx = 0;
+            renderAnnouncement();
+        }).catch(function(){});
+}
+function renderAnnouncement() {
+    var bar = document.getElementById('announcementBar');
+    var textEl = document.getElementById('announcementText');
+    var dotsEl = document.getElementById('announceDots');
+    var prevBtn = document.getElementById('announcePrev');
+    var nextBtn = document.getElementById('announceNext');
+    if (!bar || !textEl) return;
+    if (!announceList.length) {
+        // 管理员始终可见，方便发布第一条公告
+        if (curPermission === 'administrator') {
+            bar.style.display = 'block';
+            textEl.innerHTML = '<span style="opacity:0.6;">暂无公告，点击右侧 ＋ 发布</span>';
+            if (dotsEl) dotsEl.innerHTML = '';
+            if (prevBtn) prevBtn.style.visibility = 'hidden';
+            if (nextBtn) nextBtn.style.visibility = 'hidden';
+        } else {
+            bar.style.display = 'none';
+        }
+        return;
+    }
+    bar.style.display = 'block';
+    var item = announceList[announceIdx];
+    var by = item.created_by || '';
+    var time = (item.created_at || '').slice(0, 16);
+    textEl.innerHTML = escapeHtml(item.content) + ' <small style="opacity:0.6;white-space:nowrap;">— ' + escapeHtml(by) + ' · ' + escapeHtml(time) + '</small>';
+    // 导航点
+    if (dotsEl) {
+        var dots = '';
+        for (var i = 0; i < announceList.length; i++) {
+            dots += '<span class="announce-dot' + (i === announceIdx ? ' active' : '') + '" data-idx="' + i + '"></span>';
+        }
+        dotsEl.innerHTML = dots;
+    }
+    if (prevBtn) prevBtn.style.visibility = announceList.length > 1 ? '' : 'hidden';
+    if (nextBtn) nextBtn.style.visibility = announceList.length > 1 ? '' : 'hidden';
+}
+function announceNav(delta) {
+    if (!announceList.length) return;
+    announceIdx = (announceIdx + delta + announceList.length) % announceList.length;
+    renderAnnouncement();
+}
+document.getElementById('announcePrev').addEventListener('click', function() { announceNav(-1); });
+document.getElementById('announceNext').addEventListener('click', function() { announceNav(1); });
+// 点击指示点跳转
+document.getElementById('announceDots').addEventListener('click', function(e) {
+    var dot = e.target.closest('.announce-dot');
+    if (!dot) return;
+    announceIdx = parseInt(dot.getAttribute('data-idx'));
+    renderAnnouncement();
+});
+
+// 管理员功能
+function showAnnounceModal() { new bootstrap.Modal(document.getElementById('announceModal')).show(); }
+function submitAnnounce() {
+    var ta = document.getElementById('announceInput');
+    var content = ta.value.trim();
+    if (!content) { alert('请输入公告内容'); return; }
+    fetch('/api/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content })
+    }).then(function(r) { return r.json(); })
+      .then(function(d) {
+          if (d.ok) {
+              ta.value = '';
+              bootstrap.Modal.getInstance(document.getElementById('announceModal')).hide();
+              loadAnnouncements();
+          } else {
+              alert(d.error || '发布失败');
+          }
+      }).catch(function(){ alert('请求失败'); });
+}
+function deleteAnnounce(aid) {
+    if (!confirm('确定要删除这条公告吗？')) return;
+    fetch('/api/announcements/' + aid, { method: 'DELETE', cache: 'no-store' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                loadAnnouncements();
+                // 同时刷新弹窗中的管理列表
+                loadAnnounceManage();
+            } else alert(d.error || '删除失败');
+        }).catch(function(){ alert('请求失败'); });
+}
+
+// 页面加载时获取公告
+loadAnnouncements();
+</script>
+<style nonce="{{ csp_nonce }}">
+/* 公告栏样式 */
+.announcement-bar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    padding: 10px 16px;
+    box-shadow: 0 4px 15px rgba(102,126,234,.25);
+    display: none;
+}
+.announcement-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+}
+.announcement-icon { font-size: 1.3rem; flex-shrink: 0; }
+.announcement-content {
+    flex: 1;
+    font-size: .92rem;
+    line-height: 1.5;
+    min-width: 0;
+}
+.announcement-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.announcement-nav-btn {
+    background: rgba(255,255,255,.2);
+    border: none;
+    color: #fff;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    font-size: .7rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .2s;
+}
+.announcement-nav-btn:hover { background: rgba(255,255,255,.35); }
+.announcement-dots { display: flex; gap: 4px; margin: 0 4px; }
+.announcement-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.4);
+    cursor: pointer;
+    transition: background .2s;
+}
+.announcement-dot.active { background: #fff; }
+.announcement-add-btn {
+    background: rgba(255,255,255,.25);
+    border: 1px dashed rgba(255,255,255,.5);
+    color: #fff;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background .2s;
+}
+.announcement-add-btn:hover { background: rgba(255,255,255,.4); }
+/* 公告管理列表 */
+.announce-manage-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.announce-manage-item:last-child { border-bottom: none; }
+.announce-manage-content { flex: 1; font-size: .9rem; min-width: 0; }
+.announce-manage-delete {
+    background: none; border: none;
+    color: #dc3545; cursor: pointer;
+    font-size: 1.1rem; flex-shrink: 0;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.announce-manage-delete:hover { background: rgba(220,53,69,.1); }
+.announce-manage-scroll { max-height:200px; overflow-y:auto; }
+</style>
+<div class="modal fade" id="announceModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">📢 发布公告</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <textarea id="announceInput" class="form-control" rows="3" placeholder="输入公告内容..."></textarea>
+            <div id="announceManageList" class="mt-3 announce-manage-scroll"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-csp-click="loadAnnounceManage">📋 管理已有公告</button>
+            <button type="button" class="btn btn-primary" data-csp-click="submitAnnounce">发布</button>
+        </div>
+    </div></div>
+</div>
+<script nonce="{{ csp_nonce }}">
+function loadAnnounceManage() {
+    fetch('/api/announcements', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var list = d.announcements || [];
+            var html = '';
+            if (!list.length) { html = '<p class="text-muted small mb-0">暂无公告</p>'; }
+            list.forEach(function(a) {
+                html += '<div class="announce-manage-item">' +
+                    '<div class="announce-manage-content">' + escapeHtml(a.content.slice(0, 80)) + (a.content.length > 80 ? '...' : '') +
+                    '<br><small class="text-muted">' + escapeHtml(a.created_by) + ' · ' + (a.created_at||'').slice(0,16) + '</small></div>' +
+                    '<button class="announce-manage-delete" data-aid="' + a.id + '">✕</button>' +
+                    '</div>';
+            });
+            document.getElementById('announceManageList').innerHTML = html;
+        });
+}
+document.getElementById('announceManageList').addEventListener('click', function(e) {
+    var btn = e.target.closest('.announce-manage-delete');
+    if (!btn) return;
+    deleteAnnounce(parseInt(btn.getAttribute('data-aid')));
+});
 </script>
 <div class="modal fade" id="adminReqModal" tabindex="-1">
     <div class="modal-dialog modal-lg"><div class="modal-content">

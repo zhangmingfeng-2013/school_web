@@ -29,6 +29,12 @@
     ⚠️ 有 <strong>{{ pending_admin_reqs }}</strong> 个待审核的管理员申请 — 点击查看
 </div>
 {% endif %}
+{% if pending_reset_reqs > 0 %}
+<div class="alert alert-danger py-2 mb-3">
+    🔐 有 <strong>{{ pending_reset_reqs }}</strong> 个待审核的密码重置申请 —
+    <a href="/admin/reset_requests" class="alert-link fw-bold">立即审核 →</a>
+</div>
+{% endif %}
 
 {% if leaderboard %}
 <div class="card mb-4">
