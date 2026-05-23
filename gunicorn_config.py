@@ -4,12 +4,13 @@ Gunicorn 生产配置 — 多合一工具箱 Web 版
 架构: Nginx (8080) → Gunicorn gthread workers (127.0.0.1:4444)
 
 并发模型:
-  4 个 worker 进程 × 4 个线程/worker = 16 并发连接
+  6 个 worker 进程 × 6 个线程/worker = 36 并发连接
   适用于 I/O 密集型 Flask 应用（MySQL 查询、文件 I/O）
+  硬件: 8 核 Apple Silicon / 16GB RAM
 
 环境变量自定义（可选）:
-  GUNICORN_WORKERS=4       worker 进程数（建议 = 2 * CPU 核心数）
-  GUNICORN_THREADS=4       每 worker 的线程数
+  GUNICORN_WORKERS=6       worker 进程数（I/O 型：CPU 核数 * 0.75）
+  GUNICORN_THREADS=6       每 worker 的线程数
   GUNICORN_PORT=4444       监听端口
   GUNICORN_TIMEOUT=60      请求超时（秒）
   GUNICORN_LOG_LEVEL=info  日志级别
@@ -24,9 +25,15 @@ bind = f"127.0.0.1:{os.environ.get('GUNICORN_PORT', '4444')}"
 # ---- Worker ----
 # gthread: 每个 worker 是独立进程，内部分配线程处理请求
 # 最适合 I/O 型 Flask 应用（DB 查询、文件读写）
-workers = int(os.environ.get("GUNICORN_WORKERS", "4"))
-threads = int(os.environ.get("GUNICORN_THREADS", "4"))
+workers = int(os.environ.get("GUNICORN_WORKERS", "6"))
+threads = int(os.environ.get("GUNICORN_THREADS", "6"))
 worker_class = "gthread"
+
+# 连接积压队列（Nginx → Gunicorn）
+backlog = 2048
+
+# 每 worker 最大并发连接数
+worker_connections = 1000
 
 # ---- Worker 重启（防止内存泄漏） ----
 # 每个 worker 处理 N 个请求后自动重启，保持长期稳定
@@ -36,7 +43,7 @@ max_requests_jitter = 100  # 随机偏移，避免所有 worker 同时重启
 # ---- 超时 ----
 timeout = int(os.environ.get("GUNICORN_TIMEOUT", "60"))       # 请求处理超时
 graceful_timeout = 30  # 平滑关闭等待
-keepalive = 5           # Nginx upstream keepalive 配合
+keepalive = 15          # HTTP keep-alive（复用连接，减少握手开销）
 
 # ---- 进程管理 ----
 # 应用启动前预加载（节省内存，但需注意全局状态）

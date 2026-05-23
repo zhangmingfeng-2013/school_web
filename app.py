@@ -276,6 +276,7 @@ def _init_db_once():
         _init_marketplace_table()
         _init_src_table()
         _init_life_tables()
+        _init_forum_tables()
         _init_db_done = True
 
 
@@ -322,6 +323,27 @@ def _init_reset_table():
         # 确保 lang 列存在（兼容旧表）
         try:
             cursor.execute("ALTER TABLE user_profiles ADD COLUMN lang VARCHAR(10) DEFAULT 'zh-CN'")
+            conn.commit()
+        except Exception:
+            pass
+        # 确保校友录字段存在
+        for col, col_def in [
+            ("graduation_year", "INT DEFAULT NULL"),
+            ("class_name", "VARCHAR(50) DEFAULT ''"),
+            ("major", "VARCHAR(100) DEFAULT ''"),
+            ("city", "VARCHAR(50) DEFAULT ''"),
+            ("occupation", "VARCHAR(100) DEFAULT ''"),
+            ("wechat", "VARCHAR(50) DEFAULT ''"),
+            ("public_profile", "TINYINT DEFAULT 1"),
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE user_profiles ADD COLUMN {col} {col_def}")
+                conn.commit()
+            except Exception:
+                pass
+        # 论坛公告标记
+        try:
+            cursor.execute("ALTER TABLE forum_posts ADD COLUMN is_announcement TINYINT DEFAULT 0")
             conn.commit()
         except Exception:
             pass
@@ -717,7 +739,7 @@ def check_session_idle_timeout():
 
 # ---------- 全站验证码门禁 ----------
 CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/")
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/")
 
 @app.before_request
 def check_global_captcha():
@@ -1344,6 +1366,14 @@ def register():
 
         try:
             cursor = conn.cursor()
+            # 检查用户名是否已存在（主动检测，而非依赖 UNIQUE 约束报错）
+            cursor.execute("SELECT COUNT(*) FROM users WHERE User_Name = %s", (username,))
+            if cursor.fetchone()[0] > 0:
+                flash("用户名已存在，请更换", "danger")
+                cursor.close()
+                conn.close()
+                return render_template("register.html", csrf_token=session.get("csrf_token", ""))
+
             hashed_pw = generate_password_hash(password)
             cursor.execute(
                 "INSERT INTO users (User_Name, User_Password, Access_Permission) VALUES (%s, %s, %s)",
@@ -1353,7 +1383,7 @@ def register():
             cursor.close()
             conn.close()
             perm_text = "管理员" if permission == "administrator" else "访客"
-            write_log("用户注册", f"用户名: {username}, 权限: {permission}")
+            write_log("用户注册", f"用户名: {username}, 权限: {perm_text}")
             flash(f"注册成功！权限: {perm_text}", "success")
             return redirect(url_for("login"))
         except pymysql.IntegrityError:
@@ -1705,13 +1735,24 @@ def api_vip_request():
         return jsonify({"error": "数据库连接失败"}), 500
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM admin_requests WHERE username=%s AND status='pending'", (username,))
-        if cursor.fetchone():
-            return jsonify({"error": "你已有待审核的申请"}), 400
-        cursor.execute(
-            "INSERT INTO admin_requests (username, status, score) VALUES (%s, 'pending', 0)",
-            (username,)
-        )
+        cursor.execute("SELECT id, status FROM admin_requests WHERE username=%s", (username,))
+        existing = cursor.fetchone()
+        if existing:
+            if existing[1] == "pending":
+                return jsonify({"error": "你已有待审核的申请"}), 400
+            elif existing[1] == "approved":
+                return jsonify({"error": "你的申请已经通过了"}), 400
+            else:
+                # 之前被拒绝的，更新为重新申请
+                cursor.execute(
+                    "UPDATE admin_requests SET status='pending', requested_at=NOW(), reviewed_by=NULL, reviewed_at=NULL WHERE username=%s",
+                    (username,)
+                )
+        else:
+            cursor.execute(
+                "INSERT INTO admin_requests (username, status, score) VALUES (%s, 'pending', 0)",
+                (username,)
+            )
         conn.commit()
         cursor.close()
         conn.close()
@@ -1825,7 +1866,7 @@ def api_notifications():
     username = session["username"]
     is_admin = session.get("permission") == "administrator"
     since = request.args.get("since", "").strip()
-    result = {"chat_unread": 0, "admin_requests": 0, "blocked_ips": 0}
+    result = {"chat_unread": 0, "admin_requests": 0, "blocked_ips": 0, "forum_unread": 0}
 
     # 聊天未读
     if since:
@@ -1871,6 +1912,18 @@ def api_notifications():
                 conn2.close()
         except Exception:
             pass
+
+    # 论坛未读通知
+    try:
+        conn3 = get_db()
+        if conn3:
+            cur3 = conn3.cursor()
+            cur3.execute("SELECT COUNT(*) FROM forum_notifications WHERE username=%s AND is_read=0", (username,))
+            result["forum_unread"] = cur3.fetchone()[0]
+            cur3.close()
+            conn3.close()
+    except Exception:
+        pass
 
     return jsonify(result)
 
@@ -6953,6 +7006,104 @@ def _init_life_tables():
         print(f"  生活实用模块数据库表初始化失败: {e}")
 
 
+def _init_forum_tables():
+    """确保论坛表存在 + 预设版块"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        # 版块表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forum_categories (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(50) NOT NULL UNIQUE,
+                icon VARCHAR(5) DEFAULT '📌',
+                sort_order INT DEFAULT 0,
+                description VARCHAR(200) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 帖子表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forum_posts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                category_id INT NOT NULL,
+                username VARCHAR(50) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                content TEXT NOT NULL,
+                is_pinned TINYINT DEFAULT 0,
+                is_locked TINYINT DEFAULT 0,
+                view_count INT DEFAULT 0,
+                reply_count INT DEFAULT 0,
+                like_count INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_fp_cat (category_id),
+                INDEX idx_fp_user (username),
+                INDEX idx_fp_created (created_at)
+            )
+        """)
+        # 回复表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forum_replies (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                post_id INT NOT NULL,
+                username VARCHAR(50) NOT NULL,
+                content TEXT NOT NULL,
+                like_count INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_fr_post (post_id),
+                INDEX idx_fr_user (username)
+            )
+        """)
+        # 点赞表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forum_likes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                target_type ENUM('post', 'reply') NOT NULL,
+                target_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_like (username, target_type, target_id)
+            )
+        """)
+        # 通知表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS forum_notifications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                type VARCHAR(20) NOT NULL COMMENT 'reply or like',
+                post_id INT,
+                post_title VARCHAR(200) DEFAULT '',
+                from_user VARCHAR(50) NOT NULL,
+                content_preview VARCHAR(100) DEFAULT '',
+                is_read TINYINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_fn_user (username, is_read),
+                INDEX idx_fn_created (created_at)
+            )
+        """)
+        # 预设版块
+        default_categories = [
+            ("🎓", "校友动态", 1, "校友近况、班级新闻、母校发展"),
+            ("📢", "活动通知", 2, "聚会、讲座、返校日活动发布"),
+            ("❓", "互助问答", 3, "学习、工作、生活中的问题求助"),
+            ("💼", "职业发展", 4, "招聘内推、行业交流、创业分享"),
+            ("🎉", "随便聊聊", 5, "灌水八卦，轻松交流"),
+        ]
+        for icon, name, order, desc in default_categories:
+            cursor.execute(
+                "INSERT IGNORE INTO forum_categories (icon, name, sort_order, description) VALUES (%s,%s,%s,%s)",
+                (icon, name, order, desc)
+            )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError as e:
+        print(f"  论坛模块数据库表初始化失败: {e}")
+
+
 # ---------- 天气 ----------
 # 和风天气 API 配置
 QWEATHER_KEY = "0983383148ea4af799eb535dd1a03ca9"
@@ -7679,12 +7830,618 @@ def code_formatter_page():
     return render_template("code_formatter.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 
+# ==============================================================
+#  信息门户 & 校友录
+# ==============================================================
+
+# ---- 信息门户主页 ----
+@app.route("/portal")
+@login_required
+def portal_page():
+    _init_forum_tables()
+    return render_template("portal.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---- 门户 API：聚合数据 ----
+@app.route("/api/portal/summary")
+@login_required
+def api_portal_summary():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 最新公告（置顶+公告标记）
+    cursor.execute("""
+        SELECT p.id, p.title, p.content, p.username, p.created_at, c.icon as cat_icon, c.name as cat_name
+        FROM forum_posts p JOIN forum_categories c ON p.category_id=c.id
+        WHERE p.is_announcement=1 OR p.is_pinned=1
+        ORDER BY p.is_announcement DESC, p.created_at DESC LIMIT 5
+    """)
+    announcements = [{"id": r[0], "title": r[1], "content": r[2][:120], "username": r[3], "created_at": str(r[4]), "cat_icon": r[5], "cat_name": r[6]} for r in cursor.fetchall()]
+
+    # 最新帖子
+    cursor.execute("""
+        SELECT p.id, p.title, p.content, p.username, p.created_at, c.icon, c.name, p.reply_count
+        FROM forum_posts p JOIN forum_categories c ON p.category_id=c.id
+        ORDER BY p.created_at DESC LIMIT 10
+    """)
+    latest_posts = [{"id": r[0], "title": r[1], "content": r[2][:100], "username": r[3], "created_at": str(r[4]), "cat_icon": r[5], "cat_name": r[6], "reply_count": r[7]} for r in cursor.fetchall()]
+
+    # 近期活动（calendar_events 中 category='event' 的）
+    today = __import__('datetime').date.today().isoformat()
+    cursor.execute("""
+        SELECT id, title, description, event_date, event_time, username, category
+        FROM calendar_events WHERE event_date >= %s AND category='event'
+        ORDER BY event_date ASC LIMIT 8
+    """, (today,))
+    events = [{"id": r[0], "title": r[1], "description": (r[2] or "")[:100], "event_date": str(r[3]), "event_time": str(r[4]) if r[4] else "", "username": r[5], "category": r[6]} for r in cursor.fetchall()]
+
+    # 校友统计
+    cursor.execute("SELECT COUNT(*) FROM user_profiles WHERE graduation_year IS NOT NULL AND public_profile=1")
+    alumni_count = cursor.fetchone()[0]
+
+    cursor.close(); conn.close()
+    return jsonify({"announcements": announcements, "latest_posts": latest_posts, "events": events, "alumni_count": alumni_count})
+
+# ---- 校友录主页 ----
+@app.route("/alumni")
+@login_required
+def alumni_page():
+    _init_reset_table()
+    return render_template("alumni.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---- 校友录 API：列表 ----
+@app.route("/api/alumni/list")
+@login_required
+def api_alumni_list():
+    page = request.args.get("page", 1, type=int)
+    per_page = 20
+    grad_year = request.args.get("year", type=int)
+    keyword = request.args.get("keyword", "").strip()
+    offset_val = (page - 1) * per_page
+
+    conn = get_db()
+    cursor = conn.cursor()
+    where = "WHERE up.public_profile=1"
+    params = []
+
+    if grad_year:
+        where += " AND up.graduation_year=%s"
+        params.append(grad_year)
+    if keyword:
+        where += " AND (up.username LIKE %s OR up.nickname LIKE %s OR up.city LIKE %s OR up.class_name LIKE %s)"
+        kw = f"%{keyword}%"
+        params.extend([kw, kw, kw, kw])
+
+    cursor.execute(f"SELECT COUNT(*) FROM user_profiles up {where}", params)
+    total = cursor.fetchone()[0]
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+
+    cursor.execute(f"""
+        SELECT up.username, up.nickname, up.graduation_year, up.class_name, up.city, up.bio
+        FROM user_profiles up {where}
+        ORDER BY up.graduation_year DESC, up.class_name, up.username
+        LIMIT %s OFFSET %s
+    """, params + [per_page, offset_val])
+    rows = cursor.fetchall()
+    alumni = [{
+        "username": r[0], "nickname": r[1] or r[0], "graduation_year": r[2],
+        "class_name": r[3] or "", "city": r[4] or "",
+        "bio": (r[5] or "")[:80],
+        "avatar": (r[1] or r[0])[0].upper()
+    } for r in rows]
+
+    cursor.close(); conn.close()
+    return jsonify({"alumni": alumni, "total": total, "page": page, "total_pages": total_pages})
+
+# ---- 校友录 API：统计 ----
+@app.route("/api/alumni/stats")
+@login_required
+def api_alumni_stats():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT graduation_year, COUNT(*) FROM user_profiles WHERE graduation_year IS NOT NULL AND public_profile=1 GROUP BY graduation_year ORDER BY graduation_year DESC")
+    year_stats = [{"year": r[0], "count": r[1]} for r in cursor.fetchall()]
+    cursor.execute("SELECT COUNT(*) FROM user_profiles WHERE public_profile=1")
+    total = cursor.fetchone()[0]
+    cursor.close(); conn.close()
+    return jsonify({"year_stats": year_stats, "total": total})
+
+# ---- 校友录 API：更新自己的资料 ----
+@app.route("/api/alumni/profile", methods=["GET", "POST"])
+@login_required
+def api_alumni_profile():
+    username = session["username"]
+    conn = get_db()
+
+    if request.method == "GET":
+        cursor = conn.cursor()
+        cursor.execute("SELECT nickname, graduation_year, class_name, major, city, occupation, wechat, bio, public_profile FROM user_profiles WHERE username=%s", (username,))
+        r = cursor.fetchone()
+        cursor.close(); conn.close()
+        if r:
+            return jsonify({"nickname": r[0], "graduation_year": r[1], "class_name": r[2], "major": r[3], "city": r[4], "occupation": r[5], "wechat": r[6], "bio": r[7], "public_profile": bool(r[8])})
+        return jsonify({"nickname": username, "public_profile": True})
+
+    # POST 更新
+    data = request.get_json() or {}
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO user_profiles (username, nickname, graduation_year, class_name, major, city, occupation, wechat, bio, public_profile)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            nickname=VALUES(nickname), graduation_year=VALUES(graduation_year), class_name=VALUES(class_name),
+            major=VALUES(major), city=VALUES(city), occupation=VALUES(occupation), wechat=VALUES(wechat),
+            bio=VALUES(bio), public_profile=VALUES(public_profile)
+    """, (
+        username,
+        data.get("nickname", username),
+        data.get("graduation_year"),
+        data.get("class_name", ""),
+        data.get("major", ""),
+        data.get("city", ""),
+        data.get("occupation", ""),
+        data.get("wechat", ""),
+        data.get("bio", ""),
+        1 if data.get("public_profile", True) else 0
+    ))
+    conn.commit()
+    cursor.close(); conn.close()
+    _log_activity_local(username, "alumni_profile", 3)
+    return jsonify({"ok": True})
+
+# ---- 公告管理（仅管理员的 forum 帖子标记为公告） ----
+@app.route("/api/portal/announce", methods=["POST"])
+@login_required
+def api_portal_announce():
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    data = request.get_json() or {}
+    pid = data.get("post_id")
+    val = data.get("announce", True)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE forum_posts SET is_announcement=%s WHERE id=%s", (1 if val else 0, pid))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+
+def _log_activity_local(username, action, points):
+    try:
+        ac = get_db()
+        if ac:
+            acu = ac.cursor()
+            acu.execute("INSERT INTO activity_log (username, action, points) VALUES (%s,%s,%s)", (username, action, points))
+            ac.commit(); acu.close(); ac.close()
+    except Exception:
+        pass
+
+
+# ==============================================================
+#  校友社区论坛
+# ==============================================================
+
+@app.route("/forum")
+@login_required
+def forum_page():
+    _init_forum_tables()
+    return render_template("forum.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+# ---- 版块 ----
+@app.route("/api/forum/categories")
+@login_required
+def api_forum_categories():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, icon, description, sort_order FROM forum_categories ORDER BY sort_order")
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+    cats = [{"id": r[0], "name": r[1], "icon": r[2], "description": r[3], "sort_order": r[4]} for r in rows]
+    # 统计每个版块的帖子数
+    conn2 = get_db()
+    cur2 = conn2.cursor()
+    cur2.execute("SELECT category_id, COUNT(*) FROM forum_posts GROUP BY category_id")
+    counts = dict(cur2.fetchall())
+    cur2.close(); conn2.close()
+    for cat in cats:
+        cat["post_count"] = counts.get(cat["id"], 0)
+    return jsonify({"categories": cats})
+
+# ---- 帖子列表 ----
+@app.route("/api/forum/posts", methods=["GET", "POST"])
+@login_required
+def api_forum_posts():
+    username = session["username"]
+    permission = session.get("permission", "guest")
+    conn = get_db()
+
+    if request.method == "GET":
+        cat_id = request.args.get("category_id", type=int)
+        page = request.args.get("page", 1, type=int)
+        per_page = 15
+        offset_val = (page - 1) * per_page
+        keyword = request.args.get("keyword", "").strip()
+
+        cursor = conn.cursor()
+        where = "WHERE 1=1"
+        params = []
+
+        if cat_id:
+            where += " AND p.category_id=%s"
+            params.append(cat_id)
+        if keyword:
+            where += " AND (p.title LIKE %s OR p.content LIKE %s)"
+            params.extend([f"%{keyword}%", f"%{keyword}%"])
+
+        # 总数
+        cursor.execute(f"SELECT COUNT(*) FROM forum_posts p {where}", params)
+        total = cursor.fetchone()[0]
+        total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+
+        # 分页查询（置顶优先，按时间倒序）
+        order = "ORDER BY p.is_pinned DESC, p.created_at DESC"
+        cursor.execute(
+            f"SELECT p.id, p.category_id, p.username, p.title, p.content, p.is_pinned, p.is_locked, "
+            f"p.view_count, p.reply_count, p.like_count, p.created_at "
+            f"FROM forum_posts p {where} {order} LIMIT %s OFFSET %s",
+            params + [per_page, offset_val]
+        )
+        rows = cursor.fetchall()
+        posts = []
+        for r in rows:
+            posts.append({
+                "id": r[0], "category_id": r[1], "username": r[2], "title": r[3],
+                "content": r[4][:200], "is_pinned": bool(r[5]), "is_locked": bool(r[6]),
+                "view_count": r[7], "reply_count": r[8], "like_count": r[9],
+                "created_at": str(r[10]),
+            })
+        cursor.close(); conn.close()
+        return jsonify({"posts": posts, "total": total, "page": page, "total_pages": total_pages})
+
+    else:  # POST — 发帖
+        data = request.get_json() or {}
+        title = data.get("title", "").strip()
+        content = data.get("content", "").strip()
+        cat_id = data.get("category_id", 0)
+        if not title or not content or not cat_id:
+            return jsonify({"ok": False, "error": "标题、内容和版块不能为空"}), 400
+        if len(title) > 200:
+            return jsonify({"ok": False, "error": "标题不能超过200字"}), 400
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO forum_posts (category_id, username, title, content) VALUES (%s,%s,%s,%s)",
+            (cat_id, username, title, content)
+        )
+        conn.commit()
+        pid = cursor.lastrowid
+        cursor.close(); conn.close()
+        # 记活跃分
+        try:
+            ac = get_db()
+            if ac:
+                acu = ac.cursor()
+                acu.execute("INSERT INTO activity_log (username, action, points) VALUES (%s,%s,%s)", (username, "forum_post", 5))
+                ac.commit(); acu.close(); ac.close()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "id": pid})
+
+# ---- 帖子详情 ----
+@app.route("/api/forum/posts/<int:pid>", methods=["GET", "PUT", "DELETE"])
+@login_required
+def api_forum_post_item(pid):
+    username = session["username"]
+    permission = session.get("permission", "guest")
+    conn = get_db()
+
+    if request.method == "GET":
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT p.id, p.category_id, p.username, p.title, p.content, p.is_pinned, p.is_locked, "
+            "p.view_count, p.reply_count, p.like_count, p.created_at, "
+            "c.name as cat_name, c.icon as cat_icon "
+            "FROM forum_posts p JOIN forum_categories c ON p.category_id=c.id "
+            "WHERE p.id=%s", (pid,)
+        )
+        r = cursor.fetchone()
+        if not r:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "帖子不存在"}), 404
+        post = {
+            "id": r[0], "category_id": r[1], "username": r[2], "title": r[3],
+            "content": r[4], "is_pinned": bool(r[5]), "is_locked": bool(r[6]),
+            "view_count": r[7], "reply_count": r[8], "like_count": r[9],
+            "created_at": str(r[10]), "cat_name": r[11], "cat_icon": r[12],
+        }
+        # 当前用户是否已点赞
+        cursor.execute("SELECT 1 FROM forum_likes WHERE username=%s AND target_type='post' AND target_id=%s", (username, pid))
+        post["liked"] = cursor.fetchone() is not None
+
+        # 更新浏览量（同一会话内不重复计数）
+        viewed_key = f"_viewed_{pid}"
+        if not session.get(viewed_key):
+            cursor.execute("UPDATE forum_posts SET view_count = view_count + 1 WHERE id=%s", (pid,))
+            conn.commit()
+            session[viewed_key] = True
+            post["view_count"] += 1
+
+        # 回复列表
+        cursor.execute(
+            "SELECT r.id, r.username, r.content, r.like_count, r.created_at FROM forum_replies r WHERE r.post_id=%s ORDER BY r.created_at ASC",
+            (pid,)
+        )
+        replies = []
+        for r2 in cursor.fetchall():
+            # 每个回复的点赞状态
+            cursor.execute("SELECT 1 FROM forum_likes WHERE username=%s AND target_type='reply' AND target_id=%s", (username, r2[0]))
+            replies.append({
+                "id": r2[0], "username": r2[1], "content": r2[2], "like_count": r2[3],
+                "created_at": str(r2[4]),
+                "liked": cursor.fetchone() is not None,
+            })
+        post["replies"] = replies
+        cursor.close(); conn.close()
+        return jsonify({"post": post})
+
+    elif request.method == "PUT":  # 编辑
+        data = request.get_json() or {}
+        cursor = conn.cursor()
+        if permission == "administrator":
+            cursor.execute("UPDATE forum_posts SET title=%s, content=%s, category_id=%s WHERE id=%s",
+                           (data.get("title"), data.get("content"), data.get("category_id", 0), pid))
+        else:
+            cursor.execute("UPDATE forum_posts SET title=%s, content=%s WHERE id=%s AND username=%s",
+                           (data.get("title"), data.get("content"), pid, username))
+        conn.commit()
+        affected = cursor.rowcount
+        cursor.close(); conn.close()
+        if affected == 0:
+            return jsonify({"ok": False, "error": "无权限或帖子不存在"}), 403
+        return jsonify({"ok": True})
+
+    else:  # DELETE
+        cursor = conn.cursor()
+        if permission == "administrator":
+            cursor.execute("DELETE FROM forum_posts WHERE id=%s", (pid,))
+        else:
+            cursor.execute("DELETE FROM forum_posts WHERE id=%s AND username=%s", (pid, username))
+        affected = cursor.rowcount
+        if affected > 0:
+            cursor.execute("DELETE FROM forum_replies WHERE post_id=%s", (pid,))
+            cursor.execute("DELETE FROM forum_likes WHERE target_type='post' AND target_id=%s", (pid,))
+        conn.commit()
+        cursor.close(); conn.close()
+        if affected == 0:
+            return jsonify({"ok": False, "error": "无权限或帖子不存在"}), 403
+        return jsonify({"ok": True})
+
+# ---- 置顶/取消置顶 ----
+@app.route("/api/forum/posts/<int:pid>/pin", methods=["POST"])
+@login_required
+def api_forum_post_pin(pid):
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT is_pinned FROM forum_posts WHERE id=%s", (pid,))
+    r = cursor.fetchone()
+    if not r:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "帖子不存在"}), 404
+    new_val = 0 if r[0] else 1
+    cursor.execute("UPDATE forum_posts SET is_pinned=%s WHERE id=%s", (new_val, pid))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True, "is_pinned": bool(new_val)})
+
+# ---- 锁定/解锁 ----
+@app.route("/api/forum/posts/<int:pid>/lock", methods=["POST"])
+@login_required
+def api_forum_post_lock(pid):
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT is_locked FROM forum_posts WHERE id=%s", (pid,))
+    r = cursor.fetchone()
+    if not r:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "帖子不存在"}), 404
+    new_val = 0 if r[0] else 1
+    cursor.execute("UPDATE forum_posts SET is_locked=%s WHERE id=%s", (new_val, pid))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True, "is_locked": bool(new_val)})
+
+# ---- 回帖 ----
+@app.route("/api/forum/replies", methods=["POST"])
+@login_required
+def api_forum_reply():
+    username = session["username"]
+    data = request.get_json() or {}
+    post_id = data.get("post_id")
+    content = data.get("content", "").strip()
+    if not post_id or not content:
+        return jsonify({"ok": False, "error": "内容不能为空"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    # 检查是否锁定
+    cursor.execute("SELECT is_locked, username, title FROM forum_posts WHERE id=%s", (post_id,))
+    post = cursor.fetchone()
+    if not post:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "帖子不存在"}), 404
+    if post[0] and session.get("permission") != "administrator":
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "帖子已锁定，无法回复"}), 403
+
+    cursor.execute("INSERT INTO forum_replies (post_id, username, content) VALUES (%s,%s,%s)",
+                   (post_id, username, content))
+    cursor.execute("UPDATE forum_posts SET reply_count = reply_count + 1 WHERE id=%s", (post_id,))
+    conn.commit()
+    rid = cursor.lastrowid
+
+    # 通知帖主（不通知自己）
+    if post[1] != username:
+        cursor.execute(
+            "INSERT INTO forum_notifications (username, type, post_id, post_title, from_user, content_preview) VALUES (%s,%s,%s,%s,%s,%s)",
+            (post[1], "reply", post_id, post[2], username, content[:80])
+        )
+    conn.commit()
+    cursor.close(); conn.close()
+
+    # 记活跃分
+    try:
+        ac = get_db()
+        if ac:
+            acu = ac.cursor()
+            acu.execute("INSERT INTO activity_log (username, action, points) VALUES (%s,%s,%s)", (username, "forum_reply", 2))
+            ac.commit(); acu.close(); ac.close()
+    except Exception:
+        pass
+    return jsonify({"ok": True, "id": rid})
+
+# ---- 删除回复 ----
+@app.route("/api/forum/replies/<int:rid>", methods=["DELETE"])
+@login_required
+def api_forum_reply_item(rid):
+    username = session["username"]
+    permission = session.get("permission", "guest")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT post_id, username FROM forum_replies WHERE id=%s", (rid,))
+    r = cursor.fetchone()
+    if not r:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "回复不存在"}), 404
+    post_id = r[0]
+    if permission != "administrator" and r[1] != username:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "无权限"}), 403
+    cursor.execute("DELETE FROM forum_replies WHERE id=%s", (rid,))
+    cursor.execute("UPDATE forum_posts SET reply_count = GREATEST(reply_count - 1, 0) WHERE id=%s", (post_id,))
+    cursor.execute("DELETE FROM forum_likes WHERE target_type='reply' AND target_id=%s", (rid,))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+# ---- 点赞/取消点赞 ----
+@app.route("/api/forum/like", methods=["POST"])
+@login_required
+def api_forum_like():
+    username = session["username"]
+    data = request.get_json() or {}
+    target_type = data.get("target_type")  # 'post' or 'reply'
+    target_id = data.get("target_id")
+    if target_type not in ("post", "reply") or not target_id:
+        return jsonify({"ok": False, "error": "参数错误"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM forum_likes WHERE username=%s AND target_type=%s AND target_id=%s",
+                   (username, target_type, target_id))
+    existing = cursor.fetchone()
+
+    if existing:
+        # 取消点赞
+        cursor.execute("DELETE FROM forum_likes WHERE id=%s", (existing[0],))
+        table = "forum_posts" if target_type == "post" else "forum_replies"
+        col = "like_count"
+        cursor.execute(f"UPDATE {table} SET {col} = GREATEST({col} - 1, 0) WHERE id=%s", (target_id,))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True, "liked": False})
+
+    # 点赞
+    cursor.execute("INSERT INTO forum_likes (username, target_type, target_id) VALUES (%s,%s,%s)",
+                   (username, target_type, target_id))
+    table = "forum_posts" if target_type == "post" else "forum_replies"
+    cursor.execute(f"UPDATE {table} SET like_count = like_count + 1 WHERE id=%s", (target_id,))
+
+    # 通知（帖子点赞通知帖主，回复点赞通知回复者）
+    if target_type == "post":
+        cursor.execute("SELECT username, title FROM forum_posts WHERE id=%s", (target_id,))
+        target = cursor.fetchone()
+        if target and target[0] != username:
+            cursor.execute(
+                "INSERT INTO forum_notifications (username, type, post_id, post_title, from_user) VALUES (%s,%s,%s,%s,%s)",
+                (target[0], "like", target_id, target[1], username)
+            )
+    else:
+        cursor.execute("SELECT r.username, r.content, r.post_id FROM forum_replies r WHERE r.id=%s", (target_id,))
+        target = cursor.fetchone()
+        if target and target[0] != username:
+            cursor.execute(
+                "INSERT INTO forum_notifications (username, type, post_id, post_title, from_user, content_preview) VALUES (%s,%s,%s,%s,%s,%s)",
+                (target[0], "like", target[2], "", username, (target[1] or "")[:80])
+            )
+
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True, "liked": True})
+
+# ---- 论坛通知 ----
+@app.route("/api/forum/notifications")
+@login_required
+def api_forum_notifications():
+    username = session["username"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, type, post_id, post_title, from_user, content_preview, is_read, created_at "
+        "FROM forum_notifications WHERE username=%s ORDER BY created_at DESC LIMIT 50",
+        (username,)
+    )
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+    notifs = [{
+        "id": r[0], "type": r[1], "post_id": r[2], "post_title": r[3],
+        "from_user": r[4], "content_preview": r[5], "is_read": bool(r[6]),
+        "created_at": str(r[7]),
+    } for r in rows]
+    unread = sum(1 for n in notifs if not n["is_read"])
+    return jsonify({"notifications": notifs, "unread": unread})
+
+@app.route("/api/forum/notifications/read", methods=["POST"])
+@login_required
+def api_forum_notifications_read():
+    username = session["username"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE forum_notifications SET is_read=1 WHERE username=%s AND is_read=0", (username,))
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+
 # ---------- 启动 ----------
+def _kill_orphan_port(port: int):
+    """杀掉占用指定端口的本用户残留进程，防止启动时端口冲突。"""
+    import subprocess
+    import signal
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=5
+        )
+        pids = result.stdout.strip().split()
+        if not pids:
+            return
+        # 过滤：只杀当前用户的进程
+        my_pid = os.getpid()
+        killed = 0
+        for pid_str in pids:
+            try:
+                pid = int(pid_str)
+                if pid == my_pid:
+                    continue  # 不要杀自己
+                os.kill(pid, signal.SIGKILL)
+                killed += 1
+            except (ProcessLookupError, PermissionError):
+                pass
+        if killed:
+            print(f"  [清理] 已终止 {killed} 个占用端口 {port} 的残留进程")
+    except Exception:
+        pass  # 清理失败不阻塞启动
+
 if __name__ == "__main__":
     import atexit
     atexit.register(rate_limiter.shutdown)
 
-    print("=" * 100)
+    print("=" * 50)
     print("  多合一工具箱 Web 版启动")
     print(f"  本地访问: http://127.0.0.1:4444")
     # 自动检测本机局域网 IP
@@ -7697,11 +8454,49 @@ if __name__ == "__main__":
     except Exception:
         print(f"  局域网访问: http://192.168.3.160:5800")
     print(f"  调试模式: {'开启' if os.environ.get('FLASK_DEBUG') else '关闭'}")
-    print("=" * 100)
+    print("=" * 50)
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     _init_plugins()
-    # 不泄露服务器类型/版本
-    import werkzeug.serving
-    werkzeug.serving.WSGIRequestHandler.version_string = lambda self: ""
-    werkzeug.serving.WSGIRequestHandler.sys_version = ''
-    app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
+    
+    # ---- 服务器选择 ----
+    # WAITRESS_ENABLED=0 可强制回退到 Werkzeug 开发服务器
+    # WAITRESS_THREADS=8  线程池大小（默认 8）
+    use_waitress = os.environ.get("WAITRESS_ENABLED", "1") == "1"
+    
+    if use_waitress:
+        try:
+            import waitress
+            
+            threads = int(os.environ.get("WAITRESS_THREADS", "8"))
+            
+            from importlib.metadata import version as pkg_version
+            print(f"  服务器引擎: Waitress {pkg_version('waitress')}")
+            print(f"  线程池大小: {threads}")
+            print(f"  最大连接数: {os.environ.get('WAITRESS_CONNECTION_LIMIT', '100')}")
+            print("=" * 50)
+            
+            # 清理残留进程，防止端口占用
+            _kill_orphan_port(4444)
+            
+            waitress.serve(
+                app,
+                host="0.0.0.0",
+                port=4444,
+                threads=threads,
+                connection_limit=int(os.environ.get("WAITRESS_CONNECTION_LIMIT", "100")),
+                channel_timeout=int(os.environ.get("WAITRESS_TIMEOUT", "60")),
+                # 隐藏服务器标识
+                ident=None,
+                clear_untrusted_proxy_headers=True,
+            )
+        except ImportError:
+            print("  Waitress 未安装，回退到 Werkzeug 开发服务器")
+            use_waitress = False
+    
+    if not use_waitress:
+        # Werkzeug 开发服务器回退
+        # 不泄露服务器类型/版本
+        import werkzeug.serving
+        werkzeug.serving.WSGIRequestHandler.version_string = lambda self: ""
+        werkzeug.serving.WSGIRequestHandler.sys_version = ''
+        app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
