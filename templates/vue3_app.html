@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<title>多合一工具箱</title>
+<!-- Element Plus CSS -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+<!-- Element Plus Dark CSS -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus/theme-chalk/dark/css-vars.css">
+<!-- Font Awesome Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style nonce="{{ csp_nonce }}">
+:root {
+  --sidebar-width: 220px;
+  --header-height: 56px;
+  --bg-primary: #f0f2f5;
+  --bg-card: #ffffff;
+  --text-primary: #303133;
+  --text-secondary: #909399;
+  --border-color: #e4e7ed;
+}
+html.dark {
+  --bg-primary: #141414;
+  --bg-card: #1d1d1d;
+  --text-primary: #e5eaf3;
+  --text-secondary: #a3a6ad;
+  --border-color: #363637;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg-primary); color: var(--text-primary); transition: background .3s, color .3s; }
+#app { min-height:100vh; display:flex; flex-direction:column; }
+.app-header { height:var(--header-height); background:var(--bg-card); border-bottom:1px solid var(--border-color); display:flex; align-items:center; padding:0 20px; position:fixed; top:0; left:0; right:0; z-index:1000; box-shadow:0 1px 4px rgba(0,0,0,.04); gap:12px; }
+.app-header .brand { font-size:18px; font-weight:700; color:var(--el-color-primary); white-space:nowrap; }
+.app-header .header-center { flex:1; display:flex; align-items:center; gap:12px; }
+.app-header .header-right { display:flex; align-items:center; gap:8px; }
+.app-body { display:flex; flex:1; margin-top:var(--header-height); }
+.app-sidebar { width:var(--sidebar-width); background:var(--bg-card); border-right:1px solid var(--border-color); position:fixed; top:var(--header-height); left:0; bottom:0; overflow-y:auto; transition:transform .3s; z-index:999; padding:8px 0; }
+.app-main { flex:1; margin-left:var(--sidebar-width); padding:20px; min-height:calc(100vh - var(--header-height)); }
+.sidebar-menu { border-right:none !important; }
+/* 移动端 */
+@media (max-width:768px) {
+  .app-sidebar { transform:translateX(-100%); }
+  .app-sidebar.open { transform:translateX(0); }
+  .app-main { margin-left:0; }
+  .mobile-menu-btn { display:inline-flex !important; }
+}
+.mobile-menu-btn { display:none !important; }
+.login-bg { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.login-card { width:420px; max-width:95vw; background:var(--bg-card); border-radius:16px; padding:40px; box-shadow:0 20px 60px rgba(0,0,0,.15); }
+.login-card h2 { text-align:center; margin-bottom:32px; font-weight:700; color:var(--text-primary); }
+/* Dashboard cards */
+.stat-card { background:var(--bg-card); border-radius:12px; padding:20px; border:1px solid var(--border-color); transition:.2s; }
+.stat-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.08); }
+.stat-card .stat-value { font-size:32px; font-weight:700; color:var(--el-color-primary); }
+.stat-card .stat-label { font-size:13px; color:var(--text-secondary); margin-top:4px; }
+.feature-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:16px; }
+.feature-card { background:var(--bg-card); border-radius:12px; padding:24px; border:1px solid var(--border-color); cursor:pointer; transition:.2s; text-decoration:none; color:var(--text-primary); display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; }
+.feature-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.1); border-color:var(--el-color-primary); }
+.feature-card .icon { font-size:36px; }
+.feature-card .name { font-weight:600; font-size:15px; }
+.feature-card .desc { font-size:12px; color:var(--text-secondary); }
+/* Chat styles */
+.chat-container { display:flex; flex-direction:column; height:calc(100vh - var(--header-height) - 40px); background:var(--bg-card); border-radius:12px; border:1px solid var(--border-color); }
+.chat-messages { flex:1; overflow-y:auto; padding:16px; }
+.chat-input-area { padding:16px; border-top:1px solid var(--border-color); display:flex; gap:8px; }
+.chat-msg { margin-bottom:12px; display:flex; gap:8px; }
+.chat-msg.mine { flex-direction:row-reverse; }
+.chat-msg .bubble { max-width:70%; padding:10px 14px; border-radius:12px; font-size:14px; line-height:1.5; }
+.chat-msg.mine .bubble { background:var(--el-color-primary); color:#fff; border-bottom-right-radius:4px; }
+.chat-msg.other .bubble { background:var(--el-fill-color); color:var(--text-primary); border-bottom-left-radius:4px; }
+.chat-msg .meta { font-size:11px; color:var(--text-secondary); margin-bottom:2px; }
+/* Bot bubble */
+.chat-msg.bot .bubble { background:linear-gradient(135deg, #667eea20, #764ba220); border:1px solid var(--el-color-primary-light); }
+.typing-dots { display:flex; gap:4px; padding:8px 0; }
+.typing-dots span { width:6px; height:6px; border-radius:50%; background:var(--el-color-primary); animation:typing 1.4s infinite ease-in-out; }
+.typing-dots span:nth-child(2) { animation-delay:.2s; }
+.typing-dots span:nth-child(3) { animation-delay:.4s; }
+@keyframes typing { 0%,60%,100% { transform:translateY(0); opacity:.3; } 30% { transform:translateY(-8px); opacity:1; } }
+/* Pet styles */
+.pet-container { text-align:center; padding:40px 20px; }
+.pet-display { font-size:120px; line-height:1; transition:transform .3s; cursor:pointer; user-select:none; display:inline-block; }
+.pet-display:hover { transform:scale(1.1); }
+.pet-display:active { transform:scale(.95); }
+.pet-name { font-size:24px; font-weight:700; margin-top:8px; }
+.pet-stats { display:flex; justify-content:center; gap:24px; margin:16px 0; flex-wrap:wrap; }
+.pet-stat { text-align:center; min-width:80px; }
+.pet-stat .label { font-size:11px; color:var(--text-secondary); }
+.pet-stat .bar { height:6px; background:var(--el-fill-color); border-radius:3px; margin-top:4px; overflow:hidden; }
+.pet-stat .bar-fill { height:100%; border-radius:3px; transition:width .5s; }
+.pet-actions { display:flex; justify-content:center; gap:12px; margin:20px 0; flex-wrap:wrap; }
+/* Scrollbar */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--el-border-color); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--el-text-color-secondary); }
+/* Forum */
+.forum-post { background:var(--bg-card); border-radius:12px; padding:16px; border:1px solid var(--border-color); margin-bottom:12px; cursor:pointer; transition:.2s; }
+.forum-post:hover { border-color:var(--el-color-primary); box-shadow:0 2px 8px rgba(0,0,0,.06); }
+.forum-post .title { font-size:16px; font-weight:600; }
+.forum-post .meta { font-size:12px; color:var(--text-secondary); margin-top:8px; display:flex; gap:16px; }
+/* Album grid */
+.album-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:12px; }
+.album-card { background:var(--bg-card); border-radius:10px; overflow:hidden; border:1px solid var(--border-color); cursor:pointer; transition:.2s; }
+.album-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.1); }
+.album-card img { width:100%; height:170px; object-fit:cover; display:block; }
+.album-card .info { padding:8px 12px; font-size:12px; color:var(--text-secondary); }
+/* Page transitions */
+.fade-enter-active, .fade-leave-active { transition:opacity .25s ease; }
+.fade-enter-from, .fade-leave-to { opacity:0; }
+/* Notifications */
+.notif-bell { position:relative; cursor:pointer; font-size:20px; }
+.notif-bell .badge { position:absolute; top:-6px; right:-8px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Auth Layout (Login/Register/Forgot) -->
+  <div v-if="!isLoggedIn" class="login-bg">
+    <router-view></router-view>
+  </div>
+  <!-- App Layout (Logged in) -->
+  <template v-if="isLoggedIn">
+    <!-- Header -->
+    <header class="app-header">
+      <el-button class="mobile-menu-btn" :icon="Menu" circle @click="sidebarOpen=!sidebarOpen" size="small"/>
+      <span class="brand">🔧 多合一工具箱</span>
+      <div class="header-center">
+        <el-button size="small" type="warning" plain @click="$router.push('/donate')" style="animation:donatePulse 2s ease-in-out infinite;">
+          ❤️ 捐赠
+        </el-button>
+        <el-button size="small" circle @click="toggleTheme">
+          [[ isDark ? '☀️' : '🌙' ]]
+        </el-button>
+        <el-dropdown @command="switchLang">
+          <el-button size="small" plain>🌐 [[ currentLangName ]]</el-button>
+          <template #dropdown><el-dropdown-menu>
+            <el-dropdown-item command="zh">中文</el-dropdown-item>
+            <el-dropdown-item command="en">English</el-dropdown-item>
+          </el-dropdown-menu></template>
+        </el-dropdown>
+      </div>
+      <div class="header-right">
+        <el-popover placement="bottom" :width="340" trigger="click">
+          <template #reference>
+            <el-badge :value="unreadCount" :hidden="unreadCount===0" class="notif-bell">
+              <el-button size="small" circle>🔔</el-button>
+            </el-badge>
+          </template>
+          <div v-if="notifications.length===0" style="text-align:center;padding:20px;color:var(--text-secondary);">暂无新通知</div>
+          <div v-for="n in notifications" :key="n.id" style="padding:8px 0;border-bottom:1px solid var(--border-color);font-size:13px;cursor:pointer;" @click="handleNotifClick(n)">
+            [[ n.icon ]] [[ n.text ]]
+          </div>
+        </el-popover>
+        <el-dropdown @command="handleUserCommand">
+          <span style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <el-avatar :size="32" :src="avatarUrl"/> 
+            <span style="font-size:14px;">[[ username ]]</span>
+            <el-tag size="small" :type="permTagType">[[ permLabel ]]</el-tag>
+          </span>
+          <template #dropdown><el-dropdown-menu>
+            <el-dropdown-item command="profile">👤 个人资料</el-dropdown-item>
+            <el-dropdown-item command="admin" v-if="isAdmin">🔑 管理后台</el-dropdown-item>
+            <el-dropdown-item command="logout" divided>🚪 退出登录</el-dropdown-item>
+          </el-dropdown-menu></template>
+        </el-dropdown>
+      </div>
+    </header>
+    <!-- Body -->
+    <div class="app-body">
+      <!-- Sidebar -->
+      <aside class="app-sidebar" :class="{open: sidebarOpen}">
+        <el-menu :default-active="currentRoute" router class="sidebar-menu" :collapse="false">
+          <el-menu-item index="/dashboard"><el-icon><Monitor/></el-icon><span>仪表盘</span></el-menu-item>
+          <el-sub-menu index="community">
+            <template #title><el-icon><ChatDotRound/></el-icon><span>社区</span></template>
+            <el-menu-item index="/chat">💬 聊天室</el-menu-item>
+            <el-menu-item index="/forum">📋 论坛</el-menu-item>
+            <el-menu-item index="/portal">📰 信息门户</el-menu-item>
+            <el-menu-item index="/alumni">👥 校友名录</el-menu-item>
+            <el-menu-item index="/album">🖼️ 纪念相册</el-menu-item>
+            <el-menu-item index="/alumni_stories">📖 校友故事</el-menu-item>
+            <el-menu-item index="/confession">💌 表白墙</el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu index="life">
+            <template #title><el-icon><Sunny/></el-icon><span>生活</span></template>
+            <el-menu-item index="/pet">🐾 电子宠物</el-menu-item>
+            <el-menu-item index="/pomodoro">🍅 番茄钟</el-menu-item>
+            <el-menu-item index="/checkin">✅ 签到</el-menu-item>
+            <el-menu-item index="/habits">🎯 习惯追踪</el-menu-item>
+            <el-menu-item index="/expenses">💰 记账</el-menu-item>
+            <el-menu-item index="/weather">🌤️ 天气</el-menu-item>
+            <el-menu-item index="/calendar">📅 日历</el-menu-item>
+            <el-menu-item index="/daily_quote">💭 每日一言</el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu index="study">
+            <template #title><el-icon><Reading/></el-icon><span>学习</span></template>
+            <el-menu-item index="/study">📚 学习工具</el-menu-item>
+            <el-menu-item index="/notes">📝 便签</el-menu-item>
+            <el-menu-item index="/bookmarks">🔖 书签</el-menu-item>
+            <el-menu-item index="/translator">🌍 翻译</el-menu-item>
+            <el-menu-item index="/ai_writing">✍️ AI写作</el-menu-item>
+            <el-menu-item index="/markdown">📄 Markdown</el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu index="tools">
+            <template #title><el-icon><Tools/></el-icon><span>工具</span></template>
+            <el-menu-item index="/network_tools">🌐 网络工具</el-menu-item>
+            <el-menu-item index="/system_monitor">📊 系统监控</el-menu-item>
+            <el-menu-item index="/file_manager">📁 文件管理</el-menu-item>
+            <el-menu-item index="/db_query">🗄️ 数据库查询</el-menu-item>
+            <el-menu-item index="/converter">🔄 格式转换</el-menu-item>
+            <el-menu-item index="/utils">🧰 实用工具</el-menu-item>
+            <el-menu-item index="/calculator">🧮 计算器</el-menu-item>
+            <el-menu-item index="/qrcode">📱 二维码</el-menu-item>
+            <el-menu-item index="/api_tester">🔌 API测试</el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu index="more">
+            <template #title><el-icon><MoreFilled/></el-icon><span>更多</span></template>
+            <el-menu-item index="/games">🎮 小游戏</el-menu-item>
+            <el-menu-item index="/marketplace">🛒 插件市场</el-menu-item>
+            <el-menu-item index="/rss">📡 RSS阅读</el-menu-item>
+            <el-menu-item index="/countdown">⏱️ 倒计时</el-menu-item>
+            <el-menu-item index="/image_compress">🖼️ 图片压缩</el-menu-item>
+            <el-menu-item index="/pdf_tools">📑 PDF工具</el-menu-item>
+            <el-menu-item index="/text_diff">📝 文本对比</el-menu-item>
+            <el-menu-item index="/jwt_decoder">🔐 JWT解码</el-menu-item>
+            <el-menu-item index="/sql_formatter">💾 SQL格式化</el-menu-item>
+            <el-menu-item index="/mock_data">🎲 Mock数据</el-menu-item>
+            <el-menu-item index="/random_tools">🎯 随机工具</el-menu-item>
+            <el-menu-item index="/git_cheatsheet">📖 Git速查</el-menu-item>
+            <el-menu-item index="/password_analyzer">🔒 密码分析</el-menu-item>
+            <el-menu-item index="/file_converter">📁 文件转换</el-menu-item>
+            <el-menu-item index="/morse_code">📡 摩斯电码</el-menu-item>
+            <el-menu-item index="/idcard_tools">🪪 身份证工具</el-menu-item>
+            <el-menu-item index="/cron_parser">⏰ Cron解析</el-menu-item>
+            <el-menu-item index="/ua_parser">🔍 UA解析</el-menu-item>
+            <el-menu-item index="/code_formatter">💻 代码格式化</el-menu-item>
+            <el-menu-item index="/unit_converter">📏 单位换算</el-menu-item>
+          </el-sub-menu>
+          <el-menu-item index="/author"><el-icon><UserFilled/></el-icon><span>关于作者</span></el-menu-item>
+          <el-menu-item index="/donate"><el-icon><Present/></el-icon><span>捐赠支持</span></el-menu-item>
+        </el-menu>
+      </aside>
+      <!-- Main Content -->
+      <main class="app-main" @click="sidebarOpen=false">
+        <router-view v-slot="{Component}">
+          <transition name="fade" mode="out-in">
+            <component :is="Component"/>
+          </transition>
+        </router-view>
+      </main>
+    </div>
+  </template>
+</div>
+
+<!-- Dependencies -->
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+<script src="https://unpkg.com/@element-plus/icons-vue"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+<script>
+const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, h } = Vue;
+const { createRouter, createWebHashHistory } = VueRouter;
+
+// ===================== CSRF & API Helper =====================
+const api = axios.create({ withCredentials: true });
+api.interceptors.request.use(config => {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  if (csrf) config.headers['X-CSRF-Token'] = csrf;
+  return config;
+});
+
+// ===================== Global State =====================
+const userState = reactive({
+  username: '',
+  permission: 'guest',
+  isLoggedIn: false,
+  avatarUrl: '',
+});
+
+// ===================== Components =====================
+
+// --- Login Page ---
+const LoginPage = {
+  template: `
+    <div class="login-card">
+      <h2>🔐 登录</h2>
+      <el-form :model="form" @submit.prevent="login" label-position="top">
+        <el-form-item label="用户名">
+          <el-input v-model="form.username" placeholder="请输入用户名" prefix-icon="User" size="large"/>
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input v-model="form.password" type="password" placeholder="请输入密码" prefix-icon="Lock" show-password size="large" @keyup.enter="login"/>
+        </el-form-item>
+        <el-form-item label="验证码">
+          <div style="display:flex;gap:12px;align-items:center;">
+            <el-input v-model="form.captcha" placeholder="验证码" size="large" style="flex:1" @keyup.enter="login"/>
+            <img :src="captchaUrl" @click="refreshCaptcha" style="height:40px;cursor:pointer;border-radius:4px;border:1px solid var(--el-border-color);" title="点击刷新"/>
+          </div>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" size="large" style="width:100%" @click="login" :loading="loading">登 录</el-button>
+        </el-form-item>
+      </el-form>
+      <div style="text-align:center;font-size:13px;color:var(--text-secondary);">
+        <a href="javascript:void(0)" @click="$router.push('/register')" style="color:var(--el-color-primary);">注册账号</a>
+        <span style="margin:0 8px;">|</span>
+        <a href="javascript:void(0)" @click="$router.push('/forgot')" style="color:var(--el-color-primary);">忘记密码</a>
+      </div>
+    </div>`,
+  data() { return { form:{username:'',password:'',captcha:''}, loading:false, captchaUrl:'/api/captcha?'+Date.now() }; },
+  methods: {
+    refreshCaptcha() { this.captchaUrl='/api/captcha?'+Date.now(); },
+    async login() {
+      if(!this.form.username||!this.form.password){ ElMessage.warning('请填写用户名和密码');return; }
+      this.loading=true;
+      try {
+        const r=await api.post('/api/auth/login', this.form);
+        if(r.data&&r.data.ok){ userState.username=r.data.username;userState.permission=r.data.permission;userState.isLoggedIn=true;userState.avatarUrl=r.data.avatar||'';this.$router.push('/dashboard'); }
+        else { ElMessage.error(r.data?.error||'登录失败');this.refreshCaptcha(); }
+      } catch(e){ ElMessage.error(e.response?.data?.error||e.response?.data||'登录失败，请检查网络');this.refreshCaptcha(); }
+      finally{ this.loading=false; }
+    }
+  }
+};
+
+// --- Register Page ---
+const RegisterPage = {
+  template: `
+    <div class="login-card">
+      <h2>📝 注册</h2>
+      <el-form :model="form" label-position="top">
+        <el-form-item label="用户名"><el-input v-model="form.username" placeholder="请输入用户名" size="large"/></el-form-item>
+        <el-form-item label="密码"><el-input v-model="form.password" type="password" placeholder="至少8位，含字母和数字" show-password size="large"/></el-form-item>
+        <el-form-item label="确认密码"><el-input v-model="form.confirm" type="password" placeholder="再次输入密码" show-password size="large"/></el-form-item>
+        <el-form-item label="管理员密码（选填）"><el-input v-model="form.admin_pwd" type="password" placeholder="如需管理员权限请输入" show-password size="large"/></el-form-item>
+        <el-form-item label="验证码">
+          <div style="display:flex;gap:12px;align-items:center;">
+            <el-input v-model="form.captcha" placeholder="验证码" size="large" style="flex:1"/>
+            <img :src="captchaUrl" @click="refreshCaptcha" style="height:40px;cursor:pointer;border-radius:4px;border:1px solid var(--el-border-color);"/>
+          </div>
+        </el-form-item>
+        <el-button type="primary" size="large" style="width:100%" @click="register" :loading="loading">注 册</el-button>
+      </el-form>
+      <div style="text-align:center;margin-top:16px;font-size:13px;">
+        <a href="javascript:void(0)" @click="$router.push('/')" style="color:var(--el-color-primary);">已有账号？去登录</a>
+      </div>
+    </div>`,
+  data() { return { form:{username:'',password:'',confirm:'',admin_pwd:'',captcha:''}, loading:false, captchaUrl:'/api/captcha?'+Date.now() }; },
+  methods: {
+    refreshCaptcha() { this.captchaUrl='/api/captcha?'+Date.now(); },
+    async register() {
+      const f=this.form;
+      if(!f.username||!f.password||!f.confirm){ ElMessage.warning('请填写所有必填字段');return; }
+      if(f.password!==f.confirm){ ElMessage.error('两次密码不一致');return; }
+      if(f.password.length<8){ ElMessage.error('密码长度不能少于8位');return; }
+      if(!/[A-Za-z]/.test(f.password)){ ElMessage.error('密码必须包含至少一个字母');return; }
+      if(!/[0-9]/.test(f.password)){ ElMessage.error('密码必须包含至少一个数字');return; }
+      this.loading=true;
+      try {
+        const r=await api.post('/api/auth/register', f);
+        ElMessage.success(r.data?.message||'注册成功！请登录');
+        this.$router.push('/');
+      } catch(e){ ElMessage.error(e.response?.data?.error||'注册失败');this.refreshCaptcha(); }
+      finally{ this.loading=false; }
+    }
+  }
+};
+
+// --- Forgot Password ---
+const ForgotPage = {
+  template: `
+    <div class="login-card">
+      <h2>🔑 忘记密码</h2>
+      <el-form :model="form" label-position="top">
+        <el-form-item label="用户名"><el-input v-model="form.username" placeholder="请输入用户名" size="large"/></el-form-item>
+        <el-form-item label="邮箱（选填）"><el-input v-model="form.email" placeholder="用于接收重置链接" size="large"/></el-form-item>
+        <el-form-item label="验证码">
+          <div style="display:flex;gap:12px;align-items:center;">
+            <el-input v-model="form.captcha" placeholder="验证码" size="large" style="flex:1"/>
+            <img :src="captchaUrl" @click="refreshCaptcha" style="height:40px;cursor:pointer;border-radius:4px;border:1px solid var(--el-border-color);"/>
+          </div>
+        </el-form-item>
+        <el-button type="primary" size="large" style="width:100%" @click="submit" :loading="loading">提交申请</el-button>
+      </el-form>
+      <div style="text-align:center;margin-top:16px;font-size:13px;">
+        <a href="javascript:void(0)" @click="$router.push('/')" style="color:var(--el-color-primary);">返回登录</a>
+      </div>
+    </div>`,
+  data() { return { form:{username:'',email:'',captcha:''}, loading:false, captchaUrl:'/api/captcha?'+Date.now() }; },
+  methods: {
+    refreshCaptcha() { this.captchaUrl='/api/captcha?'+Date.now(); },
+    async submit() {
+      if(!this.form.username){ ElMessage.warning('请输入用户名');return; }
+      this.loading=true;
+      try {
+        await api.post('/api/auth/forgot_password', {username:this.form.username, email:this.form.email, captcha:this.form.captcha});
+        ElMessage.success('申请已提交，请等待管理员审核');
+        this.$router.push('/');
+      } catch(e){ ElMessage.error(e.response?.data?.error||'提交失败');this.refreshCaptcha(); }
+      finally{ this.loading=false; }
+    }
+  }
+};
+
+// --- Dashboard ---
+const DashboardPage = {
+  template: `
+    <div>
+      <div style="margin-bottom:20px;">
+        <h2 style="margin:0;">👋 欢迎回来，[[ userState.username ]]</h2>
+        <el-tag :type="permTag" size="large" style="margin-top:8px;">[[ permLabel ]]</el-tag>
+      </div>
+      <!-- Stats -->
+      <el-row :gutter="16" style="margin-bottom:20px;">
+        <el-col :xs="12" :sm="6" v-for="s in stats" :key="s.label" style="margin-bottom:16px;">
+          <div class="stat-card">
+            <div class="stat-value">[[ s.value ]]</div>
+            <div class="stat-label">[[ s.label ]]</div>
+          </div>
+        </el-col>
+      </el-row>
+      <!-- Leaderboard -->
+      <el-card shadow="never" style="margin-bottom:20px;">
+        <template #header><span>🏆 活跃排行榜</span></template>
+        <el-table :data="leaderboard" stripe size="small">
+          <el-table-column type="index" width="60" label="#"/>
+          <el-table-column prop="username" label="用户名"/>
+          <el-table-column prop="score" label="积分" width="100" align="right"/>
+          <el-table-column prop="actions" label="操作数" width="100" align="right"/>
+        </el-table>
+      </el-card>
+      <!-- Features Grid -->
+      <h3 style="margin-bottom:12px;">🚀 功能入口</h3>
+      <div class="feature-grid">
+        <div class="feature-card" v-for="f in features" :key="f.path" @click="$router.push(f.path)">
+          <span class="icon">[[ f.icon ]]</span>
+          <span class="name">[[ f.name ]]</span>
+          <span class="desc">[[ f.desc ]]</span>
+        </div>
+      </div>
+    </div>`,
+  data() {
+    return {
+      stats:[
+        {label:'社区成员',value:'...'},
+        {label:'论坛帖子',value:'...'},
+        {label:'相册照片',value:'...'},
+        {label:'今日签到',value:'...'},
+      ],
+      leaderboard:[],
+      features:[
+        {icon:'💬',name:'聊天室',desc:'实时交流',path:'/chat'},
+        {icon:'🤖',name:'AI 助手',desc:'智能对话',path:'/chat'},
+        {icon:'📋',name:'论坛',desc:'校友社区',path:'/forum'},
+        {icon:'🖼️',name:'纪念相册',desc:'美好回忆',path:'/album'},
+        {icon:'🐾',name:'电子宠物',desc:'养成陪伴',path:'/pet'},
+        {icon:'🍅',name:'番茄钟',desc:'专注学习',path:'/pomodoro'},
+        {icon:'🎯',name:'习惯追踪',desc:'养成好习惯',path:'/habits'},
+        {icon:'💰',name:'记账',desc:'财务管理',path:'/expenses'},
+        {icon:'👥',name:'校友名录',desc:'找校友',path:'/alumni'},
+        {icon:'📰',name:'信息门户',desc:'校园资讯',path:'/portal'},
+        {icon:'💌',name:'表白墙',desc:'匿名心声',path:'/confession'},
+        {icon:'📖',name:'校友故事',desc:'精彩分享',path:'/alumni_stories'},
+        {icon:'🌍',name:'翻译',desc:'多语言翻译',path:'/translator'},
+        {icon:'✍️',name:'AI写作',desc:'智能创作',path:'/ai_writing'},
+        {icon:'🌐',name:'网络工具',desc:'Ping/DNS/Whois',path:'/network_tools'},
+        {icon:'📊',name:'系统监控',desc:'服务器状态',path:'/system_monitor'},
+        {icon:'🧰',name:'实用工具',desc:'加密/编码/JSON',path:'/utils'},
+        {icon:'🧮',name:'计算器',desc:'科学计算',path:'/calculator'},
+        {icon:'🎮',name:'小游戏',desc:'休闲娱乐',path:'/games'},
+        {icon:'🛒',name:'插件市场',desc:'扩展功能',path:'/marketplace'},
+        {icon:'📡',name:'RSS阅读',desc:'订阅资讯',path:'/rss'},
+        {icon:'👤',name:'关于作者',desc:'开发者信息',path:'/author'},
+        {icon:'❤️',name:'捐赠支持',desc:'支持开发者',path:'/donate'},
+        {icon:'📁',name:'文件管理',desc:'上传下载',path:'/file_manager'},
+        {icon:'📅',name:'日历',desc:'日程管理',path:'/calendar'},
+        {icon:'📝',name:'便签',desc:'快速记录',path:'/notes'},
+        {icon:'🔖',name:'书签',desc:'收藏链接',path:'/bookmarks'},
+        {icon:'🗄️',name:'数据库',desc:'查询管理',path:'/db_query'},
+        {icon:'🌤️',name:'天气',desc:'天气预报',path:'/weather'},
+        {icon:'⏱️',name:'倒计时',desc:'重要日期',path:'/countdown'},
+        {icon:'💭',name:'每日一言',desc:'名言警句',path:'/daily_quote'},
+        {icon:'✅',name:'签到',desc:'每日打卡',path:'/checkin'},
+      ]
+    };
+  },
+  computed: {
+    permTag(){ const p=userState.permission; return p==='administrator'?'danger':p==='vip'?'warning':'info'; },
+    permLabel(){ const p=userState.permission; return p==='administrator'?'管理员':p==='vip'?'VIP':'用户'; }
+  },
+  async mounted() {
+    try {
+      const [lb,stats]=await Promise.all([
+        api.get('/api/leaderboard').then(r=>r.data),
+        api.get('/api/forum/categories').then(()=>{}).catch(()=>{}),
+      ]);
+      this.leaderboard=lb||[];
+      this.stats[0].value=lb.length||0;
+    } catch(e){}
+  }
+};
+
+// --- Chat Page ---
+const ChatPage = {
+  template: `
+    <div class="chat-container">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border-color);display:flex;gap:8px;align-items:center;">
+        <el-radio-group v-model="chatMode" size="small">
+          <el-radio-button value="chat">💬 群聊</el-radio-button>
+          <el-radio-button value="ai">🤖 AI助手</el-radio-button>
+        </el-radio-group>
+        <el-button v-if="chatMode==='ai'" size="small" @click="showAiSettings=true">⚙️ 设置</el-button>
+      </div>
+      <div class="chat-messages" ref="msgBox">
+        <div v-if="messages.length===0" style="text-align:center;padding:40px;color:var(--text-secondary);">
+          [[ chatMode==='ai' ? '👋 你好！我是AI助手，有什么可以帮助你的？' : '暂无消息，开始聊天吧！' ]]
+        </div>
+        <div v-for="msg in messages" :key="msg.id" :class="['chat-msg', msg.mine ? 'mine' : (msg.role==='assistant'?'bot':'other')]">
+          <div v-if="!msg.mine&&msg.role!=='assistant'" class="meta" style="text-align:left;">[[ msg.username||msg.sender ]]</div>
+          <div class="bubble">[[ msg.content||msg.message ]]</div>
+          <div class="meta" style="margin-top:2px;">[[ formatTime(msg.created_at||msg.timestamp) ]]</div>
+        </div>
+        <div v-if="aiLoading" class="chat-msg bot"><div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div></div>
+      </div>
+      <div class="chat-input-area">
+        <el-input v-model="inputText" placeholder="输入消息..." @keyup.enter="send" :disabled="aiLoading" size="large"/>
+        <el-button type="primary" @click="send" :loading="aiLoading" size="large">发送</el-button>
+        <el-button v-if="chatMode==='ai'" @click="clearAiChat" size="large">清空</el-button>
+      </div>
+      <!-- AI Settings Dialog -->
+      <el-dialog v-model="showAiSettings" title="AI 设置" width="500px">
+        <el-form label-width="100px">
+          <el-form-item label="API地址"><el-input v-model="aiConfig.url" placeholder="https://api.openai.com/v1"/></el-form-item>
+          <el-form-item label="API Key"><el-input v-model="aiConfig.key" type="password" show-password placeholder="sk-..."/></el-form-item>
+          <el-form-item label="模型"><el-input v-model="aiConfig.model" placeholder="gpt-3.5-turbo"/></el-form-item>
+        </el-form>
+        <template #footer><el-button @click="showAiSettings=false">取消</el-button><el-button type="primary" @click="saveAiConfig">保存</el-button></template>
+      </el-dialog>
+    </div>`,
+  data() {
+    return {
+      chatMode:'chat', inputText:'', messages:[], aiLoading:false,
+      showAiSettings:false, aiConfig:{url:'',key:'',model:'gpt-3.5-turbo'},
+      pollTimer:null,
+    };
+  },
+  methods: {
+    formatTime(t) { if(!t)return''; const d=new Date(t); return d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); },
+    async loadMessages() {
+      if(this.chatMode==='chat') {
+        try { const r=await api.get('/api/chat/messages'); this.messages=(r.data||[]).map(m=>({...m,mine:m.sender===userState.username})); this.scrollBottom(); } catch(e){}
+      }
+    },
+    async send() {
+      if(!this.inputText.trim())return;
+      const text=this.inputText; this.inputText='';
+      if(this.chatMode==='chat') {
+        try { await api.post('/api/chat/send',{message:text}); this.loadMessages(); } catch(e){ ElMessage.error('发送失败'); }
+      } else {
+        this.messages.push({id:Date.now(),role:'user',content:text,mine:true,created_at:new Date().toISOString()});
+        this.aiLoading=true; this.scrollBottom();
+        try {
+          const r=await api.post('/api/chat/ai/ask',{message:text});
+          this.messages.push({id:Date.now()+1,role:'assistant',content:r.data.reply||r.data.content||'...',mine:false,created_at:new Date().toISOString()});
+        } catch(e){ this.messages.push({id:Date.now()+1,role:'assistant',content:'抱歉，AI服务暂时不可用',mine:false,created_at:new Date().toISOString()}); }
+        finally{ this.aiLoading=false; this.scrollBottom(); }
+      }
+    },
+    async clearAiChat() {
+      try { await api.post('/api/chat/ai/clear'); this.messages=[]; ElMessage.success('已清空'); } catch(e){}
+    },
+    async loadAiConfig() {
+      try { const r=await api.get('/api/chat/ai/config'); if(r.data){ this.aiConfig=r.data; } } catch(e){}
+    },
+    async saveAiConfig() {
+      try { await api.post('/api/chat/ai/config',this.aiConfig); ElMessage.success('保存成功'); this.showAiSettings=false; } catch(e){ ElMessage.error('保存失败'); }
+    },
+    scrollBottom() { nextTick(()=>{ const el=this.$refs.msgBox; if(el) el.scrollTop=el.scrollHeight; }); }
+  },
+  watch: {
+    chatMode(v) {
+      if(v==='chat') this.loadMessages();
+      else { this.loadAiConfig(); this.messages=[]; }
+    }
+  },
+  mounted() {
+    this.loadMessages();
+    this.pollTimer=setInterval(()=>{ if(this.chatMode==='chat') this.loadMessages(); },3000);
+  },
+  beforeUnmount() { if(this.pollTimer) clearInterval(this.pollTimer); }
+};
+
+// --- Forum Page ---
+const ForumPage = {
+  template: `
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="margin:0;">📋 校友论坛</h2>
+        <el-button type="primary" @click="showNewPost=true">发帖</el-button>
+      </div>
+      <el-tabs v-model="activeTab" @tab-change="loadPosts">
+        <el-tab-pane v-for="c in categories" :key="c.id" :label="c.name" :name="String(c.id)"/>
+      </el-tabs>
+      <div v-if="posts.length===0" style="text-align:center;padding:60px;color:var(--text-secondary);">暂无帖子</div>
+      <div class="forum-post" v-for="p in posts" :key="p.id" @click="viewPost(p)">
+        <div class="title">[[ p.title ]]</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">[[ (p.content||'').substring(0,120) ]][[ (p.content||'').length>120?'...':'' ]]</div>
+        <div class="meta">
+          <span>👤 [[ p.author||p.username ]]</span>
+          <span>👁️ [[ p.views||0 ]]</span>
+          <span>❤️ [[ p.likes||0 ]]</span>
+          <span>💬 [[ p.reply_count||0 ]]</span>
+          <span>🕐 [[ formatDate(p.created_at) ]]</span>
+        </div>
+      </div>
+      <!-- Post Detail Dialog -->
+      <el-dialog v-model="showDetail" :title="currentPost?.title" width="700px" top="5vh">
+        <div style="white-space:pre-wrap;line-height:1.6;">[[ currentPost?.content ]]</div>
+        <el-divider/>
+        <h4>回复 ([[ replies.length ]])</h4>
+        <div v-for="r in replies" :key="r.id" style="padding:8px 0;border-bottom:1px solid var(--border-color);">
+          <strong>[[ r.author||r.username ]]</strong>
+          <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">[[ formatDate(r.created_at) ]]</span>
+          <div style="margin-top:4px;">[[ r.content ]]</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <el-input v-model="replyText" placeholder="写回复..." size="small" @keyup.enter="submitReply"/>
+          <el-button type="primary" size="small" @click="submitReply">回复</el-button>
+        </div>
+        <template #footer><el-button @click="showDetail=false">关闭</el-button></template>
+      </el-dialog>
+      <!-- New Post Dialog -->
+      <el-dialog v-model="showNewPost" title="发布新帖" width="600px">
+        <el-form label-width="80px">
+          <el-form-item label="分类"><el-select v-model="newPost.category_id" placeholder="选择分类"><el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id"/></el-select></el-form-item>
+          <el-form-item label="标题"><el-input v-model="newPost.title" placeholder="帖子标题"/></el-form-item>
+          <el-form-item label="内容"><el-input v-model="newPost.content" type="textarea" :rows="6" placeholder="帖子内容"/></el-form-item>
+        </el-form>
+        <template #footer><el-button @click="showNewPost=false">取消</el-button><el-button type="primary" @click="submitPost">发布</el-button></template>
+      </el-dialog>
+    </div>`,
+  data() { return {
+    categories:[], activeTab:'0', posts:[], showNewPost:false, newPost:{category_id:null,title:'',content:''},
+    showDetail:false, currentPost:null, replies:[], replyText:'',
+  };},
+  methods: {
+    formatDate(d) { if(!d)return''; return new Date(d).toLocaleDateString('zh-CN'); },
+    async loadCategories() { try { const r=await api.get('/api/forum/categories'); this.categories=r.data||[]; this.activeTab=String(this.categories[0]?.id||0); } catch(e){} },
+    async loadPosts() { try { const r=await api.get('/api/forum/posts?category_id='+this.activeTab); this.posts=r.data||[]; } catch(e){} },
+    async viewPost(p) {
+      this.currentPost=p; this.showDetail=true; this.replyText='';
+      try {
+        const r=await api.get('/api/forum/posts/'+p.id);
+        if(r.data) { this.currentPost=r.data; this.replies=r.data.replies||[]; }
+      } catch(e){}
+    },
+    async submitPost() {
+      if(!this.newPost.title.trim()){ ElMessage.warning('请输入标题');return; }
+      try { await api.post('/api/forum/posts',this.newPost); ElMessage.success('发布成功'); this.showNewPost=false; this.newPost={category_id:null,title:'',content:''}; this.loadPosts(); } catch(e){ ElMessage.error('发布失败'); }
+    },
+    async submitReply() {
+      if(!this.replyText.trim())return;
+      try { await api.post('/api/forum/posts/'+this.currentPost.id+'/reply',{content:this.replyText}); this.replyText=''; this.viewPost(this.currentPost); } catch(e){ ElMessage.error('回复失败'); }
+    }
+  },
+  async mounted() { await this.loadCategories(); if(this.categories.length) this.loadPosts(); }
+};
+
+// --- Placeholder Page ---
+const PlaceholderPage = {
+  props: { title:{default:'页面'}, icon:{default:'📄'}, desc:{default:''} },
+  template: `
+    <div style="text-align:center;padding:60px 20px;">
+      <div style="font-size:64px;">[[ icon ]]</div>
+      <h2 style="margin-top:16px;">[[ title ]]</h2>
+      <p style="color:var(--text-secondary);margin-top:8px;">[[ desc || '功能开发中，敬请期待...' ]]</p>
+      <el-empty v-if="!desc" description="功能开发中..."/>
+    </div>`
+};
+
+// --- Pet Page (full implementation) ---
+const PetPage = {
+  template: `
+    <div>
+      <div class="pet-container" v-if="!pet">
+        <div style="font-size:64px;">🥚</div>
+        <h2>你还没有宠物</h2>
+        <el-button type="primary" size="large" @click="hatch" style="margin-top:16px;">🥚 孵化宠物</el-button>
+      </div>
+      <div v-else class="pet-container">
+        <div class="pet-display" @click="feed">[[ petEmoji ]]</div>
+        <div class="pet-name">[[ pet.name ]] <el-tag size="small" :type="stageType" style="margin-left:4px;">[[ stageName ]]</el-tag></div>
+        <div class="pet-stats">
+          <div class="pet-stat">
+            <span>😊</span><span class="label">心情</span>
+            <div class="bar"><div class="bar-fill" :style="{width:pet.mood+'%',background:moodColor}"></div></div>
+            <span style="font-size:11px;">[[ pet.mood ]]%</span>
+          </div>
+          <div class="pet-stat">
+            <span>🍔</span><span class="label">饱腹</span>
+            <div class="bar"><div class="bar-fill" :style="{width:pet.hunger+'%',background:'#67c23a'}"></div></div>
+            <span style="font-size:11px;">[[ pet.hunger ]]%</span>
+          </div>
+          <div class="pet-stat">
+            <span>🧹</span><span class="label">清洁</span>
+            <div class="bar"><div class="bar-fill" :style="{width:pet.cleanliness+'%',background:'#409eff'}"></div></div>
+            <span style="font-size:11px;">[[ pet.cleanliness ]]%</span>
+          </div>
+          <div class="pet-stat">
+            <span>⚡</span><span class="label">体力</span>
+            <div class="bar"><div class="bar-fill" :style="{width:pet.energy+'%',background:'#e6a23c'}"></div></div>
+            <span style="font-size:11px;">[[ pet.energy ]]%</span>
+          </div>
+        </div>
+        <div style="font-size:13px;color:var(--text-secondary);">等级: [[ pet.level ]] | 经验: [[ pet.exp ]]/[[ pet.exp_next ]] | 💰金币: [[ pet.coins ]]</div>
+        <div class="pet-actions">
+          <el-button @click="petAction('feed')">🍔 喂食</el-button>
+          <el-button @click="petAction('clean')">🧹 清洁</el-button>
+          <el-button @click="petAction('play')">🎾 玩耍</el-button>
+          <el-button @click="petAction('sleep')">😴 睡觉</el-button>
+          <el-button @click="showGame=true">🎮 小游戏</el-button>
+          <el-button @click="showShop=true">🛒 商店</el-button>
+          <el-button @click="showCommunity=true">🏘️ 社区</el-button>
+        </div>
+        <div v-if="pet.dialogue" style="margin-top:12px;padding:8px 16px;background:var(--el-fill-color);border-radius:8px;display:inline-block;font-size:14px;">
+          💬 [[ pet.dialogue ]]
+        </div>
+      </div>
+      <!-- Tabs -->
+      <el-tabs v-if="pet" v-model="activeTab" style="margin-top:20px;">
+        <el-tab-pane label="🏆 成就" name="achievements">
+          <el-row :gutter="12"><el-col :span="8" v-for="a in achievements" :key="a.id" style="margin-bottom:12px;">
+            <el-card shadow="hover"><div style="text-align:center;font-size:24px;">[[ a.unlocked ? a.icon : '🔒' ]]</div>
+            <div style="text-align:center;font-size:12px;margin-top:4px;">[[ a.name ]]</div></el-card>
+          </el-col></el-row>
+        </el-tab-pane>
+        <el-tab-pane label="👗 装扮" name="dress">
+          <el-row :gutter="12"><el-col :span="8" v-for="d in inventory" :key="d.id" style="margin-bottom:12px;">
+            <el-card shadow="hover"><div style="text-align:center;font-size:24px;">[[ d.icon||'🎀' ]]</div>
+            <div style="text-align:center;font-size:12px;">[[ d.name ]]</div>
+            <el-button size="small" style="width:100%;margin-top:4px;" @click="equipItem(d)" :type="d.equipped?'success':''">
+              [[ d.equipped ? '已装备' : '装备' ]]</el-button></el-card>
+          </el-col></el-row>
+        </el-tab-pane>
+        <el-tab-pane label="📔 日记" name="diary">
+          <el-timeline><el-timeline-item v-for="d in diary" :key="d.id" :timestamp="formatDate(d.created_at)">[[ d.content ]]</el-timeline-item></el-timeline>
+        </el-tab-pane>
+      </el-tabs>
+    </div>`,
+  data() { return {
+    pet:null, activeTab:'achievements', achievements:[], inventory:[], diary:[],
+    showGame:false, showShop:false, shopItems:[], showCommunity:false, communityPets:[],
+  };},
+  computed: {
+    petEmoji() { const s=this.pet?.stage||1; return s===1?'🐣':s===2?'🐥':'🐔'; },
+    stageName() { const s=this.pet?.stage||1; return s===1?'幼年期':s===2?'成长期':'成熟期'; },
+    stageType() { const s=this.pet?.stage||1; return s===1?'info':s===2?'warning':'success'; },
+    moodColor() { const m=this.pet?.mood||50; return m>70?'#67c23a':m>30?'#e6a23c':'#f56c6c'; }
+  },
+  methods: {
+    formatDate(d) { if(!d)return''; return new Date(d).toLocaleDateString('zh-CN'); },
+    async loadPet() { try { const r=await api.get('/api/pet'); this.pet=r.data; } catch(e){ this.pet=null; } },
+    async hatch() { try { const r=await api.post('/api/pet/hatch'); this.pet=r.data; ElMessage.success('孵化成功！'); } catch(e){ ElMessage.error('孵化失败'); } },
+    async petAction(action) {
+      try {
+        const r=await api.post('/api/pet/action',{action});
+        if(r.data) this.pet={...this.pet,...r.data};
+        ElMessage.success(r.data?.dialogue||'操作成功');
+      } catch(e){ ElMessage.error('操作失败'); }
+    },
+    async loadAchievements() { try { this.achievements=(await api.get('/api/pet/achievements/list')).data||[]; } catch(e){} },
+    async loadInventory() { try { this.inventory=(await api.get('/api/pet/shop')).data||[]; } catch(e){} },
+    async loadDiary() { try { this.diary=(await api.get('/api/pet/diary')).data||[]; } catch(e){} },
+    async equipItem(item) { try { await api.post('/api/pet/accessory/equip',{item_id:item.id}); this.loadInventory(); } catch(e){} },
+    async loadShopItems() { try { this.shopItems=(await api.get('/api/pet/shop')).data||[]; } catch(e){} },
+    async buyItem(item) { try { await api.post('/api/pet/shop/buy',{item_id:item.id}); ElMessage.success('购买成功'); this.loadPet(); } catch(e){ ElMessage.error('购买失败'); } },
+    async loadCommunity() { try { this.communityPets=(await api.get('/api/pet/community')).data||[]; } catch(e){} },
+    async visit(username) { try { const r=await api.get('/api/pet/visit/'+username); ElMessage.success(r.data?.dialogue||'串门成功'); } catch(e){} },
+  },
+  watch: { activeTab(v) { if(v==='achievements')this.loadAchievements(); else if(v==='dress')this.loadInventory(); else if(v==='diary')this.loadDiary(); } },
+  async mounted() { await this.loadPet(); }
+};
+
+// --- Profile ---
+const ProfilePage = {
+  template: `
+    <div>
+      <h2>👤 个人资料</h2>
+      <el-card shadow="never" style="max-width:600px;margin-top:16px;">
+        <el-form :model="form" label-width="100px">
+          <el-form-item label="用户名"><el-input v-model="form.username" disabled/></el-form-item>
+          <el-form-item label="权限"><el-tag>[[ permLabel ]]</el-tag></el-form-item>
+          <el-form-item label="邮箱"><el-input v-model="form.email" placeholder="请输入邮箱"/></el-form-item>
+          <el-form-item label="个人简介"><el-input v-model="form.bio" type="textarea" :rows="3" placeholder="介绍一下自己..."/></el-form-item>
+          <el-form-item><el-button type="primary" @click="save">保存</el-button></el-form-item>
+        </el-form>
+      </el-card>
+      <el-card shadow="never" style="max-width:600px;margin-top:16px;">
+        <template #header>🔒 修改密码</template>
+        <el-form :model="pwdForm" label-width="100px">
+          <el-form-item label="当前密码"><el-input v-model="pwdForm.old" type="password" show-password/></el-form-item>
+          <el-form-item label="新密码"><el-input v-model="pwdForm.new1" type="password" show-password/></el-form-item>
+          <el-form-item label="确认新密码"><el-input v-model="pwdForm.new2" type="password" show-password/></el-form-item>
+          <el-form-item><el-button type="danger" @click="changePwd">修改密码</el-button></el-form-item>
+        </el-form>
+      </el-card>
+    </div>`,
+  data() { return { form:{username:userState.username,email:'',bio:''}, pwdForm:{old:'',new1:'',new2:''} }; },
+  computed: { permLabel() { return userState.permission==='administrator'?'管理员':'用户'; } },
+  methods: {
+    async save() { try { await api.post('/profile',this.form); ElMessage.success('保存成功'); } catch(e){} },
+    async changePwd() {
+      if(!this.pwdForm.old||!this.pwdForm.new1){ ElMessage.warning('请填写所有密码字段');return; }
+      if(this.pwdForm.new1!==this.pwdForm.new2){ ElMessage.error('两次新密码不一致');return; }
+      try { await api.post('/change_password',{old_password:this.pwdForm.old,new_password:this.pwdForm.new1}); ElMessage.success('密码修改成功'); this.pwdForm={old:'',new1:'',new2:''}; } catch(e){ ElMessage.error(e.response?.data||'修改失败'); }
+    }
+  }
+};
+
+// --- Admin Page ---
+const AdminPage = {
+  template: `
+    <div>
+      <h2>🔑 管理后台</h2>
+      <el-row :gutter="16" style="margin-top:16px;">
+        <el-col :span="12" style="margin-bottom:16px;">
+          <el-card shadow="hover"><template #header>📋 管理员申请</template>
+            <div v-if="adminReqs.length===0" style="text-align:center;padding:20px;color:var(--text-secondary);">暂无待审核申请</div>
+            <div v-for="r in adminReqs" :key="r.id" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-color);">
+              <span>[[ r.username ]]</span>
+              <span><el-button size="small" type="success" @click="review(r.id,'approve')">通过</el-button>
+              <el-button size="small" type="danger" @click="review(r.id,'reject')">拒绝</el-button></span>
+            </div>
+          </el-card>
+        </el-col>
+        <el-col :span="12" style="margin-bottom:16px;">
+          <el-card shadow="hover"><template #header>🖼️ 待审核照片</template>
+            <div v-if="pendingPhotos===0" style="text-align:center;padding:20px;color:var(--text-secondary);">暂无待审核</div>
+            <div v-else><el-tag type="warning">[[ pendingPhotos ]] 张待审核</el-tag></div>
+          </el-card>
+        </el-col>
+      </el-row>
+      <el-card shadow="never" style="margin-top:16px;">
+        <template #header>🛡️ IP管理</template>
+        <el-tabs><el-tab-pane label="封禁IP">
+          <el-table :data="blockedIps" size="small"><el-table-column prop="ip" label="IP"/><el-table-column prop="count" label="请求数" width="100"/><el-table-column label="操作" width="120"><template #default="{row}"><el-button size="small" type="success" @click="unblock(row.ip)">解封</el-button></template></el-table-column></el-table>
+        </el-tab-pane></el-tabs>
+      </el-card>
+    </div>`,
+  data() { return { adminReqs:[], pendingPhotos:0, blockedIps:[] }; },
+  methods: {
+    async loadData() {
+      try { this.adminReqs=(await api.get('/api/admin-requests')).data||[]; } catch(e){}
+      try { this.pendingPhotos=(await api.get('/api/album/pending/count')).data?.count||0; } catch(e){}
+      try { this.blockedIps=(await api.get('/api/admin/ip_stats')).data||[]; } catch(e){}
+    },
+    async review(id,action) { try { await api.post('/api/admin-review',{id,action}); ElMessage.success('操作成功'); this.loadData(); } catch(e){} },
+    async unblock(ip) { try { await api.post('/api/admin/unblock',{ip}); ElMessage.success('已解封'); this.loadData(); } catch(e){} }
+  },
+  mounted() { this.loadData(); }
+};
+
+// --- Donate Page ---
+const DonatePage = {
+  template: `
+    <div style="text-align:center;padding:40px 20px;max-width:600px;margin:0 auto;">
+      <h2>❤️ 捐赠支持</h2>
+      <p style="color:var(--text-secondary);margin:12px 0 24px;">如果这个工具箱对你有帮助，欢迎捐赠支持开发！</p>
+      <el-row :gutter="24">
+        <el-col :span="12">
+          <el-card shadow="hover"><div style="font-size:48px;">💚</div><p style="margin-top:8px;">微信支付</p>
+            <img src="/static/donate_wx.jpg" style="width:100%;max-width:200px;border-radius:8px;"/>
+          </el-card>
+        </el-col>
+        <el-col :span="12">
+          <el-card shadow="hover"><div style="font-size:48px;">💙</div><p style="margin-top:8px;">支付宝</p>
+            <img src="/static/donate_zfb.jpg" style="width:100%;max-width:200px;border-radius:8px;"/>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>`
+};
+
+// --- Utility pages (simple tools) ---
+const TranslatorPage = { template:`<div><h2>🌍 翻译</h2><el-card style="max-width:700px;margin-top:16px;"><el-input v-model="text" type="textarea" :rows="4" placeholder="输入要翻译的文字"/><el-select v-model="target" style="margin:12px 8px 0 0;"><el-option label="英语" value="en"/><el-option label="日语" value="ja"/><el-option label="韩语" value="ko"/><el-option label="中文" value="zh"/></el-select><el-button type="primary" @click="translate" style="margin-top:12px;">翻译</el-button><div v-if="result" style="margin-top:16px;padding:16px;background:var(--el-fill-color);border-radius:8px;white-space:pre-wrap;">[[ result ]]</div></el-card></div>`,
+  data(){return{text:'',target:'en',result:''};},
+  methods:{async translate(){try{const r=await api.post('/api/translator',{text:this.text,target:this.target});this.result=r.data.translated||r.data.result;}catch(e){}} };
+
+const AiWritingPage = { template:`<div><h2>✍️ AI写作</h2><el-card style="max-width:700px;margin-top:16px;"><el-select v-model="type" style="margin-bottom:12px;"><el-option label="文章续写" value="continue"/><el-option label="大纲生成" value="outline"/><el-option label="润色优化" value="polish"/><el-option label="摘要提取" value="summary"/></el-select><el-input v-model="text" type="textarea" :rows="6" placeholder="输入内容..."/><el-button type="primary" @click="generate" style="margin-top:12px;" :loading="loading">生成</el-button><div v-if="result" style="margin-top:16px;padding:16px;background:var(--el-fill-color);border-radius:8px;white-space:pre-wrap;">[[ result ]]</div></el-card></div>`,
+  data(){return{text:'',type:'continue',result:'',loading:false};},
+  methods:{async generate(){this.loading=true;try{const r=await api.post('/api/ai/writing',{text:this.text,type:this.type});this.result=r.data.result||r.data.content;}catch(e){ElMessage.error('生成失败');}finally{this.loading=false;}} };
+
+// --- System Monitor ---
+const SystemMonitorPage = {
+  template: `<div><h2>📊 系统监控</h2><el-card shadow="never" style="margin-top:16px;" v-loading="loading"><div v-if="info"><el-row :gutter="16"><el-col :span="8" v-for="s in stats" :key="s.label"><div class="stat-card"><div class="stat-value">[[ s.value ]]</div><div class="stat-label">[[ s.label ]]</div></div></el-col></el-row><el-divider/><el-descriptions :column="2" border size="small"><el-descriptions-item v-for="d in details" :key="d.label" :label="d.label">[[ d.value ]]</el-descriptions-item></el-descriptions></div></el-card></div>`,
+  data(){return{loading:true,info:null};},
+  computed:{
+    stats(){const i=this.info||{};return[{label:'CPU',value:(i.cpu_percent||0)+'%'},{label:'内存',value:(i.memory_percent||0)+'%'},{label:'磁盘',value:(i.disk_percent||0)+'%'}];},
+    details(){const i=this.info||{};return[{label:'系统',value:i.os||''},{label:'主机名',value:i.hostname||''},{label:'运行时间',value:i.uptime||''},{label:'IP',value:i.ip||''}];}
+  },
+  async mounted(){try{this.info=(await api.get('/api/system_info')).data;}catch(e){}finally{this.loading=false;}}
+};
+
+// --- Network Tools ---
+const NetworkToolsPage = {
+  template: `<div><h2>🌐 网络工具</h2><el-card style="max-width:700px;margin-top:16px;"><el-form :inline="true"><el-form-item label="目标"><el-input v-model="host" placeholder="example.com"/></el-form-item><el-form-item><el-select v-model="tool"><el-option label="Ping" value="ping"/><el-option label="Traceroute" value="traceroute"/><el-option label="Whois" value="whois"/><el-option label="DNS查询" value="dns"/><el-option label="HTTP头" value="http"/><el-option label="SSL证书" value="ssl"/><el-option label="子网计算" value="subnet"/></el-select></el-form-item><el-form-item><el-button type="primary" @click="run" :loading="loading">执行</el-button></el-form-item></el-form><pre v-if="result" style="background:var(--el-fill-color);padding:16px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;margin-top:12px;">[[ result ]]</pre></el-card></div>`,
+  data(){return{host:'',tool:'ping',result:'',loading:false};},
+  methods:{async run(){if(!this.host){ElMessage.warning('请输入目标地址');return;}this.loading=true;try{const r=await api.post('/api/network/'+this.tool,{host:this.host});this.result=r.data.result||JSON.stringify(r.data,null,2);}catch(e){}finally{this.loading=false;}}}
+};
+
+// ===================== Router =====================
+const routes = [
+  { path:'/', component:LoginPage, meta:{auth:false} },
+  { path:'/register', component:RegisterPage, meta:{auth:false} },
+  { path:'/forgot', component:ForgotPage, meta:{auth:false} },
+  { path:'/dashboard', component:DashboardPage, meta:{auth:true} },
+  { path:'/chat', component:ChatPage, meta:{auth:true} },
+  { path:'/forum', component:ForumPage, meta:{auth:true} },
+  { path:'/portal', component:{...PlaceholderPage, props:()=>({title:'📰 信息门户',icon:'📰',desc:'校园资讯与公告'})}, meta:{auth:true} },
+  { path:'/alumni', component:{...PlaceholderPage, props:()=>({title:'👥 校友名录',icon:'👥',desc:'查找校友，建立联系'})}, meta:{auth:true} },
+  { path:'/album', component:{...PlaceholderPage, props:()=>({title:'🖼️ 纪念相册',icon:'🖼️',desc:'分享美好回忆'})}, meta:{auth:true} },
+  { path:'/alumni_stories', component:{...PlaceholderPage, props:()=>({title:'📖 校友故事',icon:'📖',desc:'精彩人生分享'})}, meta:{auth:true} },
+  { path:'/confession', component:{...PlaceholderPage, props:()=>({title:'💌 表白墙',icon:'💌',desc:'匿名心声'})}, meta:{auth:true} },
+  { path:'/pet', component:PetPage, meta:{auth:true} },
+  { path:'/pomodoro', component:{...PlaceholderPage, props:()=>({title:'🍅 番茄钟',icon:'🍅'})}, meta:{auth:true} },
+  { path:'/checkin', component:{...PlaceholderPage, props:()=>({title:'✅ 签到',icon:'✅'})}, meta:{auth:true} },
+  { path:'/habits', component:{...PlaceholderPage, props:()=>({title:'🎯 习惯追踪',icon:'🎯'})}, meta:{auth:true} },
+  { path:'/expenses', component:{...PlaceholderPage, props:()=>({title:'💰 记账',icon:'💰'})}, meta:{auth:true} },
+  { path:'/weather', component:{...PlaceholderPage, props:()=>({title:'🌤️ 天气',icon:'🌤️'})}, meta:{auth:true} },
+  { path:'/calendar', component:{...PlaceholderPage, props:()=>({title:'📅 日历',icon:'📅'})}, meta:{auth:true} },
+  { path:'/daily_quote', component:{...PlaceholderPage, props:()=>({title:'💭 每日一言',icon:'💭'})}, meta:{auth:true} },
+  { path:'/study', component:{...PlaceholderPage, props:()=>({title:'📚 学习工具',icon:'📚'})}, meta:{auth:true} },
+  { path:'/notes', component:{...PlaceholderPage, props:()=>({title:'📝 便签',icon:'📝'})}, meta:{auth:true} },
+  { path:'/bookmarks', component:{...PlaceholderPage, props:()=>({title:'🔖 书签',icon:'🔖'})}, meta:{auth:true} },
+  { path:'/translator', component:TranslatorPage, meta:{auth:true} },
+  { path:'/ai_writing', component:AiWritingPage, meta:{auth:true} },
+  { path:'/markdown', component:{...PlaceholderPage, props:()=>({title:'📄 Markdown编辑',icon:'📄'})}, meta:{auth:true} },
+  { path:'/network_tools', component:NetworkToolsPage, meta:{auth:true} },
+  { path:'/system_monitor', component:SystemMonitorPage, meta:{auth:true} },
+  { path:'/file_manager', component:{...PlaceholderPage, props:()=>({title:'📁 文件管理',icon:'📁'})}, meta:{auth:true} },
+  { path:'/db_query', component:{...PlaceholderPage, props:()=>({title:'🗄️ 数据库查询',icon:'🗄️'})}, meta:{auth:true} },
+  { path:'/converter', component:{...PlaceholderPage, props:()=>({title:'🔄 格式转换',icon:'🔄'})}, meta:{auth:true} },
+  { path:'/utils', component:{...PlaceholderPage, props:()=>({title:'🧰 实用工具',icon:'🧰'})}, meta:{auth:true} },
+  { path:'/calculator', component:{...PlaceholderPage, props:()=>({title:'🧮 计算器',icon:'🧮'})}, meta:{auth:true} },
+  { path:'/qrcode', component:{...PlaceholderPage, props:()=>({title:'📱 二维码',icon:'📱'})}, meta:{auth:true} },
+  { path:'/api_tester', component:{...PlaceholderPage, props:()=>({title:'🔌 API测试',icon:'🔌'})}, meta:{auth:true} },
+  { path:'/games', component:{...PlaceholderPage, props:()=>({title:'🎮 小游戏',icon:'🎮'})}, meta:{auth:true} },
+  { path:'/marketplace', component:{...PlaceholderPage, props:()=>({title:'🛒 插件市场',icon:'🛒'})}, meta:{auth:true} },
+  { path:'/rss', component:{...PlaceholderPage, props:()=>({title:'📡 RSS阅读',icon:'📡'})}, meta:{auth:true} },
+  { path:'/countdown', component:{...PlaceholderPage, props:()=>({title:'⏱️ 倒计时',icon:'⏱️'})}, meta:{auth:true} },
+  { path:'/image_compress', component:{...PlaceholderPage, props:()=>({title:'🖼️ 图片压缩',icon:'🖼️'})}, meta:{auth:true} },
+  { path:'/pdf_tools', component:{...PlaceholderPage, props:()=>({title:'📑 PDF工具',icon:'📑'})}, meta:{auth:true} },
+  { path:'/text_diff', component:{...PlaceholderPage, props:()=>({title:'📝 文本对比',icon:'📝'})}, meta:{auth:true} },
+  { path:'/jwt_decoder', component:{...PlaceholderPage, props:()=>({title:'🔐 JWT解码',icon:'🔐'})}, meta:{auth:true} },
+  { path:'/sql_formatter', component:{...PlaceholderPage, props:()=>({title:'💾 SQL格式化',icon:'💾'})}, meta:{auth:true} },
+  { path:'/mock_data', component:{...PlaceholderPage, props:()=>({title:'🎲 Mock数据',icon:'🎲'})}, meta:{auth:true} },
+  { path:'/random_tools', component:{...PlaceholderPage, props:()=>({title:'🎯 随机工具',icon:'🎯'})}, meta:{auth:true} },
+  { path:'/git_cheatsheet', component:{...PlaceholderPage, props:()=>({title:'📖 Git速查',icon:'📖'})}, meta:{auth:true} },
+  { path:'/password_analyzer', component:{...PlaceholderPage, props:()=>({title:'🔒 密码分析',icon:'🔒'})}, meta:{auth:true} },
+  { path:'/file_converter', component:{...PlaceholderPage, props:()=>({title:'📁 文件转换',icon:'📁'})}, meta:{auth:true} },
+  { path:'/morse_code', component:{...PlaceholderPage, props:()=>({title:'📡 摩斯电码',icon:'📡'})}, meta:{auth:true} },
+  { path:'/idcard_tools', component:{...PlaceholderPage, props:()=>({title:'🪪 身份证工具',icon:'🪪'})}, meta:{auth:true} },
+  { path:'/cron_parser', component:{...PlaceholderPage, props:()=>({title:'⏰ Cron解析',icon:'⏰'})}, meta:{auth:true} },
+  { path:'/ua_parser', component:{...PlaceholderPage, props:()=>({title:'🔍 UA解析',icon:'🔍'})}, meta:{auth:true} },
+  { path:'/code_formatter', component:{...PlaceholderPage, props:()=>({title:'💻 代码格式化',icon:'💻'})}, meta:{auth:true} },
+  { path:'/unit_converter', component:{...PlaceholderPage, props:()=>({title:'📏 单位换算',icon:'📏'})}, meta:{auth:true} },
+  { path:'/profile', component:ProfilePage, meta:{auth:true} },
+  { path:'/admin', component:AdminPage, meta:{auth:true,admin:true} },
+  { path:'/author', component:{...PlaceholderPage, props:()=>({title:'👤 关于作者',icon:'👤',desc:'开发者信息与联系方式'})}, meta:{auth:true} },
+  { path:'/donate', component:DonatePage, meta:{auth:true} },
+];
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes,
+});
+
+router.beforeEach((to, from) => {
+  if (to.meta.auth && !userState.isLoggedIn) return '/';
+  if (to.meta.admin && userState.permission !== 'administrator') return '/dashboard';
+});
+
+// ===================== App =====================
+const App = {
+  data() {
+    return {
+      sidebarOpen: false,
+      isDark: false,
+      currentLangName: '中文',
+      notifications: [],
+      unreadCount: 0,
+      Menu: ElementPlusIconsVue.Menu,
+    };
+  },
+  computed: {
+    username() { return userState.username; },
+    isLoggedIn() { return userState.isLoggedIn; },
+    isAdmin() { return userState.permission === 'administrator'; },
+    permLabel() { return userState.permission==='administrator'?'管理员':userState.permission==='vip'?'VIP':'用户'; },
+    permTagType() { return userState.permission==='administrator'?'danger':userState.permission==='vip'?'warning':'info'; },
+    avatarUrl() { return userState.avatarUrl || ''; },
+    currentRoute() { return this.$route.path; },
+  },
+  methods: {
+    toggleTheme() {
+      this.isDark = !this.isDark;
+      document.documentElement.classList.toggle('dark', this.isDark);
+      localStorage.setItem('theme', this.isDark ? 'dark' : 'light');
+    },
+    async switchLang(lang) {
+      try { await api.post('/api/lang/switch', { lang }); location.reload(); } catch(e) {}
+    },
+    handleUserCommand(cmd) {
+      if (cmd === 'logout') {
+        ElMessageBox.confirm('确定要退出登录吗？', '确认', { type:'warning' }).then(async () => {
+          try { await api.post('/api/auth/logout'); userState.isLoggedIn=false; userState.username=''; this.$router.push('/'); } catch(e) { userState.isLoggedIn=false; this.$router.push('/'); }
+        }).catch(() => {});
+      } else if (cmd === 'profile') { this.$router.push('/profile'); }
+      else if (cmd === 'admin') { this.$router.push('/admin'); }
+    },
+    handleNotifClick(n) {
+      if (n.link) this.$router.push(n.link);
+    },
+    async fetchNotifications() {
+      try {
+        const r = await api.get('/api/notifications');
+        const d = r.data;
+        const items = [];
+        if (d.chat_unread) items.push({id:'chat',icon:'💬',text:`${d.chat_unread} 条未读消息`,link:'/chat'});
+        if (d.admin_requests) items.push({id:'admin',icon:'📋',text:`${d.admin_requests} 个管理员申请`,link:'/admin'});
+        if (d.pending_photos) items.push({id:'photo',icon:'🖼️',text:`${d.pending_photos} 张待审核照片`,link:'/album'});
+        if (d.forum_unread) items.push({id:'forum',icon:'💬',text:`${d.forum_unread} 条论坛通知`,link:'/forum'});
+        this.notifications = items;
+        this.unreadCount = items.length;
+      } catch(e) {}
+    },
+    async checkAuth() {
+      try {
+        const r = await api.get('/api/auth/status');
+        if (r.data && r.data.logged_in) {
+          userState.username = r.data.username || '';
+          userState.permission = r.data.permission || 'guest';
+          userState.isLoggedIn = true;
+          userState.avatarUrl = r.data.avatar || '';
+        }
+      } catch(e) {}
+  },
+  watch: {
+    '$route'() { this.sidebarOpen = false; }
+  },
+  async mounted() {
+    // Theme
+    const saved = localStorage.getItem('theme');
+    this.isDark = saved === 'dark';
+    if (this.isDark) document.documentElement.classList.add('dark');
+    // Auth
+    await this.checkAuth();
+    if (this.isLoggedIn) {
+      this.fetchNotifications();
+      setInterval(() => this.fetchNotifications(), 30000);
+    }
+  }
+};
+
+// Create app
+const app = createApp(App);
+app.config.compilerOptions.delimiters = ['[[', ']]'];
+app.use(router);
+app.use(ElementPlus, { locale: ElementPlus.localeZhCn || {} });
+
+// Register Element Plus icons
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+  app.component(key, component);
+}
+
+app.mount('#app');
+</script>
+</body>
+</html>

@@ -269,6 +269,9 @@ def api_lang_switch():
 
 # ---------- 数据库初始化 ----------
 _db_init_done = False
+_forum_tables_done = False
+_confession_tables_done = False
+_alumni_stories_tables_done = False
 def _init_db_once():
     global _db_init_done
     if not _db_init_done:
@@ -7659,198 +7662,228 @@ def _init_life_tables():
 
 def _init_forum_tables():
     """确保论坛表存在 + 预设版块"""
-    conn = get_db()
-    if not conn:
+    global _forum_tables_done
+    if _forum_tables_done:
         return
-    try:
-        cursor = conn.cursor()
-        # 版块表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS forum_categories (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(50) NOT NULL UNIQUE,
-                icon VARCHAR(5) DEFAULT '📌',
-                sort_order INT DEFAULT 0,
-                description VARCHAR(200) DEFAULT '',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        # 帖子表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS forum_posts (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                category_id INT NOT NULL,
-                username VARCHAR(50) NOT NULL,
-                title VARCHAR(200) NOT NULL,
-                content TEXT NOT NULL,
-                is_pinned TINYINT DEFAULT 0,
-                is_locked TINYINT DEFAULT 0,
-                view_count INT DEFAULT 0,
-                reply_count INT DEFAULT 0,
-                like_count INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_fp_cat (category_id),
-                INDEX idx_fp_user (username),
-                INDEX idx_fp_created (created_at)
-            )
-        """)
-        # 回复表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS forum_replies (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                post_id INT NOT NULL,
-                username VARCHAR(50) NOT NULL,
-                content TEXT NOT NULL,
-                like_count INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_fr_post (post_id),
-                INDEX idx_fr_user (username)
-            )
-        """)
-        # 点赞表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS forum_likes (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) NOT NULL,
-                target_type ENUM('post', 'reply') NOT NULL,
-                target_id INT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uk_like (username, target_type, target_id)
-            )
-        """)
-        # 通知表
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS forum_notifications (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) NOT NULL,
-                type VARCHAR(20) NOT NULL COMMENT 'reply or like',
-                post_id INT,
-                post_title VARCHAR(200) DEFAULT '',
-                from_user VARCHAR(50) NOT NULL,
-                content_preview VARCHAR(100) DEFAULT '',
-                is_read TINYINT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_fn_user (username, is_read),
-                INDEX idx_fn_created (created_at)
-            )
-        """)
-        # 预设版块
-        default_categories = [
-            ("🎓", "校友动态", 1, "校友近况、班级新闻、母校发展"),
-            ("📢", "活动通知", 2, "聚会、讲座、返校日活动发布"),
-            ("❓", "互助问答", 3, "学习、工作、生活中的问题求助"),
-            ("💼", "职业发展", 4, "招聘内推、行业交流、创业分享"),
-            ("🎉", "随便聊聊", 5, "灌水八卦，轻松交流"),
-        ]
-        for icon, name, order, desc in default_categories:
-            cursor.execute(
-                "INSERT IGNORE INTO forum_categories (icon, name, sort_order, description) VALUES (%s,%s,%s,%s)",
-                (icon, name, order, desc)
-            )
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except pymysql.MySQLError as e:
-        print(f"  论坛模块数据库表初始化失败: {e}")
+    for attempt in range(3):
+        try:
+            conn = get_db()
+            if not conn:
+                return
+            cursor = conn.cursor()
+            # 版块表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS forum_categories (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(50) NOT NULL UNIQUE,
+                    icon VARCHAR(5) DEFAULT '📌',
+                    sort_order INT DEFAULT 0,
+                    description VARCHAR(200) DEFAULT '',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            # 帖子表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS forum_posts (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    category_id INT NOT NULL,
+                    username VARCHAR(50) NOT NULL,
+                    title VARCHAR(200) NOT NULL,
+                    content TEXT NOT NULL,
+                    is_pinned TINYINT DEFAULT 0,
+                    is_locked TINYINT DEFAULT 0,
+                    view_count INT DEFAULT 0,
+                    reply_count INT DEFAULT 0,
+                    like_count INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_fp_cat (category_id),
+                    INDEX idx_fp_user (username),
+                    INDEX idx_fp_created (created_at)
+                )
+            """)
+            # 回复表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS forum_replies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    post_id INT NOT NULL,
+                    username VARCHAR(50) NOT NULL,
+                    content TEXT NOT NULL,
+                    like_count INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_fr_post (post_id),
+                    INDEX idx_fr_user (username)
+                )
+            """)
+            # 点赞表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS forum_likes (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL,
+                    target_type ENUM('post', 'reply') NOT NULL,
+                    target_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_like (username, target_type, target_id)
+                )
+            """)
+            # 通知表
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS forum_notifications (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL,
+                    type VARCHAR(20) NOT NULL COMMENT 'reply or like',
+                    post_id INT,
+                    post_title VARCHAR(200) DEFAULT '',
+                    from_user VARCHAR(50) NOT NULL,
+                    content_preview VARCHAR(100) DEFAULT '',
+                    is_read TINYINT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_fn_user (username, is_read),
+                    INDEX idx_fn_created (created_at)
+                )
+            """)
+            # 预设版块
+            default_categories = [
+                ("🎓", "校友动态", 1, "校友近况、班级新闻、母校发展"),
+                ("📢", "活动通知", 2, "聚会、讲座、返校日活动发布"),
+                ("❓", "互助问答", 3, "学习、工作、生活中的问题求助"),
+                ("💼", "职业发展", 4, "招聘内推、行业交流、创业分享"),
+                ("🎉", "随便聊聊", 5, "灌水八卦，轻松交流"),
+            ]
+            for icon, name, order, desc in default_categories:
+                cursor.execute(
+                    "INSERT IGNORE INTO forum_categories (icon, name, sort_order, description) VALUES (%s,%s,%s,%s)",
+                    (icon, name, order, desc)
+                )
+            conn.commit()
+            cursor.close()
+            conn.close()
+            _forum_tables_done = True
+            return
+        except pymysql.MySQLError as e:
+            if e.args[0] == 1213 and attempt < 2:  # 死锁，重试
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            print(f"  论坛模块数据库表初始化失败: {e}")
+            return
 
 
 def _init_confession_tables():
     """匿名树洞表"""
-    conn = get_db()
-    if not conn:
+    global _confession_tables_done
+    if _confession_tables_done:
         return
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS anonymous_posts (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                nickname VARCHAR(20) NOT NULL,
-                content TEXT NOT NULL,
-                emoji VARCHAR(5) DEFAULT '💬',
-                like_count INT DEFAULT 0,
-                reply_count INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_ap_created (created_at)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS anonymous_replies (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                post_id INT NOT NULL,
-                nickname VARCHAR(20) NOT NULL,
-                content TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_ar_post (post_id)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS anonymous_likes (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                post_id INT NOT NULL,
-                username VARCHAR(50) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uk_alike (post_id, username)
-            )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except pymysql.MySQLError as e:
-        print(f"  树洞模块数据库表初始化失败: {e}")
+    for attempt in range(3):
+        try:
+            conn = get_db()
+            if not conn:
+                return
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS anonymous_posts (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    nickname VARCHAR(20) NOT NULL,
+                    content TEXT NOT NULL,
+                    emoji VARCHAR(5) DEFAULT '💬',
+                    like_count INT DEFAULT 0,
+                    reply_count INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_ap_created (created_at)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS anonymous_replies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    post_id INT NOT NULL,
+                    nickname VARCHAR(20) NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_ar_post (post_id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS anonymous_likes (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    post_id INT NOT NULL,
+                    username VARCHAR(50) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_alike (post_id, username)
+                )
+            """)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            _confession_tables_done = True
+            return
+        except pymysql.MySQLError as e:
+            if e.args[0] == 1213 and attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            print(f"  树洞模块数据库表初始化失败: {e}")
+            return
 
 
 def _init_alumni_stories_tables():
     """校友故事表"""
-    conn = get_db()
-    if not conn:
+    global _alumni_stories_tables_done
+    if _alumni_stories_tables_done:
         return
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS alumni_stories (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(50) NOT NULL,
-                title VARCHAR(200) NOT NULL,
-                content TEXT NOT NULL,
-                cover_image VARCHAR(500) DEFAULT '',
-                status ENUM('pending','approved','rejected') DEFAULT 'pending',
-                reviewer VARCHAR(50) DEFAULT NULL,
-                review_note VARCHAR(200) DEFAULT '',
-                view_count INT DEFAULT 0,
-                like_count INT DEFAULT 0,
-                comment_count INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                reviewed_at TIMESTAMP NULL,
-                INDEX idx_as_status (status, created_at),
-                INDEX idx_as_user (username)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS alumni_story_comments (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                story_id INT NOT NULL,
-                username VARCHAR(50) NOT NULL,
-                content TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_asc_story (story_id)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS alumni_story_likes (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                story_id INT NOT NULL,
-                username VARCHAR(50) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uk_asl (story_id, username)
-            )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except pymysql.MySQLError as e:
-        print(f"  校友故事数据库表初始化失败: {e}")
+    for attempt in range(3):
+        try:
+            conn = get_db()
+            if not conn:
+                return
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS alumni_stories (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL,
+                    title VARCHAR(200) NOT NULL,
+                    content TEXT NOT NULL,
+                    cover_image VARCHAR(500) DEFAULT '',
+                    status ENUM('pending','approved','rejected') DEFAULT 'pending',
+                    reviewer VARCHAR(50) DEFAULT NULL,
+                    review_note VARCHAR(200) DEFAULT '',
+                    view_count INT DEFAULT 0,
+                    like_count INT DEFAULT 0,
+                    comment_count INT DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    reviewed_at TIMESTAMP NULL,
+                    INDEX idx_as_status (status, created_at),
+                    INDEX idx_as_user (username)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS alumni_story_comments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    story_id INT NOT NULL,
+                    username VARCHAR(50) NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_asc_story (story_id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS alumni_story_likes (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    story_id INT NOT NULL,
+                    username VARCHAR(50) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_asl (story_id, username)
+                )
+            """)
+            conn.commit()
+            cursor.close()
+            conn.close()
+            _alumni_stories_tables_done = True
+            return
+        except pymysql.MySQLError as e:
+            if e.args[0] == 1213 and attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            print(f"  校友故事数据库表初始化失败: {e}")
+            return
 
 
 def _init_pet_tables():
@@ -11068,6 +11101,237 @@ def api_forum_notifications_read():
     cursor.execute("UPDATE forum_notifications SET is_read=1 WHERE username=%s AND is_read=0", (username,))
     conn.commit(); cursor.close(); conn.close()
     return jsonify({"ok": True})
+
+
+# ---------- Vue3 SPA 入口 ----------
+@app.route("/api/auth/logout", methods=["POST"])
+def api_logout():
+    """JSON API 登出"""
+    ip = request.remote_addr or "0.0.0.0"
+    with session_lock:
+        ip_last_active.pop(ip, None)
+    session.clear()
+    return jsonify({"ok": True, "message": "已退出登录"})
+@app.route("/vue3")
+def vue3_spa():
+    """Vue3 + Element Plus 单页应用入口"""
+    _init_db_once()
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
+    # 检查是否已登录，传递给前端
+    logged_in = "username" in session
+    return render_template("vue3_app.html",
+                           csrf_token=session.get("csrf_token", ""),
+                           logged_in=logged_in)
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    """JSON API 登录 — 供 Vue3 SPA 使用"""
+    _init_db_once()
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
+
+    client_ip = request.remote_addr or "unknown"
+    _limit, _window = RATE_LIMITS["login"]
+    if not rate_limiter.check((client_ip, "login"), max_requests=_limit, window=_window):
+        return jsonify({"ok": False, "error": "请求过于频繁，请稍后再试"}), 429
+
+    data = request.get_json(silent=True) or {}
+    username = sanitize_input((data.get("username") or "").strip(), 50)
+    password = (data.get("password") or "").strip()
+    captcha_input = (data.get("captcha") or "").strip().lower()
+
+    if not username or not password:
+        return jsonify({"ok": False, "error": "用户名和密码不能为空"}), 400
+
+    ok, err_msg = _verify_captcha(captcha_input)
+    if not ok:
+        return jsonify({"ok": False, "error": err_msg}), 400
+
+    now = time.time()
+    if username in login_lockout:
+        attempts, lockout_until = login_lockout[username]
+        if lockout_until and now < lockout_until:
+            remaining = int(lockout_until - now)
+            return jsonify({"ok": False, "error": f"账户已被锁定，请 {remaining // 60} 分 {remaining % 60} 秒后重试"}), 429
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT User_Password, Access_Permission FROM users WHERE User_Name = %s",
+            (username,)
+        )
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if result:
+            pwd_valid = safe_check_password_hash(result[0], password)
+            if not pwd_valid:
+                pwd_valid = (result[0] == password)
+            if pwd_valid:
+                login_lockout.pop(username, None)
+                session["username"] = username
+                session["permission"] = result[1]
+                session["csrf_token"] = os.urandom(32).hex()
+                if result[0] == password:
+                    # 升级密码为 hash
+                    try:
+                        conn2 = get_db()
+                        cur2 = conn2.cursor()
+                        hashed = generate_password_hash(password)
+                        cur2.execute("UPDATE users SET User_Password=%s WHERE User_Name=%s", (hashed, username))
+                        conn2.commit()
+                        cur2.close()
+                        conn2.close()
+                    except Exception:
+                        pass
+                record_activity(username, "登录", 1)
+                avatar_url = f"/api/avatar/{username}" if username else ""
+                return jsonify({
+                    "ok": True,
+                    "username": username,
+                    "permission": result[1],
+                    "avatar": avatar_url,
+                })
+        # 登录失败
+        attempts, _ = login_lockout.get(username, (0, 0))
+        attempts += 1
+        if attempts >= 5:
+            login_lockout[username] = (attempts, time.time() + 5 * 60)
+            return jsonify({"ok": False, "error": "密码错误次数过多，账户已锁定 5 分钟"}), 429
+        else:
+            login_lockout[username] = (attempts, 0)
+            remaining = 5 - attempts
+            return jsonify({"ok": False, "error": f"用户名或密码错误，还剩 {remaining} 次尝试"}), 401
+    except pymysql.MySQLError as e:
+        return jsonify({"ok": False, "error": f"数据库错误: {str(e)}"}), 500
+
+
+@app.route("/api/auth/register", methods=["POST"])
+def api_register():
+    """JSON API 注册 — 供 Vue3 SPA 使用"""
+    _init_db_once()
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
+
+    client_ip = request.remote_addr or "unknown"
+    _limit, _window = RATE_LIMITS["register"]
+    if not rate_limiter.check((client_ip, "register"), max_requests=_limit, window=_window):
+        return jsonify({"ok": False, "error": "请求过于频繁"}), 429
+
+    data = request.get_json(silent=True) or {}
+    captcha_input = (data.get("captcha") or "").strip().lower()
+    ok, err_msg = _verify_captcha(captcha_input)
+    if not ok:
+        return jsonify({"ok": False, "error": err_msg}), 400
+
+    username = sanitize_input((data.get("username") or "").strip(), 50)
+    password = (data.get("password") or "").strip()
+    confirm = (data.get("confirm") or "").strip()
+    admin_pwd = (data.get("admin_pwd") or "").strip()
+
+    if not username or not password or not confirm:
+        return jsonify({"ok": False, "error": "所有字段不能为空"}), 400
+    if password != confirm:
+        return jsonify({"ok": False, "error": "两次密码不一致"}), 400
+    if len(password) < 8:
+        return jsonify({"ok": False, "error": "密码长度不能少于8位"}), 400
+    if not re.search(r"[A-Za-z]", password):
+        return jsonify({"ok": False, "error": "密码必须包含至少一个字母"}), 400
+    if not re.search(r"[0-9]", password):
+        return jsonify({"ok": False, "error": "密码必须包含至少一个数字"}), 400
+
+    permission = "administrator" if hmac.compare_digest(admin_pwd, ADMIN_SECRET) else "guest"
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users WHERE User_Name = %s", (username,))
+        if cursor.fetchone()[0] > 0:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "用户名已存在，请更换"}), 409
+
+        hashed_pw = generate_password_hash(password)
+        cursor.execute(
+            "INSERT INTO users (User_Name, User_Password, Access_Permission) VALUES (%s, %s, %s)",
+            (username, hashed_pw, permission)
+        )
+        conn.commit()
+        cursor.close(); conn.close()
+        write_log("用户注册", f"用户名: {username}, 权限: {permission}")
+        return jsonify({"ok": True, "message": f"注册成功！权限: {'管理员' if permission == 'administrator' else '访客'}"})
+    except pymysql.IntegrityError:
+        return jsonify({"ok": False, "error": "用户名已存在"}), 409
+    except pymysql.MySQLError as e:
+        return jsonify({"ok": False, "error": f"注册失败: {str(e)}"}), 500
+
+
+@app.route("/api/auth/status")
+def api_auth_status():
+    """返回当前登录状态 — 供 Vue3 SPA 初始化时检查"""
+    if "username" in session:
+        return jsonify({
+            "logged_in": True,
+            "username": session["username"],
+            "permission": session.get("permission", "guest"),
+            "avatar": f"/api/avatar/{session['username']}" if session.get("username") else "",
+        })
+    return jsonify({"logged_in": False})
+
+
+@app.route("/api/auth/forgot_password", methods=["POST"])
+def api_forgot_password():
+    """JSON API 忘记密码 — 供 Vue3 SPA 使用"""
+    _init_db_once()
+    if "csrf_token" not in session:
+        session["csrf_token"] = os.urandom(32).hex()
+
+    client_ip = request.remote_addr or "unknown"
+    if not rate_limiter.check((client_ip, "forgot"), max_requests=3, window=300):
+        return jsonify({"ok": False, "error": "请求过于频繁，请5分钟后再试"}), 429
+
+    data = request.get_json(silent=True) or {}
+    captcha_input = (data.get("captcha") or "").strip().lower()
+    ok, err_msg = _verify_captcha(captcha_input)
+    if not ok:
+        return jsonify({"ok": False, "error": err_msg}), 400
+
+    username = sanitize_input((data.get("username") or "").strip(), 50)
+    email = sanitize_input((data.get("email") or "").strip(), 200)
+
+    if not username:
+        return jsonify({"ok": False, "error": "用户名不能为空"}), 400
+
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users WHERE User_Name = %s", (username,))
+        if cursor.fetchone()[0] == 0:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "用户名不存在"}), 404
+
+        cursor.execute(
+            "INSERT INTO reset_requests (username, email, status, created_at) VALUES (%s, %s, %s, NOW())",
+            (username, email, "pending")
+        )
+        conn.commit()
+        cursor.close(); conn.close()
+        write_log("密码重置申请", f"用户名: {username}, 邮箱: {email}")
+        return jsonify({"ok": True, "message": "申请已提交，请等待管理员审核"})
+    except pymysql.MySQLError as e:
+        return jsonify({"ok": False, "error": f"提交失败: {str(e)}"}), 500
 
 
 # ---------- 启动 ----------

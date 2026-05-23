@@ -1,920 +1,501 @@
-{% extends "base.html" %}
-{% block title %}电子宠物 - 多合一工具箱{% endblock %}
-{% block content %}
-<style nonce="{{ csp_nonce }}">
-.pet-wrap { max-width: 720px; margin: 0 auto; }
-
-/* ====== Tabs ====== */
-.pet-tabs { display: flex; gap: 0.25rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center; }
-.pet-tab { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border-light); background: var(--bs-body-bg); color: var(--text-body); cursor: pointer; font-size: 0.85rem; transition: all .2s; white-space: nowrap; }
-.pet-tab:hover { border-color: #8b5cf6; }
-.pet-tab.active { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff; border-color: transparent; }
-
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-
-/* ====== Pet Display ====== */
-.pet-display-wrap { position: relative; text-align: center; margin-bottom: 0.5rem; }
-.pet-display { position: relative; width: 140px; height: 140px; margin: 0 auto; display: flex; align-items: center; justify-content: center; }
-.pet-emoji-wrap { position: relative; display: inline-block; }
-.pet-emoji { font-size: 5.5rem; display: inline-block; animation: petWobble 2s ease-in-out infinite; transition: transform .3s; cursor: pointer; }
-.pet-emoji:hover { transform: scale(1.15); }
-.pet-egg .pet-emoji { animation: eggRock 1.5s ease-in-out infinite; }
-.pet-accessory { position: absolute; font-size: 1.5rem; pointer-events: none; }
-.pet-accessory.top1 { top: -8px; left: 50%; transform: translateX(-50%); }
-.pet-accessory.top2 { top: 2px; left: 50%; transform: translateX(-50%); }
-.pet-accessory.eyes { top: 45%; left: 50%; transform: translate(-50%, -50%); font-size: 1.2rem; }
-.pet-accessory.neck { bottom: 20%; left: 50%; transform: translateX(-50%); font-size: 1rem; }
-.pet-accessory.side { top: 30%; left: -10px; font-size: 1.8rem; }
-
-@keyframes petWobble {
-    0%,100% { transform: translateY(0) rotate(0deg); }
-    25% { transform: translateY(-6px) rotate(-3deg); }
-    75% { transform: translateY(-4px) rotate(3deg); }
-}
-@keyframes eggRock {
-    0%,100% { transform: rotate(0deg); }
-    25% { transform: rotate(-8deg); }
-    75% { transform: rotate(8deg); }
-}
-/* Evolution animation */
-.evolution-flash { animation: evoFlash 1s ease-out; }
-@keyframes evoFlash {
-    0% { transform: scale(1); filter: brightness(1); }
-    50% { transform: scale(1.4); filter: brightness(2); }
-    100% { transform: scale(1); filter: brightness(1); }
-}
-
-/* Dialogue bubble */
-.dialogue-bubble { position: relative; display: inline-block; background: var(--bs-tertiary-bg); border-radius: 14px; padding: 8px 16px; font-size: 0.85rem; color: var(--text-body); margin: 0.5rem auto 0; max-width: 280px; animation: fadeInUp .3s ease; }
-.dialogue-bubble::after { content: ''; position: absolute; top: -8px; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 8px solid var(--bs-tertiary-bg); }
-@keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-.pet-name { font-size: 1.2rem; font-weight: 600; color: var(--text-body); margin-bottom: 0.15rem; }
-.pet-info-row { display: flex; justify-content: center; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
-.pet-level { font-size: 0.85rem; color: var(--text-muted); }
-.pet-personality { font-size: 0.75rem; background: rgba(139,92,246,.15); color: #8b5cf6; padding: 2px 10px; border-radius: 10px; }
-.pet-coins { font-size: 0.8rem; color: #f59e0b; }
-
-.rename-icon { font-size: 0.8rem; color: var(--text-muted); cursor: pointer; opacity: 0.5; transition: opacity .2s; background: none; border: none; padding: 2px; }
-.rename-icon:hover { opacity: 1; }
-.rename-form { display: none; margin: 0.5rem 0; }
-.rename-form.show { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
-.rename-row { display: flex; gap: 0.5rem; align-items: center; }
-.rename-input { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-light); background: var(--bs-body-bg); color: var(--text-body); font-size: 0.9rem; width: 160px; }
-.rename-type-row { display: flex; gap: 0.35rem; }
-.rename-type-dot { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--border-light); cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; transition: all .15s; background: var(--bs-body-bg); }
-.rename-type-dot:hover { border-color: #8b5cf6; }
-.rename-type-dot.selected { border-color: #8b5cf6; background: rgba(139,92,246,.1); }
-.rename-actions { display: flex; gap: 0.5rem; }
-.rename-save-btn { background: #8b5cf6; color: #fff; border: none; border-radius: 8px; padding: 6px 18px; font-size: 0.85rem; cursor: pointer; }
-.rename-cancel-btn { background: var(--bs-tertiary-bg); color: var(--text-body); border: none; border-radius: 8px; padding: 6px 18px; font-size: 0.85rem; cursor: pointer; }
-
-/* ====== Stat Bars ====== */
-.stat-bars { margin-bottom: 0.75rem; }
-.stat-row { display: flex; align-items: center; margin-bottom: 0.4rem; gap: 0.5rem; }
-.stat-label { width: 58px; font-size: 0.8rem; color: var(--text-body); text-align: right; flex-shrink: 0; }
-.stat-bar-outer { flex: 1; height: 16px; border-radius: 8px; background: var(--bs-tertiary-bg); overflow: hidden; position: relative; }
-.stat-bar-inner { height: 100%; border-radius: 8px; transition: width 0.5s ease; }
-.stat-bar-inner.hunger { background: linear-gradient(90deg, #ef4444, #f97316); }
-.stat-bar-inner.happiness { background: linear-gradient(90deg, #f59e0b, #eab308); }
-.stat-bar-inner.energy { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
-.stat-val { font-size: 0.7rem; color: var(--text-muted); width: 30px; text-align: left; flex-shrink: 0; }
-
-/* ====== XP Bar ====== */
-.xp-wrap { margin-bottom: 1rem; }
-.xp-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.15rem; }
-.xp-bar-outer { height: 8px; border-radius: 4px; background: var(--bs-tertiary-bg); overflow: hidden; }
-.xp-bar-inner { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #a78bfa, #8b5cf6); transition: width 0.5s ease; }
-
-/* ====== Action Buttons ====== */
-.pet-actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; }
-.pet-btn { width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.4rem; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; position: relative; }
-.pet-btn.feed-btn { background: #fef3c7; }
-.pet-btn.feed-btn:hover { background: #fde68a; transform: scale(1.1); }
-.pet-btn.play-btn { background: #dbeafe; }
-.pet-btn.play-btn:hover { background: #bfdbfe; transform: scale(1.1); }
-.pet-btn.sleep-btn { background: #e0e7ff; }
-.pet-btn.sleep-btn:hover { background: #c7d2fe; transform: scale(1.1); }
-.pet-btn .btn-label { position: absolute; bottom: -18px; font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; }
-.pet-btn.disabled { opacity: 0.4; pointer-events: none; }
-
-/* ====== Hatch Section ====== */
-.hatch-section { margin-bottom: 1.5rem; }
-.hatch-types { display: flex; gap: 0.75rem; justify-content: center; margin: 1rem 0; }
-.hatch-type-card { border: 2px solid var(--border-light); border-radius: 12px; padding: 0.75rem 1rem; cursor: pointer; transition: all .2s; background: var(--bs-body-bg); text-align: center; }
-.hatch-type-card:hover { border-color: #8b5cf6; background: rgba(139,92,246,.05); }
-.hatch-type-card.selected { border-color: #8b5cf6; background: rgba(139,92,246,.1); }
-.hatch-type-card .type-emoji { font-size: 2rem; display: block; }
-.hatch-type-card .type-name { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
-.hatch-btn { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: #fff; border: none; border-radius: 24px; padding: 10px 32px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all .2s; }
-.hatch-btn:hover { transform: scale(1.05); box-shadow: 0 4px 16px rgba(139,92,246,.4); }
-
-/* ====== Achievement Toast ====== */
-.achievement-toast { position: fixed; top: 20px; right: 20px; background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #1a1a2e; border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; gap: 0.5rem; z-index: 9999; animation: slideInRight .4s ease; box-shadow: 0 4px 20px rgba(245,158,11,.4); font-weight: 600; }
-@keyframes slideInRight { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-.achievement-toast.hide { animation: slideOutRight .4s ease forwards; }
-@keyframes slideOutRight { to { transform: translateX(120%); opacity: 0; } }
-
-/* ====== Mini-Game ====== */
-.game-wrap { text-align: center; }
-.game-canvas { border: 2px solid var(--border-light); border-radius: 12px; background: linear-gradient(180deg, #e0f2fe 0%, #f0fdf4 100%); display: block; margin: 0 auto; }
-.game-hud { display: flex; justify-content: center; gap: 1.5rem; margin: 0.5rem 0; font-size: 0.9rem; color: var(--text-body); }
-.game-start-btn { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; border-radius: 20px; padding: 8px 24px; font-size: 0.9rem; cursor: pointer; margin-top: 0.5rem; }
-.game-start-btn:hover { transform: scale(1.05); }
-.game-tip { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
-
-/* ====== Shop ====== */
-.shop-coins { text-align: center; margin-bottom: 1rem; font-size: 1rem; color: #f59e0b; font-weight: 600; }
-.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.75rem; }
-.shop-item { border: 2px solid var(--border-light); border-radius: 12px; padding: 0.75rem; text-align: center; transition: all .2s; background: var(--bs-body-bg); cursor: pointer; }
-.shop-item:hover { border-color: #8b5cf6; transform: translateY(-2px); }
-.shop-item.owned { border-color: #10b981; background: rgba(16,185,129,.05); }
-.shop-item.equipped { border-color: #8b5cf6; background: rgba(139,92,246,.1); }
-.shop-item .item-emoji { font-size: 2rem; display: block; }
-.shop-item .item-name { font-size: 0.8rem; color: var(--text-body); margin: 0.25rem 0; }
-.shop-item .item-cost { font-size: 0.75rem; color: #f59e0b; }
-.shop-item .item-owned-label { font-size: 0.7rem; color: #10b981; }
-.shop-item .item-equipped-label { font-size: 0.7rem; color: #8b5cf6; font-weight: 600; }
-
-/* ====== Community ====== */
-.community-grid { display: grid; gap: 0.75rem; }
-.community-card { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: 12px; border: 1px solid var(--border-light); cursor: pointer; transition: all .2s; background: var(--bs-body-bg); }
-.community-card:hover { border-color: #8b5cf6; background: rgba(139,92,246,.05); transform: translateY(-1px); }
-.community-card .cc-emoji { font-size: 2.5rem; flex-shrink: 0; }
-.community-card .cc-info { flex: 1; min-width: 0; }
-.community-card .cc-name { font-weight: 600; color: var(--text-body); font-size: 0.9rem; }
-.community-card .cc-meta { font-size: 0.75rem; color: var(--text-muted); }
-.community-card .cc-badges { display: flex; gap: 0.25rem; margin-top: 0.15rem; }
-.community-card .cc-level { font-size: 0.85rem; font-weight: 700; color: #8b5cf6; flex-shrink: 0; }
-
-/* ====== Visit Modal ====== */
-.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); z-index: 1000; align-items: center; justify-content: center; }
-.modal-overlay.show { display: flex; }
-.modal-content { background: var(--bs-body-bg); border-radius: 16px; padding: 1.5rem; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; position: relative; }
-.modal-close { position: absolute; top: 8px; right: 12px; font-size: 1.5rem; cursor: pointer; border: none; background: none; color: var(--text-muted); }
-.gift-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
-.gift-btn { padding: 6px 14px; border-radius: 16px; border: 1px solid var(--border-light); background: var(--bs-tertiary-bg); color: var(--text-body); cursor: pointer; font-size: 0.8rem; transition: all .2s; }
-.gift-btn:hover { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
-
-/* ====== Diary & Achievements ====== */
-.diary-entry { display: flex; gap: 0.5rem; padding: 8px 0; border-bottom: 1px solid var(--border-light); font-size: 0.85rem; color: var(--text-body); }
-.diary-entry:last-child { border-bottom: none; }
-.diary-time { color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0; min-width: 70px; }
-.achievement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem; }
-.achievement-card { display: flex; align-items: center; gap: 0.5rem; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border-light); font-size: 0.8rem; }
-.achievement-card.unlocked { border-color: #fbbf24; background: rgba(251,191,36,.08); }
-.achievement-card.locked { opacity: 0.4; filter: grayscale(1); }
-.achievement-card .ach-icon { font-size: 1.5rem; }
-.achievement-card .ach-info { line-height: 1.3; }
-.achievement-card .ach-name { font-weight: 600; color: var(--text-body); }
-.achievement-card .ach-desc { font-size: 0.7rem; color: var(--text-muted); }
-
-/* ====== Evolution Preview ====== */
-.evo-preview { display: flex; gap: 1rem; justify-content: center; margin: 0.5rem 0; }
-.evo-stage { text-align: center; padding: 0.5rem 0.75rem; border-radius: 10px; border: 2px solid var(--border-light); transition: all .2s; min-width: 80px; }
-.evo-stage.current { border-color: #8b5cf6; background: rgba(139,92,246,.1); }
-.evo-stage .evo-emoji { font-size: 2rem; }
-.evo-stage .evo-name { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
-.evo-stage .evo-level { font-size: 0.65rem; color: var(--text-muted); }
-.evo-arrow { font-size: 1.5rem; color: var(--text-muted); display: flex; align-items: center; }
-
-/* Log */
-.pet-log { max-width: 400px; margin: 0 auto; text-align: left; }
-.pet-log h6 { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; text-align: center; }
-.log-list { list-style: none; padding: 0; margin: 0; }
-.log-item { padding: 6px 0; border-bottom: 1px solid var(--border-light); font-size: 0.85rem; color: var(--text-body); display: flex; gap: 0.5rem; }
-.log-item:last-child { border-bottom: none; }
-.log-time { color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0; }
-.log-action { font-weight: 500; }
-</style>
-
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">🐾 电子宠物 2.0</h2>
-</div>
-
-<div class="pet-wrap">
-    <!-- ====== No Pet: Egg + Hatch ====== -->
-    <div id="noPetSection" style="display:none;">
-        <div class="pet-display-wrap">
-            <div class="pet-display pet-egg">
-                <span class="pet-emoji">🥚</span>
-            </div>
-        </div>
-        <p class="text-muted text-center">你还没有宠物，孵化一个吧！</p>
-        <div class="hatch-section">
-            <p class="text-muted small text-center mb-2">选择宠物类型：</p>
-            <div class="hatch-types" id="hatchTypes">
-                <div class="hatch-type-card selected" data-type="cat" data-csp-click="selectPetType" data-csp-args='["cat"]'>
-                    <span class="type-emoji">🐱</span>
-                    <span class="type-name">小猫</span>
-                </div>
-                <div class="hatch-type-card" data-type="dog" data-csp-click="selectPetType" data-csp-args='["dog"]'>
-                    <span class="type-emoji">🐶</span>
-                    <span class="type-name">小狗</span>
-                </div>
-                <div class="hatch-type-card" data-type="rabbit" data-csp-click="selectPetType" data-csp-args='["rabbit"]'>
-                    <span class="type-emoji">🐰</span>
-                    <span class="type-name">兔子</span>
-                </div>
-                <div class="hatch-type-card" data-type="panda" data-csp-click="selectPetType" data-csp-args='["panda"]'>
-                    <span class="type-emoji">🐼</span>
-                    <span class="type-name">熊猫</span>
-                </div>
-            </div>
-            <div class="text-center"><button class="hatch-btn" data-csp-click="hatchPet">✨ 孵化</button></div>
-        </div>
-    </div>
-
-    <!-- ====== Has Pet: Tabs ====== -->
-    <div id="hasPetSection" style="display:none;">
-        <div class="pet-tabs" id="petTabs">
-            <button class="pet-tab active" data-tab="home">🏠 互动</button>
-            <button class="pet-tab" data-tab="game">🎮 游戏</button>
-            <button class="pet-tab" data-tab="shop">🛍️ 装扮</button>
-            <button class="pet-tab" data-tab="community">🌐 社区</button>
-            <button class="pet-tab" data-tab="diary">📖 日记</button>
-            <button class="pet-tab" data-tab="achievements">🏆 成就</button>
-        </div>
-
-        <!-- Tab: Home -->
-        <div class="tab-panel active" id="tab-home">
-            <div class="pet-display-wrap">
-                <div class="pet-display" id="petDisplay">
-                    <div class="pet-emoji-wrap">
-                        <span class="pet-emoji" id="petEmoji" data-csp-click="petTalk">🐱</span>
-                        <span class="pet-accessory top1" id="accTop1"></span>
-                        <span class="pet-accessory top2" id="accTop2"></span>
-                        <span class="pet-accessory eyes" id="accEyes"></span>
-                        <span class="pet-accessory neck" id="accNeck"></span>
-                        <span class="pet-accessory side" id="accSide"></span>
-                    </div>
-                </div>
-                <div id="dialogueBubble" style="display:none;"></div>
-            </div>
-            <div class="text-center">
-                <div class="pet-name-row" style="display:flex;align-items:center;justify-content:center;gap:0.5rem;">
-                    <span class="pet-name" id="petName">小可爱</span>
-                    <button class="rename-icon" data-csp-click="toggleRename" title="重命名">✏️</button>
-                </div>
-                <div class="pet-info-row">
-                    <span class="pet-level" id="petLevel">Lv.1</span>
-                    <span class="pet-coins" id="petCoins">🪙 0</span>
-                    <span class="pet-personality" id="petPersonality" style="display:none;"></span>
-                </div>
-                <!-- Evolution path -->
-                <div class="evo-preview" id="evoPreview"></div>
-            </div>
-
-            <div class="rename-form" id="renameForm">
-                <div class="rename-row">
-                    <input class="rename-input" id="renameInput" placeholder="新名字" maxlength="30">
-                </div>
-                <div class="rename-type-row" id="renameTypes">
-                    <button class="rename-type-dot" data-type="cat" data-csp-click="selectRenameType" data-csp-args='["cat"]'>🐱</button>
-                    <button class="rename-type-dot" data-type="dog" data-csp-click="selectRenameType" data-csp-args='["dog"]'>🐶</button>
-                    <button class="rename-type-dot" data-type="rabbit" data-csp-click="selectRenameType" data-csp-args='["rabbit"]'>🐰</button>
-                    <button class="rename-type-dot" data-type="panda" data-csp-click="selectRenameType" data-csp-args='["panda"]'>🐼</button>
-                </div>
-                <div class="rename-actions">
-                    <button class="rename-save-btn" data-csp-click="saveRename">保存</button>
-                    <button class="rename-cancel-btn" data-csp-click="cancelRename">取消</button>
-                </div>
-            </div>
-
-            <div class="stat-bars">
-                <div class="stat-row">
-                    <span class="stat-label">❤️ 饥饿</span>
-                    <div class="stat-bar-outer"><div class="stat-bar-inner hunger" id="hungerBar" style="width:100%;"></div></div>
-                    <span class="stat-val" id="hungerVal">100</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">😊 快乐</span>
-                    <div class="stat-bar-outer"><div class="stat-bar-inner happiness" id="happinessBar" style="width:100%;"></div></div>
-                    <span class="stat-val" id="happinessVal">100</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">⚡ 精力</span>
-                    <div class="stat-bar-outer"><div class="stat-bar-inner energy" id="energyBar" style="width:100%;"></div></div>
-                    <span class="stat-val" id="energyVal">100</span>
-                </div>
-            </div>
-
-            <div class="xp-wrap">
-                <div class="xp-label">经验 Lv.<span id="xpLevel">1</span></div>
-                <div class="xp-bar-outer"><div class="xp-bar-inner" id="xpBar" style="width:0%;"></div></div>
-            </div>
-
-            <div class="pet-actions">
-                <button class="pet-btn feed-btn" data-csp-click="petAction" data-csp-args='["feed"]' title="喂食">🍖<span class="btn-label">喂食</span></button>
-                <button class="pet-btn play-btn" data-csp-click="petAction" data-csp-args='["play"]' title="玩耍">🎾<span class="btn-label">玩耍</span></button>
-                <button class="pet-btn sleep-btn" data-csp-click="petAction" data-csp-args='["sleep"]' title="睡觉">💤<span class="btn-label">睡觉</span></button>
-            </div>
-
-            <div class="pet-log" id="petLog">
-                <h6>📋 活动记录</h6>
-                <ul class="log-list" id="logList"></ul>
-            </div>
-        </div>
-
-        <!-- Tab: Game -->
-        <div class="tab-panel" id="tab-game">
-            <div class="game-wrap">
-                <div class="game-hud">
-                    <span>⭐ 分数：<strong id="gameScore">0</strong></span>
-                    <span>🪙 硬币：<strong id="gameCoins">0</strong></span>
-                </div>
-                <canvas id="gameCanvas" class="game-canvas" width="360" height="400"></canvas>
-                <button class="game-start-btn" id="gameStartBtn" data-csp-click="startGame">🎮 开始游戏</button>
-                <p class="game-tip">← → 方向键移动篮子，接住掉落的美食！</p>
-            </div>
-        </div>
-
-        <!-- Tab: Shop -->
-        <div class="tab-panel" id="tab-shop">
-            <div class="shop-coins">🪙 我的硬币：<strong id="shopCoins">0</strong></div>
-            <div class="shop-grid" id="shopGrid"></div>
-        </div>
-
-        <!-- Tab: Community -->
-        <div class="tab-panel" id="tab-community">
-            <div class="community-grid" id="communityGrid"></div>
-        </div>
-
-        <!-- Tab: Diary -->
-        <div class="tab-panel" id="tab-diary">
-            <div id="diaryEntries"></div>
-        </div>
-
-        <!-- Tab: Achievements -->
-        <div class="tab-panel" id="tab-achievements">
-            <div class="achievement-grid" id="achievementGrid"></div>
-        </div>
-    </div>
-</div>
-
-<!-- Visit Modal -->
-<div class="modal-overlay" id="visitModal">
-    <div class="modal-content">
-        <button class="modal-close" data-csp-click="closeVisitModal">&times;</button>
-        <div id="visitContent"></div>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script nonce="{{ csp_nonce }}">
-// ====== State ======
-var selectedHatchType = 'cat';
-var selectedRenameType = '';
-var currentPetData = null;
-var gameRunning = false;
-var gameScore = 0;
-var gameAnimationId = null;
-var gameBasketX = 150;
-var gameItems = [];
-var gameFrame = 0;
-var lastAchievementToast = 0;
-
-// ====== Tab Switching ======
-function switchTab(tabName) {
-    document.querySelectorAll('.pet-tab').forEach(function(t) { t.classList.remove('active'); });
-    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
-    var tabBtn = document.querySelector('.pet-tab[data-tab="' + tabName + '"]');
-    var panel = document.getElementById('tab-' + tabName);
-    if (tabBtn) tabBtn.classList.add('active');
-    if (panel) panel.classList.add('active');
-    if (tabName === 'shop') loadShop();
-    if (tabName === 'community') loadCommunity();
-    if (tabName === 'diary') loadDiary();
-    if (tabName === 'achievements') loadAchievements();
-    if (tabName === 'game') resetGameUI();
-}
-document.getElementById('petTabs').addEventListener('click', function(e) {
-    var tab = e.target.closest('.pet-tab');
-    if (!tab) return;
-    switchTab(tab.getAttribute('data-tab'));
-});
-
-// ====== Hatch ======
-window.selectPetType = function(type) {
-    selectedHatchType = type;
-    document.querySelectorAll('#hatchTypes .hatch-type-card').forEach(function(el) {
-        el.classList.toggle('selected', el.getAttribute('data-type') === type);
-    });
-};
-
-window.selectRenameType = function(type) {
-    selectedRenameType = type;
-    document.querySelectorAll('#renameTypes .rename-type-dot').forEach(function(el) {
-        el.classList.toggle('selected', el.getAttribute('data-type') === type);
-    });
-};
-
-window.toggleRename = function() {
-    var form = document.getElementById('renameForm');
-    form.classList.toggle('show');
-    if (form.classList.contains('show')) {
-        document.getElementById('renameInput').value = document.getElementById('petName').textContent;
-        selectedRenameType = '';
-        document.querySelectorAll('#renameTypes .rename-type-dot').forEach(function(el) { el.classList.remove('selected'); });
-    }
-};
-
-window.cancelRename = function() {
-    document.getElementById('renameForm').classList.remove('show');
-};
-
-window.hatchPet = function() {
-    fetch('/api/pet/hatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pet_type: selectedHatchType })
-    }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) {
-            loadPet();
-        } else {
-            alert(d.error || '孵化失败');
-        }
-    });
-};
-
-window.saveRename = function() {
-    var name = document.getElementById('renameInput').value.trim();
-    if (!name) { alert('名字不能为空'); return; }
-    var body = { pet_name: name };
-    if (selectedRenameType) body.pet_type = selectedRenameType;
-    fetch('/api/pet/rename', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) {
-            document.getElementById('renameForm').classList.remove('show');
-            loadPet();
-        } else {
-            alert(d.error || '重命名失败');
-        }
-    });
-};
-
-// ====== Pet Talk ======
-window.petTalk = function() {
-    if (!currentPetData) return;
-    fetch('/api/pet/dialogue').then(function(r) { return r.json(); }).then(function(d) {
-        showDialogue(d.dialogue);
-    });
-};
-
-function showDialogue(text) {
-    var bubble = document.getElementById('dialogueBubble');
-    bubble.textContent = text;
-    bubble.style.display = 'inline-block';
-    clearTimeout(bubble._timeout);
-    bubble._timeout = setTimeout(function() { bubble.style.display = 'none'; }, 4000);
-}
-
-// ====== Pet Actions ======
-window.petAction = function(action) {
-    var btns = document.querySelectorAll('.pet-btn');
-    btns.forEach(function(b) { b.classList.add('disabled'); });
-    fetch('/api/pet/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: action })
-    }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) {
-            var msgs = [];
-            if (d.level_up) msgs.push('🎉 升级啦！');
-            if (d.evolution && d.evolution_info) {
-                msgs.push('✨ 进化成 ' + d.evolution_info.emoji + ' ' + d.evolution_info.name + '！');
-                // Flash animation
-                var emoji = document.getElementById('petEmoji');
-                emoji.classList.add('evolution-flash');
-                setTimeout(function() { emoji.classList.remove('evolution-flash'); }, 1000);
-            }
-            if (d.coins_earned) msgs.push('🪙 +' + d.coins_earned);
-            if (d.personality) msgs.push('🎭 性格：' + d.personality);
-            if (d.new_achievements && d.new_achievements.length > 0) {
-                d.new_achievements.forEach(function(a) { showAchievementToast(a); });
-            }
-            if (msgs.length > 0) showDialogue(msgs.join(' '));
-            loadPet();
-        } else {
-            alert(d.error || '操作失败');
-        }
-    }).finally(function() {
-        btns.forEach(function(b) { b.classList.remove('disabled'); });
-    });
-};
-
-// ====== Achievement Toast ======
-function showAchievementToast(ach) {
-    var now = Date.now();
-    if (now - lastAchievementToast < 1500) return;
-    lastAchievementToast = now;
-    var toast = document.createElement('div');
-    toast.className = 'achievement-toast';
-    toast.innerHTML = (ach.icon || '🏆') + ' <span>解锁成就：' + (ach.name || '') + '</span>';
-    document.body.appendChild(toast);
-    setTimeout(function() {
-        toast.classList.add('hide');
-        setTimeout(function() { toast.remove(); }, 400);
-    }, 3000);
-}
-
-// ====== Render Pet ======
-function renderPet(data) {
-    document.getElementById('noPetSection').style.display = 'none';
-    document.getElementById('hasPetSection').style.display = 'none';
-    if (!data.has_pet) {
-        document.getElementById('noPetSection').style.display = '';
-        return;
-    }
-    document.getElementById('hasPetSection').style.display = '';
-    currentPetData = data;
-    var p = data.pet;
-
-    // Emoji + evolution
-    var evo = p.evolution;
-    document.getElementById('petEmoji').textContent = evo.emoji || '🐱';
-    if (p.pet_type === 'dog') {
-        document.getElementById('petEmoji').style.animation = 'petWobble 1.5s ease-in-out infinite';
-    } else {
-        document.getElementById('petEmoji').style.animation = 'petWobble 2s ease-in-out infinite';
-    }
-
-    // Accessories
-    renderAccessories(p.accessories || []);
-
-    // Evolution preview
-    var evoCfg = getEvoConfig(p.pet_type);
-    var evoHtml = '';
-    for (var i = 0; i < evoCfg.length; i++) {
-        var cls = (evoCfg[i].stage === evo.stage) ? ' current' : '';
-        evoHtml += '<div class="evo-stage' + cls + '"><div class="evo-emoji">' + evoCfg[i].emoji + '</div><div class="evo-name">' + evoCfg[i].name + '</div><div class="evo-level">Lv.' + evoCfg[i].min_level + '+</div></div>';
-        if (i < evoCfg.length - 1) evoHtml += '<div class="evo-arrow">→</div>';
-    }
-    document.getElementById('evoPreview').innerHTML = evoHtml;
-
-    document.getElementById('petName').textContent = p.pet_name;
-    document.getElementById('petLevel').textContent = 'Lv.' + p.level;
-    document.getElementById('xpLevel').textContent = p.level;
-    document.getElementById('petCoins').textContent = '🪙 ' + (p.coins || 0);
-    if (p.personality) {
-        document.getElementById('petPersonality').style.display = '';
-        document.getElementById('petPersonality').textContent = p.personality;
-    } else {
-        document.getElementById('petPersonality').style.display = 'none';
-    }
-
-    document.getElementById('hungerBar').style.width = Math.max(0, Math.min(100, p.hunger)) + '%';
-    document.getElementById('hungerVal').textContent = Math.max(0, Math.min(100, p.hunger));
-    document.getElementById('happinessBar').style.width = Math.max(0, Math.min(100, p.happiness)) + '%';
-    document.getElementById('happinessVal').textContent = Math.max(0, Math.min(100, p.happiness));
-    document.getElementById('energyBar').style.width = Math.max(0, Math.min(100, p.energy)) + '%';
-    document.getElementById('energyVal').textContent = Math.max(0, Math.min(100, p.energy));
-    document.getElementById('xpBar').style.width = Math.max(0, Math.min(100, p.xp)) + '%';
-
-    // Dialogue
-    if (p.dialogue) {
-        showDialogue(p.dialogue);
-    }
-
-    // Log
-    var logHtml = '';
-    (data.logs || []).forEach(function(l) {
-        var actionMap = { 'hatch': '🥚', 'feed': '🍖', 'play': '🎾', 'sleep': '💤', 'rename': '✏️' };
-        logHtml += '<li class="log-item"><span class="log-time">' + l.created_at + '</span><span class="log-action">' + (actionMap[l.action] || '📝') + ' ' + l.detail + '</span></li>';
-    });
-    document.getElementById('logList').innerHTML = logHtml || '<li class="log-item text-muted">暂无记录</li>';
-
-    // Update shop coins if visible
-    document.getElementById('shopCoins').textContent = p.coins || 0;
-}
-
-function getEvoConfig(type) {
-    var configs = {
-        'cat': [{stage:0,emoji:'🐱',name:'幼猫',min_level:1},{stage:1,emoji:'😺',name:'成猫',min_level:10},{stage:2,emoji:'🦁',name:'狮猫',min_level:25}],
-        'dog': [{stage:0,emoji:'🐶',name:'幼犬',min_level:1},{stage:1,emoji:'🐕',name:'成犬',min_level:10},{stage:2,emoji:'🐺',name:'狼犬',min_level:25}],
-        'rabbit': [{stage:0,emoji:'🐰',name:'幼兔',min_level:1},{stage:1,emoji:'🐇',name:'成兔',min_level:10},{stage:2,emoji:'🦄',name:'月兔',min_level:25}],
-        'panda': [{stage:0,emoji:'🐼',name:'幼熊猫',min_level:1},{stage:1,emoji:'🐻',name:'成熊猫',min_level:10},{stage:2,emoji:'🐲',name:'龙猫',min_level:25}],
-    };
-    return configs[type] || configs['cat'];
-}
-
-function renderAccessories(accList) {
-    var positions = { 'top': [], 'eyes': [], 'neck': [], 'side': [] };
-    var shop = {
-        'hat_magic': {emoji:'🎩',position:'top'}, 'crown': {emoji:'👑',position:'top'},
-        'ribbon': {emoji:'🎀',position:'top'}, 'halo': {emoji:'😇',position:'top'},
-        'glasses': {emoji:'👓',position:'eyes'}, 'monocle': {emoji:'🧐',position:'eyes'},
-        'scarf': {emoji:'🧣',position:'neck'}, 'bowtie': {emoji:'🎀',position:'neck'},
-        'wings': {emoji:'🪽',position:'side'},
-    };
-    document.querySelectorAll('.pet-accessory').forEach(function(el) { el.textContent = ''; });
-    accList.forEach(function(key) {
-        var item = shop[key];
-        if (!item) return;
-        var pos = item.position;
-        if (!positions[pos]) positions[pos] = [];
-        positions[pos].push(item.emoji);
-    });
-    if (positions['top'].length > 0) document.getElementById('accTop1').textContent = positions['top'][0];
-    if (positions['top'].length > 1) document.getElementById('accTop2').textContent = positions['top'][1];
-    if (positions['eyes'].length > 0) document.getElementById('accEyes').textContent = positions['eyes'][0];
-    if (positions['neck'].length > 0) document.getElementById('accNeck').textContent = positions['neck'][0];
-    if (positions['side'].length > 0) document.getElementById('accSide').textContent = positions['side'][0];
-}
-
-// ====== Shop ======
-function loadShop() {
-    fetch('/api/pet/shop').then(function(r) { return r.json(); }).then(function(d) {
-        document.getElementById('shopCoins').textContent = d.coins;
-        var html = '';
-        d.items.forEach(function(item) {
-            var cls = 'shop-item';
-            if (item.equipped) cls += ' equipped';
-            else if (item.owned) cls += ' owned';
-            html += '<div class="' + cls + '" data-item="' + item.key + '" data-csp-click="shopItemClick" data-csp-args=\'["' + item.key + '",' + item.owned + ',' + item.equipped + ']\'>';
-            html += '<span class="item-emoji">' + item.emoji + '</span>';
-            html += '<div class="item-name">' + item.name + '</div>';
-            if (item.equipped) {
-                html += '<div class="item-equipped-label">✅ 已装备</div>';
-            } else if (item.owned) {
-                html += '<div class="item-owned-label">已拥有</div>';
-            } else {
-                html += '<div class="item-cost">🪙 ' + item.cost + '</div>';
-            }
-            html += '</div>';
-        });
-        document.getElementById('shopGrid').innerHTML = html;
-    });
-}
-
-window.shopItemClick = function(key, owned, equipped) {
-    if (equipped) {
-        // Unequip
-        fetch('/api/pet/accessory/equip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_key: key, equip: false })
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            if (d.ok) { loadShop(); loadPet(); }
-        });
-    } else if (owned) {
-        // Equip
-        fetch('/api/pet/accessory/equip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_key: key, equip: true })
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            if (d.ok) { loadShop(); loadPet(); }
-        });
-    } else {
-        // Buy
-        fetch('/api/pet/shop/buy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_key: key })
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            if (d.ok) {
-                loadShop();
-                loadPet();
-                alert('购买成功！剩余硬币：' + d.coins_left);
-            } else {
-                alert(d.error || '购买失败');
-            }
-        });
-    }
-};
-
-// ====== Community ======
-function loadCommunity() {
-    fetch('/api/pet/community').then(function(r) { return r.json(); }).then(function(d) {
-        var html = '';
-        d.pets.forEach(function(pet) {
-            html += '<div class="community-card" data-csp-click="visitPet" data-csp-args=\'["' + pet.username + '"]\'>';
-            html += '<div class="cc-emoji">' + pet.evolution_emoji + '</div>';
-            html += '<div class="cc-info">';
-            html += '<div class="cc-name">' + pet.pet_name + '</div>';
-            html += '<div class="cc-meta">' + pet.evolution_name + ' · ' + (pet.personality || '性格未定') + ' · 👀' + pet.visit_count + '</div>';
-            html += '</div>';
-            html += '<div class="cc-level">Lv.' + pet.level + '</div>';
-            html += '</div>';
-        });
-        document.getElementById('communityGrid').innerHTML = html || '<p class="text-muted text-center">还没有其他宠物~</p>';
-    });
-}
-
-window.visitPet = function(username) {
-    fetch('/api/pet/visit/' + username).then(function(r) { return r.json(); }).then(function(d) {
-        if (!d.ok) { alert(d.error); return; }
-        var p = d.pet;
-        var accHtml = '';
-        if (p.accessories && p.accessories.length > 0) {
-            accHtml = '<p class="small text-muted">装扮：' + p.accessories.join(', ') + '</p>';
-        }
-        var html = '<h5>🐾 ' + p.pet_name + '</h5>';
-        html += '<div class="text-center mb-3"><span style="font-size:5rem;">' + p.evolution_emoji + '</span></div>';
-        html += '<p>等级：<strong>Lv.' + p.level + '</strong> | ' + p.evolution_name + ' | ' + (p.personality || '性格未定') + '</p>';
-        html += '<p>❤️饥饿 ' + p.hunger + ' | 😊快乐 ' + p.happiness + ' | ⚡精力 ' + p.energy + '</p>';
-        html += '<p>🪙 ' + p.coins + ' | 👀 被访问 ' + p.visit_count + ' 次</p>';
-        html += accHtml;
-
-        if (d.recent_visits && d.recent_visits.length > 0) {
-            html += '<p class="small text-muted mt-3">最近来访：</p>';
-            d.recent_visits.forEach(function(v) {
-                html += '<div class="small text-muted">· ' + v.visitor + ' — ' + (v.message || '') + ' <span class="text-muted">' + v.time + '</span></div>';
-            });
-        }
-
-        html += '<div class="gift-buttons mt-3">';
-        html += '<button class="gift-btn" data-csp-click="sendGift" data-csp-args=\'["' + username + '","coins",5]\'>🪙 送5硬币</button>';
-        html += '<button class="gift-btn" data-csp-click="sendGift" data-csp-args=\'["' + username + '","coins",20]\'>🪙 送20硬币</button>';
-        html += '</div>';
-
-        document.getElementById('visitContent').innerHTML = html;
-        document.getElementById('visitModal').classList.add('show');
-    });
-};
-
-window.closeVisitModal = function() {
-    document.getElementById('visitModal').classList.remove('show');
-};
-
-window.sendGift = function(receiver, itemKey, amount) {
-    var body = { receiver: receiver, item_key: itemKey };
-    if (amount) body.amount = amount;
-    fetch('/api/pet/gift', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) {
-            alert('礼物已送出！');
-            closeVisitModal();
-        } else {
-            alert(d.error || '赠送失败');
-        }
-    });
-};
-
-// ====== Diary ======
-function loadDiary() {
-    fetch('/api/pet/diary').then(function(r) { return r.json(); }).then(function(d) {
-        var html = '';
-        var icons = {
-            'hatch': '🥚', 'feed': '🍖', 'play': '🎾', 'sleep': '💤',
-            'level_up': '⬆️', 'evolution': '✨', 'achievement': '🏆',
-            'visit': '🚪', 'gift': '🎁', 'shop': '🛍️', 'game': '🎮'
-        };
-        d.entries.forEach(function(e) {
-            html += '<div class="diary-entry"><span class="diary-time">' + e.time + '</span><span>' + (icons[e.event_type] || '📝') + ' ' + e.detail + '</span></div>';
-        });
-        document.getElementById('diaryEntries').innerHTML = html || '<p class="text-muted text-center">暂无日记~</p>';
-    });
-}
-
-// ====== Achievements ======
-function loadAchievements() {
-    fetch('/api/pet/achievements/list').then(function(r) { return r.json(); }).then(function(d) {
-        var html = '';
-        d.achievements.forEach(function(a) {
-            html += '<div class="achievement-card ' + (a.unlocked ? 'unlocked' : 'locked') + '">';
-            html += '<span class="ach-icon">' + a.icon + '</span>';
-            html += '<div class="ach-info"><div class="ach-name">' + a.name + '</div><div class="ach-desc">' + a.desc + '</div></div>';
-            html += '</div>';
-        });
-        document.getElementById('achievementGrid').innerHTML = html;
-    });
-}
-
-// ====== Mini Game ======
-function resetGameUI() {
-    document.getElementById('gameScore').textContent = '0';
-    if (currentPetData) {
-        document.getElementById('gameCoins').textContent = currentPetData.pet.coins || 0;
-    }
-    gameRunning = false;
-    if (gameAnimationId) { cancelAnimationFrame(gameAnimationId); gameAnimationId = null; }
-}
-
-window.startGame = function() {
-    if (gameRunning) return;
-    gameRunning = true;
-    gameScore = 0;
-    gameItems = [];
-    gameFrame = 0;
-    document.getElementById('gameScore').textContent = '0';
-    var canvas = document.getElementById('gameCanvas');
-    var ctx = canvas.getContext('2d');
-    gameBasketX = canvas.width / 2 - 30;
-    gameLoop(ctx);
-};
-
-function gameLoop(ctx) {
-    if (!gameRunning) return;
-    var canvas = document.getElementById('gameCanvas');
-    var W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-
-    gameFrame++;
-    // Spawn items
-    if (gameFrame % 30 === 0 || (gameFrame < 150 && gameFrame % 25 === 0)) {
-        var foods = ['🍎', '🍕', '🍗', '🍩', '🍓', '🧁', '🍔', '🍦', '💩'];
-        gameItems.push({
-            x: Math.random() * (W - 40) + 20,
-            y: -30,
-            emoji: foods[Math.floor(Math.random() * foods.length)],
-            speed: 1.5 + Math.random() * 2.5,
-            bad: false
-        });
-    }
-
-    // Draw basket
-    ctx.fillStyle = '#8b5cf6';
-    ctx.beginPath();
-    ctx.moveTo(gameBasketX, H - 40);
-    ctx.lineTo(gameBasketX + 60, H - 40);
-    ctx.lineTo(gameBasketX + 50, H - 10);
-    ctx.lineTo(gameBasketX + 10, H - 10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.font = '18px sans-serif';
-    ctx.fillText('🧺', gameBasketX + 10, H - 45);
-
-    // Update & draw items
-    for (var i = gameItems.length - 1; i >= 0; i--) {
-        var item = gameItems[i];
-        item.y += item.speed;
-        ctx.font = '28px sans-serif';
-        ctx.fillText(item.emoji, item.x, item.y);
-
-        if (item.y > H - 50 && item.y < H - 5 && item.x > gameBasketX - 10 && item.x < gameBasketX + 70) {
-            if (item.emoji === '💩') {
-                gameScore = Math.max(0, gameScore - 15);
-            } else {
-                gameScore += 10;
-            }
-            document.getElementById('gameScore').textContent = gameScore;
-            gameItems.splice(i, 1);
-        } else if (item.y > H + 30) {
-            gameItems.splice(i, 1);
-        }
-    }
-
-    // Game over after 60 seconds
-    if (gameFrame > 60 * 60) {
-        endGame();
-        return;
-    }
-
-    gameAnimationId = requestAnimationFrame(function() { gameLoop(ctx); });
-}
-
-function endGame() {
-    gameRunning = false;
-    if (gameAnimationId) { cancelAnimationFrame(gameAnimationId); gameAnimationId = null; }
-    var coinsEarned = Math.max(1, Math.floor(gameScore / 10));
-    if (gameScore > 0) {
-        fetch('/api/pet/game/score', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ score: gameScore })
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            if (d.ok) {
-                alert('游戏结束！得分：' + gameScore + '，获得 🪙 ' + d.coins_earned + ' 硬币！总硬币：' + d.total_coins);
-                document.getElementById('gameCoins').textContent = d.total_coins;
-                loadPet();
-            }
-        });
-    } else {
-        alert('游戏结束！得分：' + gameScore);
-    }
-}
-
-// Keyboard controls
-document.addEventListener('keydown', function(e) {
-    if (!gameRunning) return;
-    var canvas = document.getElementById('gameCanvas');
-    if (e.key === 'ArrowLeft') gameBasketX = Math.max(0, gameBasketX - 20);
-    if (e.key === 'ArrowRight') gameBasketX = Math.min(canvas.width - 70, gameBasketX + 20);
-    e.preventDefault();
-});
-
-// Click modal overlay to close
-document.getElementById('visitModal').addEventListener('click', function(e) {
-    if (e.target === this) closeVisitModal();
-});
-
-// ====== Load Pet ======
-function loadPet() {
-    fetch('/api/pet').then(function(r) { return r.json(); }).then(function(d) {
-        renderPet(d);
-    });
-}
-
-loadPet();
-</script>
-{% endblock %}
+     1|{% extends "base.html" %}
+     2|{% block title %}电子宠物 — 多合一工具箱{% endblock %}
+     3|
+     4|{% block content %}
+     5|<!-- Element Plus CSS from CDN (CSP允许 cdn.jsdelivr.net) -->
+     6|<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
+     7|
+     8|<!-- Pet-specific styles (CSP nonce applied) -->
+     9|<style nonce="{{ csp_nonce }}">
+    10|/* ===== 全局变量 ===== */
+    11|:root {
+    12|    --pet-primary: #8b5cf6;
+    13|    --pet-primary-light: #a78bfa;
+    14|    --pet-secondary: #f59e0b;
+    15|    --pet-success: #10b981;
+    16|    --pet-danger: #ef4444;
+    17|    --pet-info: #3b82f6;
+    18|    --pet-bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    19|}
+    20|
+    21|/* ===== 页面容器 ===== */
+    22|.pet-app-wrap {
+    23|    max-width: 780px;
+    24|    margin: 0 auto;
+    25|    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    26|}
+    27|
+    28|/* ===== 宠物展示区 ===== */
+    29|.pet-hero {
+    30|    position: relative;
+    31|    text-align: center;
+    32|    padding: 2rem 1rem 1.5rem;
+    33|    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+    34|    border-radius: 24px;
+    35|    margin-bottom: 1.5rem;
+    36|    overflow: hidden;
+    37|    transition: background 0.5s;
+    38|}
+    39|[data-bs-theme="dark"] .pet-hero {
+    40|    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    41|}
+    42|.pet-hero::before {
+    43|    content: '';
+    44|    position: absolute;
+    45|    top: -50%;
+    46|    left: -50%;
+    47|    width: 200%;
+    48|    height: 200%;
+    49|    background: radial-gradient(circle at 30% 40%, rgba(139,92,246,0.08) 0%, transparent 50%),
+    50|                radial-gradient(circle at 70% 60%, rgba(245,158,11,0.06) 0%, transparent 50%);
+    51|    animation: petHeroGlow 8s ease-in-out infinite;
+    52|    pointer-events: none;
+    53|}
+    54|@keyframes petHeroGlow {
+    55|    0%, 100% { transform: scale(1) rotate(0deg); }
+    56|    50% { transform: scale(1.05) rotate(1deg); }
+    57|}
+    58|
+    59|/* 宠物表情 */
+    60|.pet-emoji-display {
+    61|    position: relative;
+    62|    display: inline-block;
+    63|    cursor: pointer;
+    64|    transition: transform 0.3s;
+    65|    z-index: 1;
+    66|}
+    67|.pet-emoji-display:hover {
+    68|    transform: scale(1.12);
+    69|}
+    70|.pet-emoji-display .main-emoji {
+    71|    font-size: 5.5rem;
+    72|    display: inline-block;
+    73|    animation: petFloat 2.5s ease-in-out infinite;
+    74|    transition: all 0.5s;
+    75|}
+    76|@keyframes petFloat {
+    77|    0%, 100% { transform: translateY(0); }
+    78|    50% { transform: translateY(-8px); }
+    79|}
+    80|.pet-emoji-display.egg .main-emoji {
+    81|    animation: eggRock 1.5s ease-in-out infinite;
+    82|}
+    83|@keyframes eggRock {
+    84|    0%, 100% { transform: rotate(0deg); }
+    85|    25% { transform: rotate(-10deg); }
+    86|    75% { transform: rotate(10deg); }
+    87|}
+    88|/* 进化闪光 */
+    89|.evolution-flash {
+    90|    animation: evoFlash 1s ease-out !important;
+    91|}
+    92|@keyframes evoFlash {
+    93|    0% { transform: scale(1); filter: brightness(1); }
+    94|    50% { transform: scale(1.5); filter: brightness(2.5); }
+    95|    100% { transform: scale(1); filter: brightness(1); }
+    96|}
+    97|
+    98|/* 装扮定位 */
+    99|.pet-acc {
+   100|    position: absolute;
+   101|    pointer-events: none;
+   102|    z-index: 2;
+   103|}
+   104|.pet-acc.top { top: -12px; left: 50%; transform: translateX(-50%); font-size: 1.6rem; }
+   105|.pet-acc.top2 { top: 5px; left: 50%; transform: translateX(-50%) translateY(3px); font-size: 1.4rem; }
+   106|.pet-acc.eyes { top: 42%; left: 50%; transform: translate(-50%, -50%); font-size: 1.3rem; }
+   107|.pet-acc.neck { bottom: 18%; left: 50%; transform: translateX(-50%); font-size: 1.1rem; }
+   108|.pet-acc.side { top: 28%; left: -18px; font-size: 2rem; }
+   109|
+   110|/* 对话气泡 */
+   111|.dialogue-pop {
+   112|    display: inline-block;
+   113|    background: var(--pet-primary);
+   114|    color: #fff;
+   115|    border-radius: 16px;
+   116|    padding: 8px 18px;
+   117|    font-size: 0.88rem;
+   118|    margin-top: 0.75rem;
+   119|    position: relative;
+   120|    z-index: 1;
+   121|    box-shadow: 0 4px 16px rgba(139,92,246,0.3);
+   122|    max-width: 300px;
+   123|}
+   124|.dialogue-pop::after {
+   125|    content: '';
+   126|    position: absolute;
+   127|    top: -8px;
+   128|    left: 50%;
+   129|    transform: translateX(-50%);
+   130|    border-left: 8px solid transparent;
+   131|    border-right: 8px solid transparent;
+   132|    border-bottom: 8px solid var(--pet-primary);
+   133|}
+   134|
+   135|/* ===== 信息行 ===== */
+   136|.pet-meta-row {
+   137|    display: flex;
+   138|    justify-content: center;
+   139|    align-items: center;
+   140|    gap: 0.75rem;
+   141|    flex-wrap: wrap;
+   142|    margin-top: 0.5rem;
+   143|    z-index: 1;
+   144|    position: relative;
+   145|}
+   146|.pet-meta-row .el-tag {
+   147|    font-weight: 500;
+   148|}
+   149|
+   150|/* ===== 进化预览 ===== */
+   151|.evo-timeline {
+   152|    display: flex;
+   153|    align-items: center;
+   154|    justify-content: center;
+   155|    gap: 0.5rem;
+   156|    margin-top: 0.5rem;
+   157|    z-index: 1;
+   158|    position: relative;
+   159|}
+   160|.evo-node {
+   161|    text-align: center;
+   162|    padding: 0.4rem 0.6rem;
+   163|    border-radius: 12px;
+   164|    border: 2px solid #e5e7eb;
+   165|    background: var(--bs-body-bg, #fff);
+   166|    transition: all 0.3s;
+   167|    min-width: 70px;
+   168|    cursor: default;
+   169|}
+   170|[data-bs-theme="dark"] .evo-node {
+   171|    border-color: #374151;
+   172|    background: #1f2937;
+   173|}
+   174|.evo-node.active {
+   175|    border-color: var(--pet-primary);
+   176|    background: rgba(139,92,246,0.1);
+   177|    box-shadow: 0 0 12px rgba(139,92,246,0.2);
+   178|}
+   179|.evo-node .evo-icon {
+   180|    font-size: 1.6rem;
+   181|    display: block;
+   182|}
+   183|.evo-node .evo-title {
+   184|    font-size: 0.7rem;
+   185|    color: var(--text-muted, #6b7280);
+   186|    margin-top: 0.1rem;
+   187|}
+   188|.evo-arrow {
+   189|    font-size: 1.2rem;
+   190|    color: #9ca3af;
+   191|}
+   192|
+   193|/* ===== 状态条区域 ===== */
+   194|.stats-section {
+   195|    display: flex;
+   196|    flex-direction: column;
+   197|    gap: 0.6rem;
+   198|    margin: 1rem 0;
+   199|}
+   200|.stat-row {
+   201|    display: flex;
+   202|    align-items: center;
+   203|    gap: 0.5rem;
+   204|}
+   205|.stat-label {
+   206|    width: 60px;
+   207|    font-size: 0.82rem;
+   208|    font-weight: 500;
+   209|    color: var(--text-body, #374151);
+   210|    text-align: right;
+   211|    flex-shrink: 0;
+   212|}
+   213|.stat-bar-wrap {
+   214|    flex: 1;
+   215|}
+   216|.stat-value {
+   217|    width: 32px;
+   218|    font-size: 0.75rem;
+   219|    color: var(--text-muted, #9ca3af);
+   220|    text-align: left;
+   221|    flex-shrink: 0;
+   222|}
+   223|
+   224|/* XP 条 */
+   225|.xp-section {
+   226|    margin-bottom: 1rem;
+   227|}
+   228|.xp-label {
+   229|    font-size: 0.78rem;
+   230|    color: var(--text-muted, #9ca3af);
+   231|    margin-bottom: 0.2rem;
+   232|}
+   233|
+   234|/* ===== 动作按钮区 ===== */
+   235|.action-buttons {
+   236|    display: flex;
+   237|    justify-content: center;
+   238|    gap: 1.25rem;
+   239|    margin: 1.25rem 0;
+   240|    flex-wrap: wrap;
+   241|}
+   242|.pet-action-btn {
+   243|    width: 72px !important;
+   244|    height: 72px !important;
+   245|    border-radius: 50% !important;
+   246|    font-size: 1.8rem !important;
+   247|    box-shadow: 0 4px 14px rgba(0,0,0,0.08) !important;
+   248|    transition: all 0.3s !important;
+   249|}
+   250|.pet-action-btn:hover {
+   251|    transform: translateY(-4px) scale(1.08) !important;
+   252|    box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+   253|}
+   254|.btn-feed { background: linear-gradient(135deg, #fef3c7, #fde68a) !important; border: none !important; color: #b45309 !important; }
+   255|.btn-play { background: linear-gradient(135deg, #dbeafe, #bfdbfe) !important; border: none !important; color: #1d4ed8 !important; }
+   256|.btn-sleep { background: linear-gradient(135deg, #e0e7ff, #c7d2fe) !important; border: none !important; color: #4338ca !important; }
+   257|.btn-feed:hover { background: linear-gradient(135deg, #fde68a, #fcd34d) !important; }
+   258|.btn-play:hover { background: linear-gradient(135deg, #bfdbfe, #93c5fd) !important; }
+   259|.btn-sleep:hover { background: linear-gradient(135deg, #c7d2fe, #a5b4fc) !important; }
+   260|.pet-action-label {
+   261|    font-size: 0.7rem;
+   262|    color: var(--text-muted, #9ca3af);
+   263|    text-align: center;
+   264|    margin-top: 0.25rem;
+   265|}
+   266|
+   267|/* ===== 孵化区 ===== */
+   268|.hatch-container {
+   269|    text-align: center;
+   270|    padding: 2rem 1rem;
+   271|}
+   272|.hatch-title {
+   273|    font-size: 1.1rem;
+   274|    color: var(--text-muted, #6b7280);
+   275|    margin-bottom: 1rem;
+   276|}
+   277|.hatch-types {
+   278|    display: flex;
+   279|    gap: 1rem;
+   280|    justify-content: center;
+   281|    margin: 1.5rem 0;
+   282|    flex-wrap: wrap;
+   283|}
+   284|.hatch-card {
+   285|    cursor: pointer;
+   286|    transition: all 0.3s;
+   287|    border: 2px solid #e5e7eb;
+   288|    border-radius: 16px;
+   289|    padding: 1rem 1.5rem;
+   290|    text-align: center;
+   291|    font-size: 2rem;
+   292|    background: var(--bs-body-bg, #fff);
+   293|    position: relative;
+   294|}
+   295|[data-bs-theme="dark"] .hatch-card {
+   296|    border-color: #374151;
+   297|    background: #1f2937;
+   298|}
+   299|.hatch-card:hover {
+   300|    border-color: var(--pet-primary);
+   301|    background: rgba(139,92,246,0.06);
+   302|    transform: translateY(-2px);
+   303|}
+   304|.hatch-card.selected {
+   305|    border-color: var(--pet-primary) !important;
+   306|    background: rgba(139,92,246,0.12) !important;
+   307|    box-shadow: 0 0 16px rgba(139,92,246,0.2);
+   308|}
+   309|.hatch-card .card-type {
+   310|    font-size: 0.8rem;
+   311|    margin-top: 0.35rem;
+   312|    color: var(--text-muted, #6b7280);
+   313|}
+   314|
+   315|/* ===== 商店 ===== */
+   316|.shop-header {
+   317|    display: flex;
+   318|    justify-content: space-between;
+   319|    align-items: center;
+   320|    margin-bottom: 1rem;
+   321|}
+   322|.shop-grid {
+   323|    display: grid;
+   324|    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+   325|    gap: 0.75rem;
+   326|}
+   327|.shop-item-card {
+   328|    cursor: pointer;
+   329|    transition: all 0.3s;
+   330|    text-align: center;
+   331|    border: 2px solid #e5e7eb;
+   332|    border-radius: 14px;
+   333|    padding: 1rem 0.6rem;
+   334|}
+   335|[data-bs-theme="dark"] .shop-item-card {
+   336|    border-color: #374151;
+   337|}
+   338|.shop-item-card:hover {
+   339|    border-color: var(--pet-primary);
+   340|    transform: translateY(-3px);
+   341|    box-shadow: 0 6px 20px rgba(139,92,246,0.12);
+   342|}
+   343|.shop-item-card.owned {
+   344|    border-color: var(--pet-success);
+   345|    background: rgba(16,185,129,0.05);
+   346|}
+   347|.shop-item-card.equipped {
+   348|    border-color: var(--pet-primary);
+   349|    background: rgba(139,92,246,0.08);
+   350|    box-shadow: 0 0 14px rgba(139,92,246,0.15);
+   351|}
+   352|.shop-item-icon {
+   353|    font-size: 2.2rem;
+   354|    display: block;
+   355|    margin-bottom: 0.3rem;
+   356|}
+   357|.shop-item-name {
+   358|    font-size: 0.82rem;
+   359|    font-weight: 500;
+   360|    color: var(--text-body, #374151);
+   361|}
+   362|.shop-item-cost {
+   363|    font-size: 0.78rem;
+   364|    color: var(--pet-secondary);
+   365|    font-weight: 600;
+   366|    margin-top: 0.15rem;
+   367|}
+   368|.shop-item-status {
+   369|    font-size: 0.7rem;
+   370|    margin-top: 0.15rem;
+   371|    font-weight: 500;
+   372|}
+   373|
+   374|/* ===== 社区 ===== */
+   375|.community-header {
+   376|    display: flex;
+   377|    justify-content: space-between;
+   378|    align-items: center;
+   379|    margin-bottom: 1rem;
+   380|}
+   381|.community-grid {
+   382|    display: flex;
+   383|    flex-direction: column;
+   384|    gap: 0.6rem;
+   385|}
+   386|.community-card {
+   387|    cursor: pointer;
+   388|    transition: all 0.3s;
+   389|    border-radius: 14px;
+   390|}
+   391|.community-card:hover {
+   392|    transform: translateY(-2px);
+   393|    box-shadow: 0 4px 16px rgba(139,92,246,0.1);
+   394|    border-color: var(--pet-primary);
+   395|}
+   396|.comm-avatar {
+   397|    font-size: 2.8rem;
+   398|    flex-shrink: 0;
+   399|}
+   400|.comm-info {
+   401|    flex: 1;
+   402|    min-width: 0;
+   403|}
+   404|.comm-name {
+   405|    font-weight: 600;
+   406|    font-size: 0.95rem;
+   407|    color: var(--text-body, #374151);
+   408|}
+   409|.comm-meta {
+   410|    font-size: 0.78rem;
+   411|    color: var(--text-muted, #6b7280);
+   412|    display: flex;
+   413|    gap: 0.5rem;
+   414|    align-items: center;
+   415|    flex-wrap: wrap;
+   416|}
+   417|.comm-level {
+   418|    font-weight: 700;
+   419|    font-size: 0.95rem;
+   420|    color: var(--pet-primary);
+   421|    flex-shrink: 0;
+   422|}
+   423|
+   424|/* ===== 成就网格 ===== */
+   425|.achieve-grid {
+   426|    display: grid;
+   427|    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+   428|    gap: 0.5rem;
+   429|}
+   430|.achieve-card {
+   431|    transition: all 0.3s;
+   432|    border-radius: 12px;
+   433|}
+   434|.achieve-card.locked {
+   435|    opacity: 0.4;
+   436|    filter: grayscale(80%);
+   437|}
+   438|.achieve-card.unlocked {
+   439|    border-color: var(--pet-secondary);
+   440|    background: rgba(245,158,11,0.06);
+   441|}
+   442|.achieve-icon {
+   443|    font-size: 1.6rem;
+   444|    flex-shrink: 0;
+   445|}
+   446|.achieve-info {
+   447|    line-height: 1.3;
+   448|}
+   449|.achieve-name {
+   450|    font-weight: 600;
+   451|    font-size: 0.82rem;
+   452|    color: var(--text-body, #374151);
+   453|}
+   454|.achieve-desc {
+   455|    font-size: 0.7rem;
+   456|    color: var(--text-muted, #9ca3af);
+   457|}
+   458|
+   459|/* ===== 日记 ===== */
+   460|.diary-list {
+   461|    display: flex;
+   462|    flex-direction: column;
+   463|    gap: 0.4rem;
+   464|}
+   465|
+   466|/* ===== 日志 ===== */
+   467|.activity-log {
+   468|    margin-top: 1.5rem;
+   469|}
+   470|.log-header {
+   471|    font-size: 0.88rem;
+   472|    font-weight: 600;
+   473|    color: var(--text-muted, #6b7280);
+   474|    margin-bottom: 0.5rem;
+   475|}
+   476|.log-item {
+   477|    display: flex;
+   478|    gap: 0.5rem;
+   479|    padding: 5px 0;
+   480|    font-size: 0.82rem;
+   481|    color: var(--text-body, #374151);
+   482|    border-bottom: 1px solid #f3f4f6;
+   483|}
+   484|[data-bs-theme="dark"] .log-item {
+   485|    border-color: #1f2937;
+   486|}
+   487|.log-item:last-child {
+   488|    border-bottom: none;
+   489|}
+   490|.log-time {
+   491|    color: var(--text-muted, #9ca3af);
+   492|    font-size: 0.72rem;
+   493|    flex-shrink: 0;
+   494|    min-width: 65px;
+   495|}
+   496|
+   497|/* ===== 游戏区 ===== */
+   498|.game-container {
+   499|    text-align: center;
+   500|}
+   501|
