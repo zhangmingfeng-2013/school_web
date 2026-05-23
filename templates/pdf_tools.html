@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+{% block title %}📄 PDF 工具箱 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.pdf-wrap { max-width: 900px; margin: 0 auto; }
+/* Tabs */
+.pdf-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border-light, #e5e7eb); margin-bottom: 1.5rem; }
+.pdf-tab { padding: 0.7rem 1.5rem; cursor: pointer; font-weight: 600; font-size: 0.92rem; color: var(--text-muted, #6b7280); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all .2s; user-select: none; background: none; border-top: none; border-left: none; border-right: none; }
+.pdf-tab:hover { color: var(--bs-body-color); }
+.pdf-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+/* Drop zone */
+.pdf-drop-zone { border: 2px dashed var(--border-light, #d1d5db); border-radius: 12px; padding: 2.5rem 1.5rem; text-align: center; cursor: pointer; transition: all .25s; background: var(--bs-tertiary-bg); }
+.pdf-drop-zone:hover, .pdf-drop-zone.dragover { border-color: #3b82f6; background: rgba(59,130,246,.04); }
+.pdf-drop-zone .dz-icon { font-size: 2.5rem; margin-bottom: 0.4rem; }
+.pdf-drop-zone .dz-text { font-size: 0.95rem; color: var(--text-muted); }
+.pdf-drop-zone .dz-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem; }
+.pdf-drop-zone.small { padding: 1.5rem 1rem; }
+.pdf-drop-zone.small .dz-icon { font-size: 1.8rem; }
+/* File list */
+.pdf-file-list { margin-top: 0.75rem; }
+.pdf-file-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.75rem; background: var(--bs-tertiary-bg); border-radius: 8px; margin-bottom: 0.4rem; }
+.pdf-file-item .fi-name { flex: 1; font-weight: 500; font-size: 0.88rem; word-break: break-all; }
+.pdf-file-item .fi-size { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
+.pdf-file-item .fi-remove { color: #ef4444; cursor: pointer; font-size: 1.1rem; line-height: 1; background: none; border: none; padding: 0 4px; }
+/* Tab panels */
+.pdf-panel { display: none; }
+.pdf-panel.active { display: block; }
+/* Buttons */
+.pdf-btn-row { display: flex; gap: 0.6rem; align-items: center; margin-top: 1rem; flex-wrap: wrap; }
+.pdf-spinner { display: none; width: 1.4rem; height: 1.4rem; }
+/* Page range input */
+.pdf-range-row { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.75rem; flex-wrap: wrap; }
+.pdf-range-row label { font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
+.pdf-range-row input { width: 140px; }
+/* Result area */
+.pdf-result { margin-top: 1rem; }
+.pdf-result-card { background: rgba(16,185,129,.08); border-radius: 12px; padding: 1.25rem; text-align: center; }
+.pdf-result-card.error { background: rgba(239,68,68,.08); }
+.pdf-result-card .r-icon { font-size: 2rem; }
+.pdf-result-card .r-text { margin-top: 0.4rem; font-weight: 500; }
+.pdf-result-card .r-extra { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; }
+/* Text output */
+.pdf-text-output { width: 100%; min-height: 260px; font-family: 'SF Mono', Consolas, monospace; font-size: 0.85rem; padding: 14px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--bs-body-bg); color: var(--bs-body-color); resize: vertical; line-height: 1.6; }
+.pdf-text-output-wrap { margin-top: 1rem; display: none; }
+/* Quality label */
+.pdf-quality-info { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem; }
+/* Responsive */
+@media (max-width: 576px) {
+    .pdf-tab { padding: 0.5rem 0.8rem; font-size: 0.82rem; }
+}
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📄 PDF 工具箱</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+</div>
+
+<div class="pdf-wrap">
+    <!-- Tabs -->
+    <div class="pdf-tabs" id="pdfTabs">
+        <button class="pdf-tab active" data-csp-click="switchPdfTab" data-csp-args='["merge"]'>📎 合并 PDF</button>
+        <button class="pdf-tab" data-csp-click="switchPdfTab" data-csp-args='["split"]'>✂️ 分割 PDF</button>
+        <button class="pdf-tab" data-csp-click="switchPdfTab" data-csp-args='["compress"]'>🗜️ 压缩 PDF</button>
+        <button class="pdf-tab" data-csp-click="switchPdfTab" data-csp-args='["extract"]'>📋 提取文本</button>
+    </div>
+
+    <!-- === MERGE PANEL === -->
+    <div class="pdf-panel active" id="panel-merge">
+        <div class="pdf-drop-zone" id="mergeDropZone" data-csp-click="triggerMergeInput">
+            <div class="dz-icon">📁</div>
+            <div class="dz-text">点击或拖拽多个 PDF 文件到此处</div>
+            <div class="dz-hint">支持同时选择多个文件（最大 20MB/个）</div>
+        </div>
+        <input type="file" id="mergeInput" accept=".pdf" multiple class="d-none" data-csp-change="onMergeFilesSelected">
+        <div class="pdf-file-list" id="mergeFileList"></div>
+        <div class="pdf-btn-row" id="mergeBtnRow" style="display:none;">
+            <button class="btn btn-primary" id="mergeBtn" data-csp-click="doMerge">📎 合并 PDF</button>
+            <div class="spinner-border text-primary pdf-spinner" id="mergeSpinner" role="status"></div>
+        </div>
+        <div class="pdf-result" id="mergeResult"></div>
+    </div>
+
+    <!-- === SPLIT PANEL === -->
+    <div class="pdf-panel" id="panel-split">
+        <div class="pdf-drop-zone small" id="splitDropZone" data-csp-click="triggerSplitInput">
+            <div class="dz-icon">📄</div>
+            <div class="dz-text">点击或拖拽 PDF 文件到此处</div>
+            <div class="dz-hint">最大 20MB</div>
+        </div>
+        <input type="file" id="splitInput" accept=".pdf" class="d-none" data-csp-change="onSplitFileSelected">
+        <div class="pdf-file-list" id="splitFileInfo"></div>
+        <div class="pdf-range-row" id="splitRangeRow" style="display:none;">
+            <label>页码范围：</label>
+            <input type="text" class="form-control form-control-sm" id="splitPageRange" placeholder="例: 1-3,5,7-9">
+            <span style="font-size:0.8rem;color:var(--text-muted);">格式：1-3,5,7-9（逗号分隔，支持范围和单页）</span>
+        </div>
+        <div class="pdf-btn-row" id="splitBtnRow" style="display:none;">
+            <button class="btn btn-primary" id="splitBtn" data-csp-click="doSplit">✂️ 分割 PDF</button>
+            <div class="spinner-border text-primary pdf-spinner" id="splitSpinner" role="status"></div>
+        </div>
+        <div class="pdf-result" id="splitResult"></div>
+    </div>
+
+    <!-- === COMPRESS PANEL === -->
+    <div class="pdf-panel" id="panel-compress">
+        <div class="pdf-drop-zone small" id="compressDropZone" data-csp-click="triggerCompressInput">
+            <div class="dz-icon">🗜️</div>
+            <div class="dz-text">点击或拖拽 PDF 文件到此处</div>
+            <div class="dz-hint">最大 20MB · 使用内容流压缩优化文件大小</div>
+        </div>
+        <input type="file" id="compressInput" accept=".pdf" class="d-none" data-csp-change="onCompressFileSelected">
+        <div class="pdf-file-list" id="compressFileInfo"></div>
+        <div class="pdf-quality-info" id="compressQualityInfo" style="display:none;">
+            ℹ️ 压缩将优化 PDF 内部内容流，移除冗余数据，适合文本为主的 PDF 文件。
+        </div>
+        <div class="pdf-btn-row" id="compressBtnRow" style="display:none;">
+            <button class="btn btn-primary" id="compressBtn" data-csp-click="doCompress">🗜️ 压缩 PDF</button>
+            <div class="spinner-border text-primary pdf-spinner" id="compressSpinner" role="status"></div>
+        </div>
+        <div class="pdf-result" id="compressResult"></div>
+    </div>
+
+    <!-- === EXTRACT TEXT PANEL === -->
+    <div class="pdf-panel" id="panel-extract">
+        <div class="pdf-drop-zone small" id="extractDropZone" data-csp-click="triggerExtractInput">
+            <div class="dz-icon">📋</div>
+            <div class="dz-text">点击或拖拽 PDF 文件到此处</div>
+            <div class="dz-hint">最大 20MB · 提取所有页面文本内容</div>
+        </div>
+        <input type="file" id="extractInput" accept=".pdf" class="d-none" data-csp-change="onExtractFileSelected">
+        <div class="pdf-file-list" id="extractFileInfo"></div>
+        <div class="pdf-btn-row" id="extractBtnRow" style="display:none;">
+            <button class="btn btn-primary" id="extractBtn" data-csp-click="doExtract">📋 提取文本</button>
+            <div class="spinner-border text-primary pdf-spinner" id="extractSpinner" role="status"></div>
+        </div>
+        <div class="pdf-text-output-wrap" id="extractOutputWrap">
+            <textarea class="pdf-text-output" id="extractTextOutput" readonly placeholder="提取的文本将显示在这里..."></textarea>
+            <div class="pdf-btn-row">
+                <button class="btn btn-outline-secondary btn-sm" data-csp-click="copyExtractedText">📋 复制文本</button>
+            </div>
+        </div>
+        <div class="pdf-result" id="extractResult"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+// ===== State =====
+var currentPdfTab = 'merge';
+var mergeFiles = [];
+var splitFile = null;
+var compressFile = null;
+var extractFile = null;
+
+// ===== Tab Switching =====
+function switchPdfTab(tab) {
+    currentPdfTab = tab;
+    // Update tab buttons
+    var tabs = document.querySelectorAll('#pdfTabs .pdf-tab');
+    tabs.forEach(function(t) {
+        t.classList.remove('active');
+        if ((t.getAttribute('data-csp-args') || '').indexOf(tab) !== -1) t.classList.add('active');
+    });
+    // Update panels
+    document.querySelectorAll('.pdf-panel').forEach(function(p) { p.classList.remove('active'); });
+    var panel = document.getElementById('panel-' + tab);
+    if (panel) panel.classList.add('active');
+    // Clear results
+    document.getElementById('mergeResult').innerHTML = '';
+    document.getElementById('splitResult').innerHTML = '';
+    document.getElementById('compressResult').innerHTML = '';
+    document.getElementById('extractResult').innerHTML = '';
+}
+
+// ===== Helpers =====
+function formatSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function showResult(containerId, ok, message, extra) {
+    var container = document.getElementById(containerId);
+    var cls = ok ? 'pdf-result-card' : 'pdf-result-card error';
+    var icon = ok ? '✅' : '❌';
+    var html = '<div class="' + cls + '"><div class="r-icon">' + icon + '</div><div class="r-text">' + escapeHtml(message) + '</div>';
+    if (extra) html += '<div class="r-extra">' + extra + '</div>';
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function setBtnLoading(btn, spinner, loading) {
+    btn.disabled = loading;
+    spinner.style.display = loading ? 'inline-block' : 'none';
+}
+
+function triggerInput(inputId) {
+    document.getElementById(inputId).click();
+}
+
+function showFileInfo(containerId, name, size) {
+    var container = document.getElementById(containerId);
+    container.innerHTML = '<div class="pdf-file-item"><span>📄</span><span class="fi-name">' + escapeHtml(name) + '</span><span class="fi-size">' + formatSize(size) + '</span></div>';
+}
+
+// ===== MERGE =====
+function triggerMergeInput() { triggerInput('mergeInput'); }
+
+function onMergeFilesSelected(e) {
+    var files = Array.from(e.target.files || []);
+    // Also handle drag-drop
+    if (e.dataTransfer && e.dataTransfer.files) files = Array.from(e.dataTransfer.files);
+    if (!files.length) return;
+
+    mergeFiles = mergeFiles.concat(files);
+    renderMergeFileList();
+    document.getElementById('mergeBtnRow').style.display = 'flex';
+    document.getElementById('mergeResult').innerHTML = '';
+}
+
+function renderMergeFileList() {
+    var container = document.getElementById('mergeFileList');
+    var html = '';
+    mergeFiles.forEach(function(f, i) {
+        html += '<div class="pdf-file-item"><span>📄</span><span class="fi-name">' + escapeHtml(f.name) + '</span><span class="fi-size">' + formatSize(f.size) + '</span><button class="fi-remove" data-csp-click="removeMergeFile" data-csp-args=\'[' + i + ']\'>✕</button></div>';
+    });
+    container.innerHTML = html;
+    if (mergeFiles.length === 0) {
+        document.getElementById('mergeBtnRow').style.display = 'none';
+    }
+}
+
+function removeMergeFile(index) {
+    mergeFiles.splice(index, 1);
+    renderMergeFileList();
+    if (mergeFiles.length === 0) {
+        document.getElementById('mergeBtnRow').style.display = 'none';
+        document.getElementById('mergeInput').value = '';
+    }
+}
+
+function doMerge() {
+    if (mergeFiles.length < 2) {
+        showResult('mergeResult', false, '请至少选择 2 个 PDF 文件');
+        return;
+    }
+    var btn = document.getElementById('mergeBtn');
+    var spinner = document.getElementById('mergeSpinner');
+    setBtnLoading(btn, spinner, true);
+    document.getElementById('mergeResult').innerHTML = '';
+
+    var formData = new FormData();
+    mergeFiles.forEach(function(f) { formData.append('files', f); });
+
+    fetch('/api/pdf/merge', { method: 'POST', body: formData })
+        .then(handlePdfResponse)
+        .then(function(result) {
+            setBtnLoading(btn, spinner, false);
+            if (result.ok) {
+                showResult('mergeResult', true, '合并成功！' + result.info, null);
+                triggerDownload(result.filename);
+            } else {
+                showResult('mergeResult', false, result.error || '合并失败');
+            }
+        })
+        .catch(function(err) {
+            setBtnLoading(btn, spinner, false);
+            showResult('mergeResult', false, err.message || '请求失败');
+        });
+}
+
+// ===== SPLIT =====
+function triggerSplitInput() { triggerInput('splitInput'); }
+
+function onSplitFileSelected(e) {
+    var files = e.target.files || (e.dataTransfer && e.dataTransfer.files);
+    if (!files || !files.length) return;
+    splitFile = files[0];
+    showFileInfo('splitFileInfo', splitFile.name, splitFile.size);
+    document.getElementById('splitRangeRow').style.display = 'flex';
+    document.getElementById('splitBtnRow').style.display = 'flex';
+    document.getElementById('splitResult').innerHTML = '';
+}
+
+function doSplit() {
+    if (!splitFile) {
+        showResult('splitResult', false, '请先选择 PDF 文件');
+        return;
+    }
+    var pageRange = document.getElementById('splitPageRange').value.trim();
+    if (!pageRange) {
+        showResult('splitResult', false, '请输入页码范围，例如: 1-3,5,7-9');
+        return;
+    }
+    var btn = document.getElementById('splitBtn');
+    var spinner = document.getElementById('splitSpinner');
+    setBtnLoading(btn, spinner, true);
+    document.getElementById('splitResult').innerHTML = '';
+
+    var formData = new FormData();
+    formData.append('file', splitFile);
+    formData.append('page_range', pageRange);
+
+    fetch('/api/pdf/split', { method: 'POST', body: formData })
+        .then(handlePdfResponse)
+        .then(function(result) {
+            setBtnLoading(btn, spinner, false);
+            if (result.ok) {
+                showResult('splitResult', true, '分割成功！' + result.info, null);
+                triggerDownload(result.filename);
+            } else {
+                showResult('splitResult', false, result.error || '分割失败');
+            }
+        })
+        .catch(function(err) {
+            setBtnLoading(btn, spinner, false);
+            showResult('splitResult', false, err.message || '请求失败');
+        });
+}
+
+// ===== COMPRESS =====
+function triggerCompressInput() { triggerInput('compressInput'); }
+
+function onCompressFileSelected(e) {
+    var files = e.target.files || (e.dataTransfer && e.dataTransfer.files);
+    if (!files || !files.length) return;
+    compressFile = files[0];
+    showFileInfo('compressFileInfo', compressFile.name, compressFile.size);
+    document.getElementById('compressBtnRow').style.display = 'flex';
+    document.getElementById('compressQualityInfo').style.display = '';
+    document.getElementById('compressResult').innerHTML = '';
+}
+
+function doCompress() {
+    if (!compressFile) {
+        showResult('compressResult', false, '请先选择 PDF 文件');
+        return;
+    }
+    var btn = document.getElementById('compressBtn');
+    var spinner = document.getElementById('compressSpinner');
+    setBtnLoading(btn, spinner, true);
+    document.getElementById('compressResult').innerHTML = '';
+
+    var formData = new FormData();
+    formData.append('file', compressFile);
+
+    fetch('/api/pdf/compress', { method: 'POST', body: formData })
+        .then(handlePdfResponse)
+        .then(function(result) {
+            setBtnLoading(btn, spinner, false);
+            if (result.ok) {
+                showResult('compressResult', true, '压缩成功！' + result.info, null);
+                triggerDownload(result.filename);
+            } else {
+                showResult('compressResult', false, result.error || '压缩失败');
+            }
+        })
+        .catch(function(err) {
+            setBtnLoading(btn, spinner, false);
+            showResult('compressResult', false, err.message || '请求失败');
+        });
+}
+
+// ===== EXTRACT TEXT =====
+function triggerExtractInput() { triggerInput('extractInput'); }
+
+function onExtractFileSelected(e) {
+    var files = e.target.files || (e.dataTransfer && e.dataTransfer.files);
+    if (!files || !files.length) return;
+    extractFile = files[0];
+    showFileInfo('extractFileInfo', extractFile.name, extractFile.size);
+    document.getElementById('extractBtnRow').style.display = 'flex';
+    document.getElementById('extractOutputWrap').style.display = 'none';
+    document.getElementById('extractResult').innerHTML = '';
+}
+
+function doExtract() {
+    if (!extractFile) {
+        showResult('extractResult', false, '请先选择 PDF 文件');
+        return;
+    }
+    var btn = document.getElementById('extractBtn');
+    var spinner = document.getElementById('extractSpinner');
+    setBtnLoading(btn, spinner, true);
+    document.getElementById('extractResult').innerHTML = '';
+
+    var formData = new FormData();
+    formData.append('file', extractFile);
+
+    fetch('/api/pdf/extract_text', { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            setBtnLoading(btn, spinner, false);
+            if (data.ok) {
+                document.getElementById('extractTextOutput').value = data.text || '';
+                document.getElementById('extractOutputWrap').style.display = '';
+                showResult('extractResult', true, '提取成功！共 ' + (data.pages || 0) + ' 页，' + (data.chars || 0) + ' 字符', null);
+            } else {
+                document.getElementById('extractOutputWrap').style.display = 'none';
+                showResult('extractResult', false, data.error || '提取失败');
+            }
+        })
+        .catch(function(err) {
+            setBtnLoading(btn, spinner, false);
+            document.getElementById('extractOutputWrap').style.display = 'none';
+            showResult('extractResult', false, err.message || '请求失败');
+        });
+}
+
+function copyExtractedText() {
+    var textarea = document.getElementById('extractTextOutput');
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        showResult('extractResult', true, '已复制到剪贴板！', null);
+    } catch(e) {
+        // Fallback
+        navigator.clipboard.writeText(textarea.value).then(function() {
+            showResult('extractResult', true, '已复制到剪贴板！', null);
+        }).catch(function() {
+            showResult('extractResult', false, '复制失败，请手动选择文本');
+        });
+    }
+}
+
+// ===== Common PDF Response Handler =====
+function handlePdfResponse(r) {
+    var ct = r.headers.get('Content-Type') || '';
+    if (ct.indexOf('application/json') !== -1) {
+        return r.json();
+    }
+    // Direct blob response
+    return r.blob().then(function(blob) {
+        var disposition = r.headers.get('Content-Disposition') || '';
+        var filename = 'download.pdf';
+        var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (match) filename = match[1].replace(/['"]/g, '');
+        return { ok: true, blob: blob, filename: filename, info: '' };
+    });
+}
+
+function triggerDownload(filename) {
+    var a = document.createElement('a');
+    a.href = '/api/pdf/download/' + encodeURIComponent(filename);
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// ===== Drag & Drop Setup =====
+(function() {
+    var zones = [
+        { id: 'mergeDropZone', input: 'mergeInput', handler: onMergeFilesSelected, isMulti: true },
+        { id: 'splitDropZone', input: 'splitInput', handler: onSplitFileSelected, isMulti: false },
+        { id: 'compressDropZone', input: 'compressInput', handler: onCompressFileSelected, isMulti: false },
+        { id: 'extractDropZone', input: 'extractInput', handler: onExtractFileSelected, isMulti: false }
+    ];
+
+    zones.forEach(function(z) {
+        var el = document.getElementById(z.id);
+        if (!el) return;
+        el.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); el.classList.add('dragover'); });
+        el.addEventListener('dragleave', function(e) { e.preventDefault(); e.stopPropagation(); el.classList.remove('dragover'); });
+        el.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            el.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                if (z.isMulti) {
+                    z.handler({ target: { files: e.dataTransfer.files }, dataTransfer: e.dataTransfer });
+                } else {
+                    z.handler({ target: { files: [e.dataTransfer.files[0]] }, dataTransfer: e.dataTransfer });
+                }
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

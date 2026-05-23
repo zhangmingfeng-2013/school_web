@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}智能翻译 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.tr-container { max-width: 1000px; margin: 0 auto; }
+.tr-langs {
+    display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem;
+    flex-wrap: wrap; justify-content: center;
+}
+.tr-lang-select {
+    padding: .6rem 1rem; border-radius: 10px; border: 1.5px solid var(--bs-border-color);
+    background: var(--bs-body-bg); color: var(--bs-body-color); font-size: .9rem;
+    cursor: pointer; min-width: 140px; text-align: center;
+}
+.tr-lang-select:focus { border-color: #8b5cf6; outline: none; box-shadow: 0 0 0 3px rgba(139,92,246,.15); }
+.tr-swap-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--bs-border-color);
+    background: var(--bs-body-bg); cursor: pointer; font-size: 1.2rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .3s, border-color .2s;
+}
+.tr-swap-btn:hover { border-color: #8b5cf6; transform: rotate(180deg); }
+.tr-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.tr-panel {
+    border-radius: 12px; border: 1.5px solid var(--bs-border-color);
+    overflow: hidden; display: flex; flex-direction: column;
+}
+.tr-panel-header {
+    padding: .6rem 1rem; font-size: .85rem; font-weight: 600;
+    background: rgba(139,92,246,.06); border-bottom: 1px solid var(--bs-border-color);
+    display: flex; align-items: center; justify-content: space-between;
+}
+.tr-panel textarea, .tr-output {
+    width: 100%; min-height: 280px; padding: 1rem; border: none; resize: vertical;
+    background: var(--bs-body-bg); color: var(--bs-body-color); font-size: 1rem;
+    line-height: 1.7; flex: 1;
+}
+.tr-panel textarea:focus { outline: none; }
+.tr-panel textarea::placeholder { color: var(--bs-secondary-color); }
+.tr-output { white-space: pre-wrap; word-break: break-word; position: relative; }
+.tr-output .tr-copy-btn { position: absolute; top: .5rem; right: .5rem; opacity: .5; transition: opacity .2s; }
+.tr-output .tr-copy-btn:hover { opacity: 1; }
+.tr-actions { display: flex; gap: .75rem; justify-content: center; margin-top: 1.5rem; flex-wrap: wrap; }
+.tr-actions .btn { border-radius: 25px; padding: .6rem 2rem; font-weight: 600; }
+.tr-error { color: #ef4444; text-align: center; padding: 1rem; margin-top: 1rem; border-radius: 10px; background: rgba(239,68,68,.08); }
+.tr-charcount { font-size: .75rem; color: var(--bs-secondary-color); padding: .3rem 1rem; }
+@media (max-width: 768px) {
+    .tr-panels { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="tr-container">
+    <h2 class="mb-3">🌐 智能翻译</h2>
+    <p class="text-muted mb-4">基于 AI 的高质量翻译，支持中/英/日/韩互译。</p>
+
+    <!-- 语言选择 -->
+    <div class="tr-langs">
+        <select class="tr-lang-select" id="trSource">
+            <option value="auto">🔍 自动检测</option>
+            <option value="zh">🇨🇳 中文</option>
+            <option value="en">🇬🇧 英文</option>
+            <option value="ja">🇯🇵 日文</option>
+            <option value="ko">🇰🇷 韩文</option>
+        </select>
+        <button class="tr-swap-btn" data-csp-click="trSwap">⇄</button>
+        <select class="tr-lang-select" id="trTarget">
+            <option value="zh">🇨🇳 中文</option>
+            <option value="en" selected>🇬🇧 英文</option>
+            <option value="ja">🇯🇵 日文</option>
+            <option value="ko">🇰🇷 韩文</option>
+        </select>
+    </div>
+
+    <!-- 翻译面板 -->
+    <div class="tr-panels">
+        <div class="tr-panel">
+            <div class="tr-panel-header">
+                <span id="trSourceLabel">源文本</span>
+                <span class="tr-charcount" id="trCharCount">0 / 5000</span>
+            </div>
+            <textarea id="trInput" placeholder="请输入要翻译的文本..."></textarea>
+        </div>
+        <div class="tr-panel">
+            <div class="tr-panel-header">
+                <span id="trTargetLabel">翻译结果</span>
+            </div>
+            <div class="tr-output" id="trOutput">
+                <span class="text-muted">翻译结果将显示在这里...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="tr-actions">
+        <button class="btn btn-primary" data-csp-click="trTranslate">🌐 翻译</button>
+        <button class="btn btn-outline-secondary" data-csp-click="trCopy">📋 复制结果</button>
+        <button class="btn btn-outline-secondary" data-csp-click="trClear">🗑️ 清空</button>
+    </div>
+    <div class="tr-error" id="trError" style="display:none;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var TRANSLATING = false;
+
+var langNames = {
+    'auto': '自动检测', 'zh': '中文', 'en': '英文', 'ja': '日文', 'ko': '韩文'
+};
+
+document.getElementById('trInput').addEventListener('input', function() {
+    document.getElementById('trCharCount').textContent = this.value.length + ' / 5000';
+});
+
+function trSwap() {
+    var src = document.getElementById('trSource');
+    var tgt = document.getElementById('trTarget');
+    if (src.value === 'auto') return;
+    var tmp = src.value;
+    src.value = tgt.value;
+    tgt.value = tmp;
+    updateLabels();
+    // Also swap text if there's a result
+    var output = document.getElementById('trOutput');
+    var input = document.getElementById('trInput');
+    if (output.textContent.trim() && output.textContent !== '翻译结果将显示在这里...') {
+        input.value = output.textContent.replace('📋 复制', '').trim();
+        output.innerHTML = '<span class="text-muted">翻译结果将显示在这里...</span>';
+    }
+}
+
+function updateLabels() {
+    var src = document.getElementById('trSource').value;
+    var tgt = document.getElementById('trTarget').value;
+    document.getElementById('trSourceLabel').textContent = '源文本 (' + langNames[src] + ')';
+    document.getElementById('trTargetLabel').textContent = '翻译结果 (' + langNames[tgt] + ')';
+}
+updateLabels();
+
+document.getElementById('trSource').addEventListener('change', updateLabels);
+document.getElementById('trTarget').addEventListener('change', updateLabels);
+
+function trTranslate() {
+    if (TRANSLATING) return;
+    var text = document.getElementById('trInput').value.trim();
+    var errorBox = document.getElementById('trError');
+    var outputBox = document.getElementById('trOutput');
+    errorBox.style.display = 'none';
+
+    if (!text) {
+        errorBox.style.display = 'block';
+        errorBox.textContent = '请输入要翻译的文本';
+        return;
+    }
+    if (text.length > 5000) {
+        errorBox.style.display = 'block';
+        errorBox.textContent = '文本长度不能超过 5000 字符';
+        return;
+    }
+
+    TRANSLATING = true;
+    outputBox.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div class="spinner-border" style="color:#8b5cf6;" role="status"></div><span class="ms-2 text-muted">正在翻译...</span></div>';
+
+    var source = document.getElementById('trSource').value;
+    var target = document.getElementById('trTarget').value;
+
+    fetch('/api/translator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, source: source, target: target })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        TRANSLATING = false;
+        if (d.error) {
+            outputBox.innerHTML = '<span class="text-muted">翻译结果将显示在这里...</span>';
+            errorBox.style.display = 'block';
+            errorBox.textContent = d.error;
+            return;
+        }
+        outputBox.innerHTML = d.translated.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') +
+            '<button class="btn btn-sm btn-outline-secondary tr-copy-btn" data-csp-click="trCopy">📋</button>';
+    })
+    .catch(function(e) {
+        TRANSLATING = false;
+        outputBox.innerHTML = '<span class="text-muted">翻译结果将显示在这里...</span>';
+        errorBox.style.display = 'block';
+        errorBox.textContent = '网络错误，请稍后再试';
+    });
+}
+
+function trCopy() {
+    var text = document.getElementById('trOutput').textContent.replace('📋', '').trim();
+    if (!text || text === '翻译结果将显示在这里...') return;
+    navigator.clipboard.writeText(text).then(function() {
+        var btn = document.querySelector('.tr-copy-btn');
+        if (btn) { btn.textContent = '✅'; setTimeout(function() { btn.textContent = '📋'; }, 2000); }
+    });
+}
+
+function trClear() {
+    document.getElementById('trInput').value = '';
+    document.getElementById('trOutput').innerHTML = '<span class="text-muted">翻译结果将显示在这里...</span>';
+    document.getElementById('trError').style.display = 'none';
+    document.getElementById('trCharCount').textContent = '0 / 5000';
+}
+</script>
+{% endblock %}

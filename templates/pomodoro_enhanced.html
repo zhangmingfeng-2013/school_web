@@ -1,0 +1,437 @@
+{% extends "base.html" %}
+{% block title %}番茄钟 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.pomodoro-wrap { max-width: 900px; margin: 0 auto; }
+.pomo-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+@media (max-width: 768px) { .pomo-layout { grid-template-columns: 1fr; } }
+.pomo-left { text-align: center; }
+.timer-ring { position: relative; width: 260px; height: 260px; margin: 0 auto 2rem; }
+.timer-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+.timer-ring .bg-circle { fill: none; stroke: var(--bs-tertiary-bg); stroke-width: 8; }
+.timer-ring .progress-circle { fill: none; stroke: #ef4444; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 0.5s linear; }
+.timer-ring .time-display { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 3.5rem; font-weight: 700; color: var(--text-body); font-family: 'SF Mono', Consolas, monospace; }
+.timer-ring .mode-label { position: absolute; top: 65%; left: 50%; transform: translateX(-50%); font-size: 0.9rem; color: var(--text-muted); letter-spacing: 2px; }
+.timer-ring.break .progress-circle { stroke: #10b981; }
+.pomo-buttons { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+.pomo-btn { width: 70px; height: 70px; border-radius: 50%; border: none; font-size: 1.4rem; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; }
+.pomo-btn.start { background: #ef4444; color: #fff; }
+.pomo-btn.start:hover { background: #dc2626; transform: scale(1.05); }
+.pomo-btn.pause { background: #f59e0b; color: #fff; }
+.pomo-btn.pause:hover { background: #d97706; }
+.pomo-btn.reset { background: var(--bs-tertiary-bg); color: var(--text-body); border: 2px solid var(--border-light); }
+.pomo-btn.reset:hover { background: var(--bg-card-hover); }
+.pomo-btn.hidden-btn { display: none; }
+.pomo-scroll { max-height: 260px; overflow-y: auto; }
+.session-counter { margin-top: 1.5rem; font-size: 0.95rem; color: var(--text-muted); }
+.session-counter .count { font-weight: 700; font-size: 1.5rem; color: #ef4444; }
+.pomo-presets { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1.5rem; }
+.preset-btn { padding: 4px 16px; border-radius: 20px; border: 1px solid var(--border-light); background: var(--bs-body-bg); color: var(--text-muted); cursor: pointer; font-size: 0.85rem; transition: all .15s; }
+.preset-btn:hover { border-color: #ef4444; color: #ef4444; }
+.preset-btn.active { background: #ef4444; color: #fff; border-color: #ef4444; }
+
+/* Task name input */
+.task-input-group { max-width: 360px; margin: 0 auto 1rem; }
+.task-input-group input { border-radius: 8px 0 0 8px; }
+
+/* Stats cards */
+.stats-row { display: flex; gap: 1rem; justify-content: center; margin: 1.5rem 0; flex-wrap: wrap; }
+.stat-card { background: var(--bs-tertiary-bg); border-radius: 12px; padding: 1rem 1.5rem; text-align: center; min-width: 100px; }
+.stat-card .stat-val { font-size: 1.8rem; font-weight: 700; color: #ef4444; }
+.stat-card .stat-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+
+/* Chart */
+.chart-wrap { max-height: 260px; margin: 1rem 0; }
+
+/* History & Leaderboard panels */
+.pomo-right .card { margin-bottom: 1rem; }
+.pomo-right .card-header { font-weight: 600; font-size: 0.95rem; }
+.period-tabs { display: flex; gap: 0.25rem; }
+.period-tab { padding: 4px 12px; border-radius: 16px; border: 1px solid var(--border-light); background: transparent; color: var(--text-muted); cursor: pointer; font-size: 0.8rem; transition: all .15s; }
+.period-tab:hover { border-color: #ef4444; color: #ef4444; }
+.period-tab.active { background: #ef4444; color: #fff; border-color: #ef4444; }
+.sess-table { width: 100%; font-size: 0.85rem; }
+.sess-table th, .sess-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-light); }
+.sess-table .sess-done { color: #10b981; }
+.sess-table .sess-cancel { color: #f59e0b; }
+.lb-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-light); }
+.lb-rank { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; margin-right: 10px; }
+.lb-rank.gold { background: #fbbf24; color: #fff; }
+.lb-rank.silver { background: #9ca3af; color: #fff; }
+.lb-rank.bronze { background: #d97706; color: #fff; }
+.lb-rank.normal { background: var(--bs-tertiary-bg); color: var(--text-muted); }
+.lb-name { flex: 1; font-weight: 500; }
+.lb-mins { font-weight: 700; color: #ef4444; }
+.lb-count { font-size: 0.8rem; color: var(--text-muted); margin-left: 8px; }
+.empty-msg { text-align: center; color: var(--text-muted); padding: 1.5rem; font-size: 0.9rem; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">🍅 番茄钟</h2>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
+</div>
+
+<div class="pomodoro-wrap">
+    <div class="pomo-layout">
+        <!-- Left: Timer -->
+        <div class="pomo-left">
+            <div class="pomo-presets">
+                <button class="preset-btn active" data-csp-click="setPreset" data-csp-args='[25]'>25 分钟</button>
+                <button class="preset-btn" data-csp-click="setPreset" data-csp-args='[45]'>45 分钟</button>
+                <button class="preset-btn" data-csp-click="setPreset" data-csp-args='[60]'>60 分钟</button>
+            </div>
+
+            <div class="task-input-group input-group input-group-sm">
+                <input type="text" id="taskNameInput" class="form-control" placeholder="任务名称（可选）" maxlength="200">
+                <button class="btn btn-outline-secondary" data-csp-click="clearTaskName" type="button">✕</button>
+            </div>
+
+            <div class="timer-ring" id="timerRing">
+                <svg viewBox="0 0 100 100">
+                    <circle class="bg-circle" cx="50" cy="50" r="44"/>
+                    <circle class="progress-circle" id="progressCircle" cx="50" cy="50" r="44" stroke-dasharray="276.46" stroke-dashoffset="0"/>
+                </svg>
+                <div class="time-display" id="timeDisplay">25:00</div>
+                <div class="mode-label" id="modeLabel">专注</div>
+            </div>
+
+            <div class="pomo-buttons">
+                <button class="pomo-btn start" id="btnStart" data-csp-click="pomoStart" title="开始">▶</button>
+                <button class="pomo-btn pause hidden-btn" id="btnPause" data-csp-click="pomoPause" title="暂停">⏸</button>
+                <button class="pomo-btn reset" data-csp-click="pomoReset" title="重置">↺</button>
+            </div>
+
+            <div class="session-counter">
+                已完成 <span class="count" id="sessionCount">0</span> 个番茄
+            </div>
+
+            <!-- Today Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-val" id="statTodayCount">0</div>
+                    <div class="stat-label">今日完成</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="statTodayMins">0</div>
+                    <div class="stat-label">今日分钟</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="statStreak">0</div>
+                    <div class="stat-label">连续天数 🔥</div>
+                </div>
+            </div>
+
+            <!-- Weekly Chart -->
+            <div class="chart-wrap">
+                <canvas id="weeklyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Right: History + Leaderboard -->
+        <div class="pomo-right">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>📋 会话记录</span>
+                    <div class="period-tabs">
+                        <button class="period-tab active" data-csp-click="loadSessions" data-csp-args='["today"]'>今天</button>
+                        <button class="period-tab" data-csp-click="loadSessions" data-csp-args='["week"]'>本周</button>
+                        <button class="period-tab" data-csp-click="loadSessions" data-csp-args='["all"]'>全部</button>
+                    </div>
+                </div>
+                <div class="card-body pomo-scroll" id="sessionList">
+                    <div class="empty-msg">加载中...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">🏆 本周排行榜</div>
+                <div class="card-body pomo-scroll" id="leaderboardList">
+                    <div class="empty-msg">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var WORK_TIME = 25 * 60;
+var BREAK_TIME = 5 * 60;
+var totalSeconds = WORK_TIME;
+var remaining = totalSeconds;
+var isBreak = false;
+var intervalId = null;
+var sessionCount = 0;
+var totalDash = 2 * Math.PI * 44; // ~276.46
+var currentTaskName = '';
+var currentPlannedDuration = WORK_TIME;
+var focusStartRemaining = WORK_TIME;
+var weeklyChart = null;
+
+// ===== Timer Functions (on window for CSP dispatcher) =====
+window.formatTime = function(secs) {
+    var m = Math.floor(secs / 60);
+    var s = secs % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+};
+
+window.updateDisplay = function() {
+    document.getElementById('timeDisplay').textContent = window.formatTime(remaining);
+    var offset = totalDash * (1 - remaining / totalSeconds);
+    document.getElementById('progressCircle').style.strokeDashoffset = offset;
+};
+
+window.setPreset = function(mins) {
+    WORK_TIME = mins * 60;
+    pomoReset();
+    var btns = document.querySelectorAll('.pomo-presets .preset-btn');
+    btns.forEach(function(b) { b.classList.remove('active'); });
+    var target = document.querySelector('.preset-btn[data-csp-args=\\'[' + mins + ']\\']');
+    if (target) target.classList.add('active');
+};
+
+window.clearTaskName = function() {
+    document.getElementById('taskNameInput').value = '';
+    currentTaskName = '';
+};
+
+window.pomoStart = function() {
+    if (intervalId) return;
+    currentTaskName = document.getElementById('taskNameInput').value.trim() || '未命名任务';
+    currentPlannedDuration = WORK_TIME;
+    focusStartRemaining = WORK_TIME;
+    var audioCtx = null;
+    intervalId = setInterval(function() {
+        remaining--;
+        window.updateDisplay();
+        if (remaining <= 0) {
+            clearInterval(intervalId);
+            intervalId = null;
+            // Play notification sound
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = 800;
+                gain.gain.value = 0.3;
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch(ee) {}
+
+            if (!isBreak) {
+                // Focus session completed - save to backend
+                var actualDuration = currentPlannedDuration;
+                window.saveSession(currentTaskName, actualDuration, currentPlannedDuration, true);
+                sessionCount++;
+                document.getElementById('sessionCount').textContent = sessionCount;
+                // Switch to break
+                isBreak = true;
+                totalSeconds = BREAK_TIME;
+                remaining = totalSeconds;
+                document.getElementById('modeLabel').textContent = '休息';
+                document.getElementById('timerRing').classList.add('break');
+                window.updateDisplay();
+                window.pomoStart();
+            } else {
+                // Break finished, switch back
+                isBreak = false;
+                totalSeconds = WORK_TIME;
+                remaining = totalSeconds;
+                document.getElementById('modeLabel').textContent = '专注';
+                document.getElementById('timerRing').classList.remove('break');
+                window.updateDisplay();
+                toggleButtons(false);
+            }
+        }
+    }, 1000);
+    toggleButtons(true);
+};
+
+window.pomoPause = function() {
+    if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+    }
+    toggleButtons(false);
+};
+
+window.pomoReset = function() {
+    if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+    }
+    isBreak = false;
+    totalSeconds = WORK_TIME;
+    remaining = totalSeconds;
+    document.getElementById('modeLabel').textContent = '专注';
+    document.getElementById('timerRing').classList.remove('break');
+    window.updateDisplay();
+    toggleButtons(false);
+};
+
+function toggleButtons(running) {
+    if (running) {
+        document.getElementById('btnStart').classList.add('hidden-btn');
+        document.getElementById('btnPause').classList.remove('hidden-btn');
+    } else {
+        document.getElementById('btnStart').classList.remove('hidden-btn');
+        document.getElementById('btnPause').classList.add('hidden-btn');
+    }
+}
+
+// ===== API Functions (on window for CSP dispatcher) =====
+window.saveSession = function(taskName, duration, plannedDuration, completed) {
+    fetch('/api/pomodoro/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            task_name: taskName,
+            duration: duration,
+            planned_duration: plannedDuration,
+            completed: completed
+        })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            // Refresh stats and list
+            window.loadStats();
+            // Find current active period tab
+            var activeTab = document.querySelector('.period-tab.active');
+            var period = 'today';
+            if (activeTab) {
+                try { var args = JSON.parse(activeTab.getAttribute('data-csp-args') || '[]'); period = args[0] || 'today'; } catch(e) {}
+            }
+            window.loadSessions(period);
+        }
+    }).catch(function(){});
+};
+
+window.loadSessions = function(period) {
+    // Update active tab
+    var tabs = document.querySelectorAll('.period-tab');
+    tabs.forEach(function(t) {
+        var args = t.getAttribute('data-csp-args');
+        try { args = JSON.parse(args); } catch(e) { args = []; }
+        if (args[0] === period) {
+            t.classList.add('active');
+        } else {
+            t.classList.remove('active');
+        }
+    });
+
+    fetch('/api/pomodoro/sessions?period=' + period)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var list = document.getElementById('sessionList');
+            if (!d.sessions || d.sessions.length === 0) {
+                list.innerHTML = '<div class="empty-msg">暂无记录</div>';
+                return;
+            }
+            var html = '<table class="sess-table"><thead><tr><th>任务</th><th>时长</th><th>状态</th><th>时间</th></tr></thead><tbody>';
+            d.sessions.forEach(function(s) {
+                var mins = Math.floor(s.duration / 60);
+                var secs = s.duration % 60;
+                var durStr = mins + '分' + (secs > 0 ? secs + '秒' : '');
+                var statusCls = s.completed ? 'sess-done' : 'sess-cancel';
+                var statusTxt = s.completed ? '✓ 完成' : '✗ 中断';
+                var timeStr = s.created_at ? s.created_at.substring(5, 16).replace('T', ' ') : '';
+                html += '<tr><td>' + escapeHtml(s.task_name) + '</td><td>' + durStr + '</td><td class="' + statusCls + '">' + statusTxt + '</td><td>' + timeStr + '</td></tr>';
+            });
+            html += '</tbody></table>';
+            list.innerHTML = html;
+        }).catch(function(e) {
+            document.getElementById('sessionList').innerHTML = '<div class="empty-msg">加载失败</div>';
+        });
+};
+
+window.loadStats = function() {
+    fetch('/api/pomodoro/stats')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            document.getElementById('statTodayCount').textContent = d.today_count || 0;
+            document.getElementById('statTodayMins').textContent = d.today_minutes || 0;
+            document.getElementById('statStreak').textContent = d.streak || 0;
+
+            // Update weekly chart
+            var weekData = d.week_data || [];
+            var labels = weekData.map(function(w) { return w.date.substring(5); }); // MM-DD
+            var chartData = weekData.map(function(w) { return w.minutes; });
+
+            var ctx = document.getElementById('weeklyChart').getContext('2d');
+            if (weeklyChart) weeklyChart.destroy();
+            weeklyChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '专注分钟',
+                        data: chartData,
+                        backgroundColor: '#ef4444',
+                        borderRadius: 4,
+                        barThickness: 20
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 2.5,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: Math.max(1, Math.ceil(Math.max.apply(null, chartData.concat([10])) / 5)) },
+                            grid: { color: 'rgba(128,128,128,0.15)' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }).catch(function(){});
+};
+
+window.loadLeaderboard = function() {
+    fetch('/api/pomodoro/leaderboard')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var list = document.getElementById('leaderboardList');
+            if (!d.leaderboard || d.leaderboard.length === 0) {
+                list.innerHTML = '<div class="empty-msg">暂无数据</div>';
+                return;
+            }
+            var rankClasses = ['gold', 'silver', 'bronze'];
+            var html = '';
+            d.leaderboard.forEach(function(item, i) {
+                var cls = i < 3 ? rankClasses[i] : 'normal';
+                html += '<div class="lb-item">' +
+                    '<div class="lb-rank ' + cls + '">' + (i + 1) + '</div>' +
+                    '<div class="lb-name">' + escapeHtml(item.username) + '</div>' +
+                    '<div class="lb-mins">' + item.minutes + ' 分钟</div>' +
+                    '<div class="lb-count">' + item.count + ' 次</div>' +
+                    '</div>';
+            });
+            list.innerHTML = html;
+        }).catch(function() {
+            document.getElementById('leaderboardList').innerHTML = '<div class="empty-msg">加载失败</div>';
+        });
+};
+
+function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
+// ===== Initial load =====
+window.updateDisplay();
+window.loadStats();
+window.loadSessions('today');
+window.loadLeaderboard();
+</script>
+{% endblock %}

@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}匿名树洞 - 多合一工具箱{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+.cf-container { max-width: 750px; margin: 0 auto; }
+.cf-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.cf-nickname {
+    display: flex; align-items: center; gap: .5rem; background: rgba(139,92,246,.08);
+    padding: .35rem .75rem; border-radius: 20px; font-size: .85rem;
+}
+.cf-nickname .cf-identity { font-weight: 600; color: #8b5cf6; }
+.cf-post-form { margin-bottom: 1.5rem; }
+.cf-textarea {
+    width: 100%; min-height: 120px; padding: 1rem; border-radius: 12px;
+    border: 1.5px solid var(--bs-border-color); background: var(--bs-body-bg);
+    color: var(--bs-body-color); font-size: .95rem; resize: vertical;
+    line-height: 1.6;
+}
+.cf-textarea:focus { border-color: #8b5cf6; outline: none; box-shadow: 0 0 0 3px rgba(139,92,246,.12); }
+.cf-textarea::placeholder { color: var(--bs-secondary-color); }
+.cf-form-actions { display: flex; gap: .5rem; margin-top: .75rem; align-items: center; flex-wrap: wrap; }
+.cf-emoji-pick { display: flex; gap: .3rem; }
+.cf-emoji-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: 2px solid transparent;
+    background: var(--bs-body-bg); font-size: 1.1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.cf-emoji-btn:hover { transform: scale(1.15); }
+.cf-emoji-btn.selected { border-color: #8b5cf6; background: rgba(139,92,246,.1); }
+.cf-submit-btn {
+    margin-left: auto; padding: .6rem 1.8rem; border-radius: 25px; border: none;
+    font-weight: 700; background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    color: #fff; cursor: pointer; transition: all .2s;
+}
+.cf-submit-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(139,92,246,.3); }
+.cf-submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+/* Post cards */
+.cf-post-card {
+    background: var(--bs-body-bg); border: 1.5px solid var(--bs-border-color);
+    border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem;
+    transition: border-color .2s;
+    animation: cfFadeIn .3s ease;
+}
+@keyframes cfFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.cf-post-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+.cf-post-emoji { font-size: 1.3rem; }
+.cf-post-nickname { font-weight: 600; color: #8b5cf6; font-size: .9rem; }
+.cf-post-time { font-size: .75rem; color: var(--bs-secondary-color); margin-left: auto; }
+.cf-post-content { line-height: 1.7; margin-bottom: .75rem; word-break: break-word; }
+.cf-post-actions { display: flex; gap: 1rem; font-size: .85rem; }
+.cf-action-btn {
+    background: none; border: none; cursor: pointer; color: var(--bs-secondary-color);
+    padding: .3rem .5rem; border-radius: 8px; display: flex; align-items: center; gap: .3rem;
+    transition: all .15s; font-size: .85rem;
+}
+.cf-action-btn:hover { background: var(--bs-border-color); }
+.cf-action-btn.liked { color: #ef4444; }
+/* Replies */
+.cf-replies { margin-top: .75rem; padding-left: 1.25rem; border-left: 2px solid var(--bs-border-color); display: none; }
+.cf-replies.show { display: block; }
+.cf-reply-item { padding: .5rem 0; font-size: .9rem; }
+.cf-reply-nickname { font-weight: 600; color: #8b5cf6; margin-right: .5rem; }
+.cf-reply-content { color: var(--bs-body-color); }
+.cf-reply-form { display: flex; gap: .5rem; margin-top: .5rem; }
+.cf-reply-input {
+    flex: 1; padding: .5rem .75rem; border-radius: 10px; border: 1.5px solid var(--bs-border-color);
+    background: var(--bs-body-bg); color: var(--bs-body-color); font-size: .85rem;
+}
+.cf-reply-input:focus { border-color: #8b5cf6; outline: none; }
+.cf-reply-send {
+    padding: .4rem 1rem; border-radius: 10px; border: none; background: #8b5cf6;
+    color: #fff; cursor: pointer; font-size: .85rem; font-weight: 600;
+}
+/* Load more */
+.cf-load-more { text-align: center; margin: 1.5rem 0; }
+.cf-load-more button {
+    padding: .6rem 2rem; border-radius: 25px; border: 1.5px solid #8b5cf6;
+    background: transparent; color: #8b5cf6; font-weight: 600; cursor: pointer;
+}
+.cf-empty { text-align: center; padding: 3rem; color: var(--bs-secondary-color); }
+</style>
+
+<div class="cf-container">
+    <div class="cf-header">
+        <h2 class="mb-0">🌳 匿名树洞</h2>
+        <div class="cf-nickname">
+            🎭 <span class="cf-identity" id="cfNickname">加载中...</span>
+            <button class="btn btn-sm btn-link text-muted p-0 ms-1" data-csp-click="refreshNickname">🔄</button>
+        </div>
+    </div>
+
+    <!-- Post form -->
+    <div class="cf-post-form">
+        <textarea class="cf-textarea" id="cfContent" placeholder="在这里写下你的心声...一切匿名，畅所欲言 🌙" maxlength="2000"></textarea>
+        <div class="cf-form-actions">
+            <div class="cf-emoji-pick" id="cfEmojiPick">
+                <button class="cf-emoji-btn selected" data-csp-click="selectEmoji" data-csp-args='["💬"]'>💬</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["💔"]'>💔</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["😂"]'>😂</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["😢"]'>😢</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["😡"]'>😡</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["🎉"]'>🎉</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["🌟"]'>🌟</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["🔥"]'>🔥</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["💡"]'>💡</button>
+                <button class="cf-emoji-btn" data-csp-click="selectEmoji" data-csp-args='["👻"]'>👻</button>
+            </div>
+            <button class="cf-submit-btn" data-csp-click="cfPost" id="cfSubmitBtn">📨 匿名发送</button>
+        </div>
+    </div>
+
+    <!-- Post list -->
+    <div id="cfPostList"></div>
+    <div class="cf-load-more" id="cfLoadMore" style="display:none;">
+        <button data-csp-click="cfLoadMore">加载更多...</button>
+    </div>
+    <div class="cf-empty" id="cfEmpty" style="display:none;">🌳 还没有树洞哦，来做第一个倾诉的人吧~</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var currentEmoji = '💬';
+var currentPage = 1;
+var hasMore = false;
+var loading = false;
+
+// Nickname management
+var nicknames = ['快乐的','安静的','勇敢的','温柔的','调皮的','可爱的','酷酷的','暖暖的','潇洒的','憨憨的'];
+var nouns = ['小树','星星','月亮','微风','小雨','阳光','猫咪','兔子','熊猫','海豚'];
+function genNick() { return nicknames[Math.floor(Math.random()*nicknames.length)] + nouns[Math.floor(Math.random()*nouns.length)]; }
+var myNickname = sessionStorage.getItem('cf_nickname') || genNick();
+sessionStorage.setItem('cf_nickname', myNickname);
+document.getElementById('cfNickname').textContent = myNickname;
+
+function refreshNickname() {
+    myNickname = genNick();
+    sessionStorage.setItem('cf_nickname', myNickname);
+    document.getElementById('cfNickname').textContent = myNickname;
+}
+
+function selectEmoji(emoji) {
+    currentEmoji = emoji;
+    document.querySelectorAll('.cf-emoji-btn').forEach(function(b) { b.classList.remove('selected'); });
+    var t = document.querySelector('[data-csp-args*="\\"' + emoji + '\\""]');
+    if (t) t.classList.add('selected');
+}
+
+function cfPost() {
+    var content = document.getElementById('cfContent').value.trim();
+    if (!content) return;
+    var btn = document.getElementById('cfSubmitBtn');
+    btn.disabled = true; btn.textContent = '发送中...';
+
+    fetch('/api/confession/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content, emoji: currentEmoji, nickname: myNickname })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false; btn.textContent = '📨 匿名发送';
+        if (d.error) { alert(d.error); return; }
+        document.getElementById('cfContent').value = '';
+        currentPage = 1;
+        loadPosts(true);
+    });
+}
+
+function loadPosts(reset) {
+    if (loading) return;
+    loading = true;
+    if (reset) { currentPage = 1; document.getElementById('cfPostList').innerHTML = ''; }
+    fetch('/api/confession/posts?page=' + currentPage)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        loading = false;
+        hasMore = d.has_more;
+        document.getElementById('cfLoadMore').style.display = hasMore ? 'block' : 'none';
+        document.getElementById('cfEmpty').style.display = (d.total === 0) ? 'block' : 'none';
+        if (reset) document.getElementById('cfPostList').innerHTML = '';
+        d.posts.forEach(function(p) { renderPost(p, 'beforeend'); });
+    });
+}
+
+function cfLoadMore() {
+    if (loading || !hasMore) return;
+    currentPage++;
+    loadPosts(false);
+}
+
+function renderPost(p, position) {
+    var repliesHtml = '';
+    p.replies.forEach(function(r) {
+        repliesHtml += '<div class="cf-reply-item"><span class="cf-reply-nickname">' + r.nickname + '</span><span class="cf-reply-content">' + r.content + '</span></div>';
+    });
+
+    var html = '<div class="cf-post-card" id="cfPost-' + p.id + '">' +
+        '<div class="cf-post-header">' +
+            '<span class="cf-post-emoji">' + p.emoji + '</span>' +
+            '<span class="cf-post-nickname">' + p.nickname + '</span>' +
+            '<span class="cf-post-time">' + p.created_at.split(' ')[0] + '</span>' +
+        '</div>' +
+        '<div class="cf-post-content">' + p.content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</div>' +
+        '<div class="cf-post-actions">' +
+            '<button class="cf-action-btn' + (p.liked ? ' liked' : '') + '" data-csp-click="cfLike" data-csp-args=\'[' + p.id + ']\'>' + (p.liked ? '❤️' : '🤍') + ' <span id="cfLikeCount-' + p.id + '">' + p.like_count + '</span></button>' +
+            '<button class="cf-action-btn" data-csp-click="cfToggleReplies" data-csp-args=\'[' + p.id + ']\'>💬 <span>' + p.reply_count + '</span></button>' +
+        '</div>' +
+        '<div class="cf-replies" id="cfReplies-' + p.id + '">' + repliesHtml +
+            '<div class="cf-reply-form"><input class="cf-reply-input" id="cfReplyInput-' + p.id + '" placeholder="回复...">' +
+            '<button class="cf-reply-send" data-csp-click="cfReply" data-csp-args=\'[' + p.id + ']\'>发送</button></div>' +
+        '</div>' +
+    '</div>';
+
+    if (position === 'beforeend') {
+        document.getElementById('cfPostList').insertAdjacentHTML('beforeend', html);
+    }
+}
+
+function cfToggleReplies(pid) {
+    var el = document.getElementById('cfReplies-' + pid);
+    el.classList.toggle('show');
+}
+
+function cfLike(pid) {
+    fetch('/api/confession/posts/' + pid + '/like', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        document.getElementById('cfLikeCount-' + pid).textContent = d.like_count;
+        var btn = document.querySelector('[data-csp-args*="' + pid + '"] .cf-action-btn');
+        // Find the like button in this card
+        var card = document.getElementById('cfPost-' + pid);
+        var likeBtns = card.querySelectorAll('.cf-action-btn');
+        likeBtns.forEach(function(b) {
+            if (b.textContent.includes('🤍') || b.textContent.includes('❤️')) {
+                b.innerHTML = (d.liked ? '❤️' : '🤍') + ' <span id="cfLikeCount-' + pid + '">' + d.like_count + '</span>';
+                if (d.liked) b.classList.add('liked'); else b.classList.remove('liked');
+            }
+        });
+    });
+}
+
+function cfReply(pid) {
+    var input = document.getElementById('cfReplyInput-' + pid);
+    var content = input.value.trim();
+    if (!content) return;
+    fetch('/api/confession/posts/' + pid + '/replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content, nickname: myNickname })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        input.value = '';
+        // Refresh posts
+        currentPage = Math.max(1, currentPage);
+        loadPosts(true);
+    });
+}
+
+loadPosts(true);
+</script>
+{% endblock %}

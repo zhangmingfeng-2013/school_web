@@ -2307,6 +2307,24 @@ def chat_standalone():
                            permission=session["permission"])
 
 
+# ---------- 路由：AI 写作助手 ----------
+@app.route("/ai_writing")
+@login_required
+def ai_writing_page():
+    return render_template("ai_writing.html",
+                           username=session.get("username", ""),
+                           permission=session.get("permission", "guest"))
+
+
+# ---------- 路由：智能翻译 ----------
+@app.route("/translator")
+@login_required
+def translator_page():
+    return render_template("translator.html",
+                           username=session.get("username", ""),
+                           permission=session.get("permission", "guest"))
+
+
 # ---------- 路由：系统监控 ----------
 @app.route("/system_monitor")
 @login_required
@@ -4457,6 +4475,173 @@ def api_chat_ai_clear():
     conn.close()
     return jsonify({"success": True})
 
+
+# ---- AI 写作助手 ----
+@app.route("/api/ai/writing", methods=["POST"])
+@login_required
+def api_ai_writing():
+    """AI 写作助手：根据模式和主题生成文本"""
+    user = session["username"]
+    data = request.get_json() or {}
+    mode = data.get("mode", "free")
+    topic = sanitize_input(data.get("topic", ""), 500)
+    requirements = sanitize_input(data.get("requirements", ""), 1000)
+
+    # 模式系统提示词
+    mode_prompts = {
+        "speech": "你是一位专业的演讲稿撰写人。请根据用户提供的主题和要求，撰写一份正式、有条理、富有感染力的发言稿。注意使用恰当的称呼、过渡语和结束语。",
+        "notice": "你是一位活动策划专家。请撰写一份清晰、吸引人的活动通知，包含活动主题、时间地点、议程亮点、参与方式等关键信息。",
+        "social": "你擅长写生动有趣的社交媒体文案。请用轻松自然的语气撰写，适当使用emoji，让文案有互动感和分享欲。长度控制在朋友圈舒适阅读范围。",
+        "report": "你是一位职场写作专家。请根据用户提供的信息，撰写一份结构清晰的工作总结，突出成果、数据支撑、经验教训和下一步计划。",
+        "email": "你是一位商务邮件撰写专家。请使用得体的商务语气，撰写格式规范的邮件，包含恰当的主题行、称呼和署名。",
+        "free": "你是一个创意写作助手。请根据用户的描述自由创作，不拘泥于特定格式，发挥你的创造力。",
+    }
+    system_prompt = mode_prompts.get(mode, mode_prompts["free"])
+
+    # 构建用户消息
+    user_message = ""
+    if topic:
+        user_message += f"主题：{topic}\n"
+    if requirements:
+        user_message += f"具体要求：{requirements}\n"
+    if mode == "free":
+        user_message = topic or requirements or "请帮我写一段文字"
+    if not user_message.strip():
+        user_message = "请帮我写一段文字"
+
+    # 加载用户 AI 配置
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    cursor = conn.cursor()
+    cursor.execute("SELECT provider_url, api_key_encrypted, model_name FROM ai_config WHERE username=%s", (user,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "请先在聊天页配置 AI 机器人（⚙️ 设置）"}), 400
+
+    provider_url, api_key_encrypted, model_name = row
+    try:
+        api_key = _ai_decrypt(api_key_encrypted)
+    except Exception:
+        return jsonify({"error": "API Key 解密失败，请重新设置"}), 500
+
+    # 构建请求
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message}
+    ]
+
+    api_url = provider_url.rstrip("/")
+    if not api_url.endswith("/chat/completions"):
+        api_url += "/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0.8,
+        "max_tokens": 3000
+    }
+
+    try:
+        resp = requests.post(api_url, json=payload, headers=headers, timeout=90)
+        if resp.status_code != 200:
+            err_text = resp.text[:300]
+            return jsonify({"error": f"AI API 返回错误 ({resp.status_code}): {err_text}"}), 502
+        result = resp.json()
+        ai_reply = result["choices"][0]["message"]["content"]
+        return jsonify({"result": ai_reply})
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "AI API 请求超时（90秒）"}), 504
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": f"无法连接到 {provider_url}，请检查 API 地址"}), 502
+    except Exception as e:
+        return jsonify({"error": f"请求失败: {str(e)}"}), 500
+
+
+# ---- 智能翻译 ----
+@app.route("/api/translator", methods=["POST"])
+@login_required
+def api_translator():
+    """AI 智能翻译"""
+    user = session["username"]
+    data = request.get_json() or {}
+    text = sanitize_input(data.get("text", ""), 5000)
+    source = data.get("source", "auto")
+    target = data.get("target", "en")
+
+    if not text:
+        return jsonify({"error": "请输入要翻译的文本"}), 400
+    if source == target:
+        return jsonify({"error": "源语言和目标语言不能相同"}), 400
+
+    lang_names = {"zh": "简体中文", "en": "英文", "ja": "日文", "ko": "韩文", "auto": "自动检测"}
+    target_name = lang_names.get(target, target)
+    source_hint = ""
+    if source != "auto":
+        source_hint = f"从{lang_names.get(source, source)}"
+
+    system_prompt = f"你是一个专业翻译。请将以下文本{source_hint}翻译成{target_name}。只返回翻译结果，不要添加任何解释、注释或额外内容。保持原文的语气和风格。"
+
+    # 加载用户 AI 配置
+    conn = get_album_db()
+    if not conn:
+        return jsonify({"error": "数据库连接失败"}), 500
+    cursor = conn.cursor()
+    cursor.execute("SELECT provider_url, api_key_encrypted, model_name FROM ai_config WHERE username=%s", (user,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "请先在聊天页配置 AI 机器人（⚙️ 设置）"}), 400
+
+    provider_url, api_key_encrypted, model_name = row
+    try:
+        api_key = _ai_decrypt(api_key_encrypted)
+    except Exception:
+        return jsonify({"error": "API Key 解密失败，请重新设置"}), 500
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": text}
+    ]
+
+    api_url = provider_url.rstrip("/")
+    if not api_url.endswith("/chat/completions"):
+        api_url += "/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": 4000
+    }
+
+    try:
+        resp = requests.post(api_url, json=payload, headers=headers, timeout=60)
+        if resp.status_code != 200:
+            err_text = resp.text[:300]
+            return jsonify({"error": f"AI API 返回错误 ({resp.status_code}): {err_text}"}), 502
+        result = resp.json()
+        translated = result["choices"][0]["message"]["content"]
+        return jsonify({"translated": translated})
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "AI API 请求超时（60秒）"}), 504
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": f"无法连接到 {provider_url}，请检查 API 地址"}), 502
+    except Exception as e:
+        return jsonify({"error": f"请求失败: {str(e)}"}), 500
 
 
 def _safe_realpath(path):
@@ -7375,6 +7560,32 @@ def _init_life_tables():
                 INDEX idx_rss_user (username)
             )
         """)
+        # 番茄钟会话表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pomodoro_sessions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                task_name VARCHAR(200) DEFAULT '未命名任务',
+                duration INT NOT NULL COMMENT '实际专注秒数',
+                planned_duration INT NOT NULL COMMENT '计划秒数',
+                completed TINYINT DEFAULT 1 COMMENT '0=中断 1=完成',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ps_user (username, created_at)
+            )
+        """)
+        # 签到打卡表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS checkins (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                checkin_date DATE NOT NULL,
+                mood VARCHAR(10) DEFAULT '😊',
+                note VARCHAR(200) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_checkin (username, checkin_date),
+                INDEX idx_c_user (username)
+            )
+        """)
         conn.commit()
         cursor.close()
         conn.close()
@@ -7478,6 +7689,146 @@ def _init_forum_tables():
         conn.close()
     except pymysql.MySQLError as e:
         print(f"  论坛模块数据库表初始化失败: {e}")
+
+
+def _init_confession_tables():
+    """匿名树洞表"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS anonymous_posts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nickname VARCHAR(20) NOT NULL,
+                content TEXT NOT NULL,
+                emoji VARCHAR(5) DEFAULT '💬',
+                like_count INT DEFAULT 0,
+                reply_count INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ap_created (created_at)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS anonymous_replies (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                post_id INT NOT NULL,
+                nickname VARCHAR(20) NOT NULL,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ar_post (post_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS anonymous_likes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                post_id INT NOT NULL,
+                username VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_alike (post_id, username)
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError as e:
+        print(f"  树洞模块数据库表初始化失败: {e}")
+
+
+def _init_alumni_stories_tables():
+    """校友故事表"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alumni_stories (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                content TEXT NOT NULL,
+                cover_image VARCHAR(500) DEFAULT '',
+                status ENUM('pending','approved','rejected') DEFAULT 'pending',
+                reviewer VARCHAR(50) DEFAULT NULL,
+                review_note VARCHAR(200) DEFAULT '',
+                view_count INT DEFAULT 0,
+                like_count INT DEFAULT 0,
+                comment_count INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                reviewed_at TIMESTAMP NULL,
+                INDEX idx_as_status (status, created_at),
+                INDEX idx_as_user (username)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alumni_story_comments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                story_id INT NOT NULL,
+                username VARCHAR(50) NOT NULL,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_asc_story (story_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alumni_story_likes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                story_id INT NOT NULL,
+                username VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_asl (story_id, username)
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError as e:
+        print(f"  校友故事数据库表初始化失败: {e}")
+
+
+def _init_pet_tables():
+    """虚拟宠物表"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pets (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                pet_name VARCHAR(30) DEFAULT '小可爱',
+                pet_type VARCHAR(20) DEFAULT 'cat',
+                hunger INT DEFAULT 100,
+                happiness INT DEFAULT 100,
+                energy INT DEFAULT 100,
+                level INT DEFAULT 1,
+                xp INT DEFAULT 0,
+                hatched TINYINT DEFAULT 0,
+                last_fed TIMESTAMP NULL,
+                last_played TIMESTAMP NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pet_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                action VARCHAR(20) NOT NULL,
+                detail VARCHAR(100) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_pl_user (username, created_at)
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError as e:
+        print(f"  宠物表初始化失败: {e}")
 
 
 # ---------- 天气 ----------
@@ -7743,7 +8094,236 @@ def api_habit_logs():
 # ---------- 番茄钟 ----------
 @app.route("/pomodoro")
 def pomodoro_page():
-    return render_template("pomodoro.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+    _init_life_tables()
+    return render_template("pomodoro_enhanced.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+
+# ========== 番茄钟 API ==========
+
+@app.route("/api/pomodoro/sessions", methods=["GET", "POST"])
+@login_required
+def api_pomodoro_sessions():
+    username = session["username"]
+    conn = get_db()
+    if request.method == "GET":
+        period = request.args.get("period", "today")
+        cursor = conn.cursor()
+        if period == "today":
+            cursor.execute(
+                "SELECT id, task_name, duration, planned_duration, completed, created_at FROM pomodoro_sessions WHERE username=%s AND DATE(created_at)=CURDATE() ORDER BY created_at DESC",
+                (username,)
+            )
+        elif period == "week":
+            cursor.execute(
+                "SELECT id, task_name, duration, planned_duration, completed, created_at FROM pomodoro_sessions WHERE username=%s AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) ORDER BY created_at DESC",
+                (username,)
+            )
+        else:
+            cursor.execute(
+                "SELECT id, task_name, duration, planned_duration, completed, created_at FROM pomodoro_sessions WHERE username=%s ORDER BY created_at DESC LIMIT 100",
+                (username,)
+            )
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        sessions = []
+        for r in rows:
+            sessions.append({
+                "id": r[0], "task_name": r[1], "duration": r[2],
+                "planned_duration": r[3], "completed": bool(r[4]),
+                "created_at": str(r[5])
+            })
+        return jsonify({"sessions": sessions})
+    else:
+        data = request.get_json() or {}
+        task_name = sanitize_input(data.get("task_name", "未命名任务"), 200)
+        duration = data.get("duration", 0)
+        planned_duration = data.get("planned_duration", duration)
+        completed = 1 if data.get("completed", True) else 0
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO pomodoro_sessions (username, task_name, duration, planned_duration, completed) VALUES (%s,%s,%s,%s,%s)",
+            (username, task_name, duration, planned_duration, completed)
+        )
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": cursor.lastrowid})
+
+
+@app.route("/api/pomodoro/stats")
+@login_required
+def api_pomodoro_stats():
+    username = session["username"]
+    conn = get_db()
+    cursor = conn.cursor()
+    # Today stats
+    cursor.execute(
+        "SELECT COUNT(*), COALESCE(SUM(duration), 0) FROM pomodoro_sessions WHERE username=%s AND DATE(created_at)=CURDATE() AND completed=1",
+        (username,)
+    )
+    today_row = cursor.fetchone()
+    today_count = today_row[0] if today_row else 0
+    today_minutes = round((today_row[1] if today_row else 0) / 60, 1)
+
+    # Week data for chart (last 7 days)
+    cursor.execute(
+        "SELECT DATE(created_at) as d, COUNT(*) as cnt, COALESCE(SUM(duration), 0) as secs FROM pomodoro_sessions WHERE username=%s AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND completed=1 GROUP BY DATE(created_at) ORDER BY d",
+        (username,)
+    )
+    week_rows = cursor.fetchall()
+    week_map = {}
+    for r in week_rows:
+        week_map[str(r[0])] = {"count": r[1], "minutes": round(r[2] / 60, 1)}
+
+    from datetime import date, timedelta
+    today_date = date.today()
+    week_data = []
+    for i in range(6, -1, -1):
+        d = (today_date - timedelta(days=i)).isoformat()
+        if d in week_map:
+            week_data.append({"date": d, "count": week_map[d]["count"], "minutes": week_map[d]["minutes"]})
+        else:
+            week_data.append({"date": d, "count": 0, "minutes": 0})
+
+    # Streak: consecutive days with at least 1 completed session
+    streak = 0
+    cursor.execute(
+        "SELECT DISTINCT DATE(created_at) as d FROM pomodoro_sessions WHERE username=%s AND completed=1 ORDER BY d DESC",
+        (username,)
+    )
+    streak_rows = cursor.fetchall()
+    check_date = today_date
+    streak_set = set(str(r[0]) for r in streak_rows) if streak_rows else set()
+    if today_date.isoformat() not in streak_set:
+        check_date = today_date - timedelta(days=1)
+    while check_date.isoformat() in streak_set:
+        streak += 1
+        check_date -= timedelta(days=1)
+
+    cursor.close(); conn.close()
+    return jsonify({
+        "today_count": today_count,
+        "today_minutes": today_minutes,
+        "week_data": week_data,
+        "streak": streak
+    })
+
+
+@app.route("/api/pomodoro/leaderboard")
+@login_required
+def api_pomodoro_leaderboard():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT username, COUNT(*) as cnt, COALESCE(SUM(duration), 0) as secs FROM pomodoro_sessions WHERE completed=1 AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY username ORDER BY secs DESC LIMIT 5"
+    )
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+    leaderboard = []
+    for r in rows:
+        leaderboard.append({
+            "username": r[0],
+            "count": r[1],
+            "minutes": round(r[2] / 60, 1)
+        })
+    return jsonify({"leaderboard": leaderboard})
+
+
+# ---------- 签到打卡 ----------
+@app.route("/checkin")
+@login_required
+def checkin_page():
+    _init_life_tables()
+    return render_template("checkin.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+
+@app.route("/api/checkin/status")
+@login_required
+def api_checkin_status():
+    """获取今日签到状态 + 年度签到日期"""
+    username = session["username"]
+    year = request.args.get("year", type=int) or datetime.datetime.utcnow().year
+    conn = get_db()
+    cursor = conn.cursor()
+    # 今日是否已签到
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    cursor.execute("SELECT mood, note FROM checkins WHERE username=%s AND checkin_date=%s", (username, today))
+    today_row = cursor.fetchone()
+    # 年度所有签到日期
+    cursor.execute(
+        "SELECT checkin_date, mood FROM checkins WHERE username=%s AND YEAR(checkin_date)=%s ORDER BY checkin_date",
+        (username, year)
+    )
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+
+    dates = [{"date": str(r[0]), "mood": r[1]} for r in rows]
+    checked_today = today_row is not None
+    today_mood = today_row[0] if today_row else None
+    today_note = today_row[1] if today_row else None
+
+    # 计算连续签到天数
+    streak = 0
+    if checked_today:
+        streak = 1
+        check_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        date_set = {r[0] for r in rows}
+        while check_date.strftime("%Y-%m-%d") in date_set:
+            streak += 1
+            check_date -= datetime.timedelta(days=1)
+
+    return jsonify({
+        "checked_today": checked_today,
+        "today_mood": today_mood,
+        "today_note": today_note,
+        "streak": streak,
+        "dates": dates,
+        "total": len(rows)
+    })
+
+
+@app.route("/api/checkin", methods=["POST"])
+@login_required
+def api_checkin():
+    """执行签到"""
+    username = session["username"]
+    data = request.get_json() or {}
+    mood = data.get("mood", "😊")
+    note = sanitize_input(data.get("note", ""), 200)
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO checkins (username, checkin_date, mood, note) VALUES (%s, %s, %s, %s)",
+            (username, today, mood, note)
+        )
+        conn.commit()
+    except pymysql.IntegrityError:
+        return jsonify({"error": "今日已签到"}), 409
+    finally:
+        cursor.close(); conn.close()
+
+    # 计算连续签到天数
+    conn2 = get_db()
+    cur2 = conn2.cursor()
+    cur2.execute("SELECT checkin_date FROM checkins WHERE username=%s ORDER BY checkin_date", (username,))
+    rows = cur2.fetchall()
+    cur2.close(); conn2.close()
+
+    date_set = {r[0] for r in rows}
+    streak = 1
+    check_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+    while check_date.strftime("%Y-%m-%d") in date_set:
+        streak += 1
+        check_date -= datetime.timedelta(days=1)
+
+    return jsonify({
+        "ok": True,
+        "streak": streak,
+        "date": today,
+        "mood": mood
+    })
+
 
 # ---------- 书签管理 ----------
 @app.route("/bookmarks")
@@ -7870,6 +8450,232 @@ def api_converter():
         })
     except Exception as e:
         return jsonify({"ok": False, "error": f"转换失败: {str(e)}"}), 500
+
+# ---------- PDF 工具箱 ----------
+@app.route("/pdf_tools")
+@login_required
+def pdf_tools_page():
+    return render_template("pdf_tools.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+
+@app.route("/api/pdf/merge", methods=["POST"])
+@login_required
+def api_pdf_merge():
+    try:
+        from PyPDF2 import PdfReader, PdfWriter
+    except ImportError:
+        return jsonify({"ok": False, "error": "PyPDF2 未安装，请联系管理员"}), 500
+
+    files = request.files.getlist("files")
+    if not files or len(files) < 2:
+        return jsonify({"ok": False, "error": "请至少上传 2 个 PDF 文件"}), 400
+
+    writer = PdfWriter()
+    total_pages = 0
+    for f in files:
+        if f.filename and not f.filename.lower().endswith(".pdf"):
+            return jsonify({"ok": False, "error": f"文件 {f.filename} 不是 PDF 格式"}), 400
+        try:
+            reader = PdfReader(f.stream)
+            if len(reader.pages) == 0:
+                return jsonify({"ok": False, "error": f"文件 {f.filename} 为空或已损坏"}), 400
+            for page in reader.pages:
+                writer.add_page(page)
+            total_pages += len(reader.pages)
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"读取 {f.filename} 失败: {str(e)}"}), 400
+
+    import uuid, os
+    os.makedirs("/tmp/pdf_tools", exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.pdf"
+    filepath = os.path.join("/tmp/pdf_tools", filename)
+    with open(filepath, "wb") as out:
+        writer.write(out)
+
+    return jsonify({
+        "ok": True,
+        "filename": filename,
+        "info": f"共合并 {len(files)} 个文件，{total_pages} 页"
+    })
+
+
+@app.route("/api/pdf/split", methods=["POST"])
+@login_required
+def api_pdf_split():
+    try:
+        from PyPDF2 import PdfReader, PdfWriter
+    except ImportError:
+        return jsonify({"ok": False, "error": "PyPDF2 未安装，请联系管理员"}), 500
+
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "请上传 PDF 文件"}), 400
+    file = request.files["file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"ok": False, "error": "请上传有效的 PDF 文件"}), 400
+
+    page_range_str = request.form.get("page_range", "").strip()
+    if not page_range_str:
+        return jsonify({"ok": False, "error": "请输入页码范围"}), 400
+
+    # Parse page range like "1-3,5,7-9"
+    try:
+        reader = PdfReader(file.stream)
+        total_pages = len(reader.pages)
+        if total_pages == 0:
+            return jsonify({"ok": False, "error": "PDF 文件为空"}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"读取 PDF 失败: {str(e)}"}), 400
+
+    # Parse ranges
+    selected_pages = set()
+    parts = [p.strip() for p in page_range_str.split(",") if p.strip()]
+    for part in parts:
+        if "-" in part:
+            try:
+                start, end = part.split("-", 1)
+                start, end = int(start.strip()), int(end.strip())
+                if start < 1 or end > total_pages or start > end:
+                    return jsonify({"ok": False, "error": f"页码范围 {part} 超出范围 (1-{total_pages})"}), 400
+                for i in range(start, end + 1):
+                    selected_pages.add(i)
+            except ValueError:
+                return jsonify({"ok": False, "error": f"无法解析页码范围: {part}"}), 400
+        else:
+            try:
+                p = int(part)
+                if p < 1 or p > total_pages:
+                    return jsonify({"ok": False, "error": f"页码 {p} 超出范围 (1-{total_pages})"}), 400
+                selected_pages.add(p)
+            except ValueError:
+                return jsonify({"ok": False, "error": f"无法解析页码: {part}"}), 400
+
+    if not selected_pages:
+        return jsonify({"ok": False, "error": "未选择任何有效页面"}), 400
+
+    writer = PdfWriter()
+    sorted_pages = sorted(selected_pages)
+    for p in sorted_pages:
+        writer.add_page(reader.pages[p - 1])  # 0-indexed
+
+    import uuid, os
+    os.makedirs("/tmp/pdf_tools", exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.pdf"
+    filepath = os.path.join("/tmp/pdf_tools", filename)
+    with open(filepath, "wb") as out:
+        writer.write(out)
+
+    return jsonify({
+        "ok": True,
+        "filename": filename,
+        "info": f"提取了 {len(sorted_pages)} 页 (页码: {','.join(str(p) for p in sorted_pages)})"
+    })
+
+
+@app.route("/api/pdf/compress", methods=["POST"])
+@login_required
+def api_pdf_compress():
+    try:
+        from PyPDF2 import PdfReader, PdfWriter
+    except ImportError:
+        return jsonify({"ok": False, "error": "PyPDF2 未安装，请联系管理员"}), 500
+
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "请上传 PDF 文件"}), 400
+    file = request.files["file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"ok": False, "error": "请上传有效的 PDF 文件"}), 400
+
+    try:
+        reader = PdfReader(file.stream)
+        if len(reader.pages) == 0:
+            return jsonify({"ok": False, "error": "PDF 文件为空"}), 400
+        writer = PdfWriter()
+        for page in reader.pages:
+            page.compress_content_streams()
+            writer.add_page(page)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"压缩失败: {str(e)}"}), 500
+
+    import uuid, os
+    os.makedirs("/tmp/pdf_tools", exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.pdf"
+    filepath = os.path.join("/tmp/pdf_tools", filename)
+    with open(filepath, "wb") as out:
+        writer.write(out)
+
+    original_size = os.path.getsize(filepath)
+    import math
+    def fmt(size):
+        if size < 1024: return f"{size} B"
+        if size < 1024*1024: return f"{size/1024:.1f} KB"
+        return f"{size/(1024*1024):.1f} MB"
+
+    return jsonify({
+        "ok": True,
+        "filename": filename,
+        "info": f"压缩后大小: {fmt(original_size)} · 共 {len(reader.pages)} 页"
+    })
+
+
+@app.route("/api/pdf/extract_text", methods=["POST"])
+@login_required
+def api_pdf_extract_text():
+    try:
+        from PyPDF2 import PdfReader
+    except ImportError:
+        return jsonify({"ok": False, "error": "PyPDF2 未安装，请联系管理员"}), 500
+
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "请上传 PDF 文件"}), 400
+    file = request.files["file"]
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        return jsonify({"ok": False, "error": "请上传有效的 PDF 文件"}), 400
+
+    try:
+        reader = PdfReader(file.stream)
+        pages_text = []
+        for i, page in enumerate(reader.pages):
+            text = page.extract_text()
+            if text:
+                pages_text.append(text.strip())
+        full_text = "\n\n".join(pages_text)
+        chars = len(full_text)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"提取文本失败: {str(e)}"}), 500
+
+    return jsonify({
+        "ok": True,
+        "text": full_text,
+        "pages": len(reader.pages),
+        "chars": chars
+    })
+
+
+@app.route("/api/pdf/download/<filename>")
+@login_required
+def api_pdf_download(filename):
+    from werkzeug.utils import secure_filename
+    safe_name = secure_filename(filename)
+    filepath = os.path.join("/tmp/pdf_tools", safe_name)
+    if not os.path.exists(filepath):
+        return jsonify({"ok": False, "error": "文件不存在或已过期"}), 404
+    try:
+        from flask import send_file
+        response = send_file(filepath, as_attachment=True, download_name=safe_name, mimetype="application/pdf")
+        # Schedule cleanup after response
+        import threading
+        def cleanup():
+            try:
+                import time
+                time.sleep(5)
+                os.remove(filepath)
+            except Exception:
+                pass
+        threading.Thread(target=cleanup, daemon=True).start()
+        return response
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"下载失败: {str(e)}"}), 500
+
 
 # ---------- RSS 阅读器 ----------
 @app.route("/rss")
@@ -8380,6 +9186,395 @@ def api_portal_announce():
     return jsonify({"ok": True})
 
 
+# ==============================================================
+# ====== 校友故事/回忆录 ======
+# ==============================================================
+
+@app.route("/alumni_stories")
+@login_required
+def alumni_stories_page():
+    _init_alumni_stories_tables()
+    return render_template("alumni_stories.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+
+@app.route("/api/alumni_stories", methods=["GET", "POST"])
+@login_required
+def api_alumni_stories():
+    username = session["username"]
+    permission = session.get("permission", "guest")
+    conn = get_db()
+
+    if request.method == "GET":
+        page = request.args.get("page", 1, type=int)
+        per_page = 12
+        offset_val = (page - 1) * per_page
+        status_filter = request.args.get("status", "approved")
+        # Non-admin can only see approved
+        if permission != "administrator":
+            status_filter = "approved"
+
+        cursor = conn.cursor()
+        where = "WHERE status=%s"
+        params = [status_filter]
+        if status_filter == "my":
+            where = "WHERE username=%s"
+            params = [username]
+
+        cursor.execute(f"SELECT COUNT(*) FROM alumni_stories {where}", params)
+        total = cursor.fetchone()[0]
+        cursor.execute(
+            f"SELECT id, username, title, content, cover_image, status, view_count, like_count, comment_count, created_at FROM alumni_stories {where} ORDER BY id DESC LIMIT %s OFFSET %s",
+            params + [per_page, offset_val]
+        )
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        stories = [{
+            "id": r[0], "username": r[1], "title": r[2], "excerpt": (r[3] or "")[:150],
+            "cover_image": r[4], "status": r[5], "view_count": r[6],
+            "like_count": r[7], "comment_count": r[8], "created_at": str(r[9])
+        } for r in rows]
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        return jsonify({"stories": stories, "total": total, "page": page, "total_pages": total_pages})
+
+    else:  # POST
+        data = request.get_json() or {}
+        title = sanitize_input(data.get("title", ""), 200)
+        content = sanitize_input(data.get("content", ""), 50000)
+        if not title or not content:
+            conn.close()
+            return jsonify({"error": "标题和内容不能为空"}), 400
+        cover_image = data.get("cover_image", "")
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO alumni_stories (username, title, content, cover_image) VALUES (%s, %s, %s, %s)",
+            (username, title, content, cover_image)
+        )
+        conn.commit()
+        sid = cursor.lastrowid
+        cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": sid})
+
+
+@app.route("/api/alumni_stories/<int:sid>")
+@login_required
+def api_alumni_story_detail(sid):
+    username = session["username"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, title, content, cover_image, status, view_count, like_count, comment_count, created_at, reviewer, review_note FROM alumni_stories WHERE id=%s", (sid,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"error": "故事不存在"}), 404
+
+    story = {
+        "id": row[0], "username": row[1], "title": row[2], "content": row[3],
+        "cover_image": row[4], "status": row[5], "view_count": row[6],
+        "like_count": row[7], "comment_count": row[8], "created_at": str(row[9]),
+        "reviewer": row[10], "review_note": row[11]
+    }
+
+    # Increment view count (only once per session)
+    view_key = f"viewed_story_{sid}"
+    if view_key not in session:
+        cursor.execute("UPDATE alumni_stories SET view_count = view_count + 1 WHERE id=%s", (sid,))
+        conn.commit()
+        session[view_key] = True
+        story["view_count"] += 1
+
+    # Comments
+    cursor.execute("SELECT id, username, content, created_at FROM alumni_story_comments WHERE story_id=%s ORDER BY id ASC", (sid,))
+    story["comments"] = [{"id": r[0], "username": r[1], "content": r[2], "created_at": str(r[3])} for r in cursor.fetchall()]
+
+    # Like status
+    cursor.execute("SELECT id FROM alumni_story_likes WHERE story_id=%s AND username=%s", (sid, username))
+    story["liked"] = cursor.fetchone() is not None
+
+    cursor.close(); conn.close()
+    return jsonify({"story": story})
+
+
+@app.route("/api/alumni_stories/<int:sid>", methods=["PUT", "DELETE"])
+@login_required
+def api_alumni_story_edit(sid):
+    username = session["username"]
+    conn = get_db()
+    if request.method == "DELETE":
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM alumni_stories WHERE id=%s AND username=%s", (sid, username))
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+    else:
+        data = request.get_json() or {}
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE alumni_stories SET title=%s, content=%s, cover_image=%s, status='pending' WHERE id=%s AND username=%s",
+            (data.get("title"), data.get("content"), data.get("cover_image", ""), sid, username)
+        )
+        conn.commit(); cursor.close(); conn.close()
+        return jsonify({"ok": True})
+
+
+@app.route("/api/alumni_stories/<int:sid>/comments", methods=["POST"])
+@login_required
+def api_alumni_story_comment(sid):
+    username = session["username"]
+    data = request.get_json() or {}
+    content = sanitize_input(data.get("content", ""), 2000)
+    if not content:
+        return jsonify({"error": "评论不能为空"}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO alumni_story_comments (story_id, username, content) VALUES (%s, %s, %s)", (sid, username, content))
+    cursor.execute("UPDATE alumni_stories SET comment_count = comment_count + 1 WHERE id=%s", (sid,))
+    conn.commit()
+    cid = cursor.lastrowid
+    cursor.close(); conn.close()
+    return jsonify({"ok": True, "id": cid})
+
+
+@app.route("/api/alumni_stories/<int:sid>/like", methods=["POST"])
+@login_required
+def api_alumni_story_like(sid):
+    username = session["username"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM alumni_story_likes WHERE story_id=%s AND username=%s", (sid, username))
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute("DELETE FROM alumni_story_likes WHERE id=%s", (existing[0],))
+        cursor.execute("UPDATE alumni_stories SET like_count = GREATEST(like_count - 1, 0) WHERE id=%s", (sid,))
+        conn.commit()
+        cursor.execute("SELECT like_count FROM alumni_stories WHERE id=%s", (sid,))
+        new_count = cursor.fetchone()[0]
+        cursor.close(); conn.close()
+        return jsonify({"liked": False, "like_count": new_count})
+    else:
+        cursor.execute("INSERT INTO alumni_story_likes (story_id, username) VALUES (%s, %s)", (sid, username))
+        cursor.execute("UPDATE alumni_stories SET like_count = like_count + 1 WHERE id=%s", (sid,))
+        conn.commit()
+        cursor.execute("SELECT like_count FROM alumni_stories WHERE id=%s", (sid,))
+        new_count = cursor.fetchone()[0]
+        cursor.close(); conn.close()
+        return jsonify({"liked": True, "like_count": new_count})
+
+
+@app.route("/api/admin/alumni_stories")
+@login_required
+def api_admin_alumni_stories():
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "仅管理员可访问"}), 403
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, title, content, cover_image, status, created_at FROM alumni_stories WHERE status='pending' ORDER BY id ASC")
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+    return jsonify({"stories": [{"id": r[0], "username": r[1], "title": r[2], "excerpt": (r[3] or "")[:200], "cover_image": r[4], "status": r[5], "created_at": str(r[6])} for r in rows]})
+
+
+@app.route("/api/admin/alumni_stories/<int:sid>/review", methods=["POST"])
+@login_required
+def api_admin_review_story(sid):
+    if session.get("permission") != "administrator":
+        return jsonify({"error": "仅管理员可访问"}), 403
+    data = request.get_json() or {}
+    action = data.get("action", "approve")
+    note = data.get("note", "")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE alumni_stories SET status=%s, reviewer=%s, review_note=%s, reviewed_at=NOW() WHERE id=%s",
+        (action, session["username"], note, sid)
+    )
+    conn.commit(); cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+
+# ==============================================================
+#  虚拟宠物 (Virtual Pet)
+# ==============================================================
+
+@app.route("/pet")
+@login_required
+def pet_page():
+    _init_pet_tables()
+    return render_template("pet.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+
+@app.route("/api/pet")
+@login_required
+def api_pet():
+    username = session["username"]
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"has_pet": False})
+    hunger = row[4]; happiness = row[5]; energy = row[6]
+    level = row[7]; xp = row[8]; hatched = row[9]
+    last_fed = row[10]; last_played = row[11]
+    now = datetime.datetime.utcnow()
+    if hatched:
+        if last_fed:
+            elapsed = (now - last_fed).total_seconds() / 3600.0
+            hunger = max(0, int(hunger - elapsed * 5))
+        if last_played:
+            elapsed = (now - last_played).total_seconds() / 3600.0
+            happiness = max(0, int(happiness - elapsed * 3))
+            energy = min(100, int(energy + elapsed * 10))
+        cursor.execute(
+            "UPDATE pets SET hunger=%s, happiness=%s, energy=%s, updated_at=NOW() WHERE username=%s",
+            (hunger, happiness, energy, username)
+        )
+        conn.commit()
+    cursor.execute(
+        "SELECT action, detail, created_at FROM pet_logs WHERE username=%s ORDER BY created_at DESC LIMIT 10",
+        (username,)
+    )
+    logs = [{"action": l[0], "detail": l[1], "created_at": l[2].strftime("%m-%d %H:%M") if l[2] else ""} for l in cursor.fetchall()]
+    cursor.close(); conn.close()
+    pet_type = row[3]
+    return jsonify({
+        "has_pet": True,
+        "pet": {
+            "pet_name": row[2],
+            "pet_type": pet_type,
+            "hunger": hunger,
+            "happiness": happiness,
+            "energy": energy,
+            "level": level,
+            "xp": xp,
+            "hatched": bool(hatched)
+        },
+        "logs": logs
+    })
+
+
+@app.route("/api/pet/hatch", methods=["POST"])
+@login_required
+def api_pet_hatch():
+    username = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    pet_type = sanitize_input(data.get("pet_type", "cat"), 20)
+    if pet_type not in ("cat", "dog", "rabbit", "panda"):
+        return jsonify({"ok": False, "error": "无效的宠物类型"}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM pets WHERE username=%s", (username,))
+    if cursor.fetchone():
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你已经有一只宠物了"}), 400
+    now = datetime.datetime.utcnow()
+    cursor.execute(
+        "INSERT INTO pets (username, pet_name, pet_type, hatched, last_fed) VALUES (%s,%s,%s,1,NOW())",
+        (username, "小可爱", pet_type)
+    )
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO pet_logs (username, action, detail) VALUES (%s,%s,%s)",
+        (username, "hatch", f"孵化了{pet_type}宠物")
+    )
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pet/action", methods=["POST"])
+@login_required
+def api_pet_action():
+    username = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    action = sanitize_input(data.get("action", ""), 10)
+    valid_actions = {"feed": "喂食", "play": "玩耍", "sleep": "睡觉"}
+    if action not in valid_actions:
+        return jsonify({"ok": False, "error": "无效的动作"}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你还没有宠物"}), 400
+    hunger = row[4]; happiness = row[5]; energy = row[6]
+    level = row[7]; xp = row[8]
+    now = datetime.datetime.utcnow()
+    if action == "feed":
+        hunger = min(100, hunger + 30)
+        happiness = min(100, happiness + 5)
+        cursor.execute("UPDATE pets SET hunger=%s, happiness=%s, last_fed=NOW(), updated_at=NOW() WHERE username=%s",
+                       (hunger, happiness, username))
+    elif action == "play":
+        happiness = min(100, happiness + 30)
+        hunger = max(0, hunger - 10)
+        energy = max(0, energy - 15)
+        cursor.execute("UPDATE pets SET happiness=%s, hunger=%s, energy=%s, last_played=NOW(), updated_at=NOW() WHERE username=%s",
+                       (happiness, hunger, energy, username))
+    elif action == "sleep":
+        energy = min(100, energy + 40)
+        cursor.execute("UPDATE pets SET energy=%s, updated_at=NOW() WHERE username=%s",
+                       (energy, username))
+    xp += 10
+    if xp >= 100:
+        level += 1
+        xp -= 100
+    cursor.execute("UPDATE pets SET xp=%s, level=%s WHERE username=%s", (xp, level, username))
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO pet_logs (username, action, detail) VALUES (%s,%s,%s)",
+        (username, action, f"执行了{valid_actions[action]}")
+    )
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"ok": True, "level_up": (xp == 0)})
+
+
+@app.route("/api/pet/rename", methods=["POST"])
+@login_required
+def api_pet_rename():
+    username = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    pet_name = sanitize_input(data.get("pet_name", ""), 30)
+    pet_type = sanitize_input(data.get("pet_type", ""), 20)
+    if pet_name and not pet_name.strip():
+        return jsonify({"ok": False, "error": "名字不能为空"}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM pets WHERE username=%s", (username,))
+    if not cursor.fetchone():
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你还没有宠物"}), 400
+    updates = []
+    values = []
+    if pet_name and pet_name.strip():
+        updates.append("pet_name=%s")
+        values.append(pet_name.strip())
+    if pet_type and pet_type.strip():
+        if pet_type not in ("cat", "dog", "rabbit", "panda"):
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "无效的宠物类型"}), 400
+        updates.append("pet_type=%s")
+        values.append(pet_type.strip())
+    if not updates:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "没有要更新的内容"}), 400
+    values.append(username)
+    cursor.execute(f"UPDATE pets SET {', '.join(updates)} WHERE username=%s", values)
+    conn.commit()
+    cursor.execute(
+        "INSERT INTO pet_logs (username, action, detail) VALUES (%s,%s,%s)",
+        (username, "rename", f"重命名为{pet_name.strip() if pet_name else ''}" + (f" 类型:{pet_type}" if pet_type and pet_type.strip() else ""))
+    )
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+
 def _log_activity_local(username, action, points):
     try:
         ac = get_db()
@@ -8467,7 +9662,150 @@ def api_announcements_delete(aid):
 
 
 # ==============================================================
-#  校友社区论坛
+# ====== 匿名树洞 ======
+# ==============================================================
+
+@app.route("/confession")
+@login_required
+def confession_page():
+    _init_confession_tables()
+    return render_template("confession_wall.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
+
+
+@app.route("/api/confession/posts", methods=["GET", "POST"])
+@login_required
+def api_confession_posts():
+    username = session["username"]
+    conn = get_db()
+    if request.method == "GET":
+        page = request.args.get("page", 1, type=int)
+        per_page = 15
+        offset_val = (page - 1) * per_page
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM anonymous_posts")
+        total = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT id, nickname, content, emoji, like_count, reply_count, created_at FROM anonymous_posts ORDER BY id DESC LIMIT %s OFFSET %s",
+            (per_page, offset_val)
+        )
+        rows = cursor.fetchall()
+        # Get replies
+        post_ids = [r[0] for r in rows]
+        replies_map = {}
+        if post_ids:
+            cursor.execute(
+                "SELECT post_id, id, nickname, content, created_at FROM anonymous_replies WHERE post_id IN ({}) ORDER BY id ASC".format(
+                    ','.join(['%s'] * len(post_ids))
+                ), post_ids)
+            for rr in cursor.fetchall():
+                if rr[0] not in replies_map:
+                    replies_map[rr[0]] = []
+                replies_map[rr[0]].append({
+                    "id": rr[1], "nickname": rr[2], "content": rr[3], "created_at": str(rr[4])
+                })
+        cursor.close()
+        # Check user likes
+        conn2 = get_db()
+        cur2 = conn2.cursor()
+        cur2.execute(
+            "SELECT post_id FROM anonymous_likes WHERE username=%s AND post_id IN ({})".format(
+                ','.join(['%s'] * len(post_ids)) if post_ids else '0'
+            ),
+            [username] + (post_ids if post_ids else [0])
+        )
+        liked_set = {r[0] for r in cur2.fetchall()}
+        cur2.close(); conn2.close()
+
+        posts = [{
+            "id": r[0], "nickname": r[1], "content": r[2], "emoji": r[3],
+            "like_count": r[4], "reply_count": r[5], "created_at": str(r[6]),
+            "replies": replies_map.get(r[0], []),
+            "liked": r[0] in liked_set
+        } for r in rows]
+        conn.close()
+        return jsonify({"posts": posts, "total": total, "has_more": offset_val + per_page < total})
+
+    else:  # POST
+        data = request.get_json() or {}
+        content = sanitize_input(data.get("content", ""), 2000)
+        if not content:
+            conn.close()
+            return jsonify({"error": "内容不能为空"}), 400
+        emoji = data.get("emoji", "💬")
+        nickname = data.get("nickname", generate_nickname())
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO anonymous_posts (nickname, content, emoji) VALUES (%s, %s, %s)",
+            (nickname, content, emoji)
+        )
+        conn.commit()
+        pid = cursor.lastrowid
+        cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": pid, "nickname": nickname})
+
+
+@app.route("/api/confession/posts/<int:pid>/replies", methods=["GET", "POST"])
+@login_required
+def api_confession_replies(pid):
+    conn = get_db()
+    if request.method == "GET":
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, nickname, content, created_at FROM anonymous_replies WHERE post_id=%s ORDER BY id ASC", (pid,))
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        return jsonify({"replies": [{"id": r[0], "nickname": r[1], "content": r[2], "created_at": str(r[3])} for r in rows]})
+    else:  # POST
+        data = request.get_json() or {}
+        content = sanitize_input(data.get("content", ""), 1000)
+        if not content:
+            conn.close()
+            return jsonify({"error": "回复不能为空"}), 400
+        nickname = data.get("nickname", generate_nickname())
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO anonymous_replies (post_id, nickname, content) VALUES (%s, %s, %s)", (pid, nickname, content))
+        cursor.execute("UPDATE anonymous_posts SET reply_count = reply_count + 1 WHERE id=%s", (pid,))
+        conn.commit()
+        rid = cursor.lastrowid
+        cursor.close(); conn.close()
+        return jsonify({"ok": True, "id": rid, "nickname": nickname})
+
+
+@app.route("/api/confession/posts/<int:pid>/like", methods=["POST"])
+@login_required
+def api_confession_like(pid):
+    username = session["username"]
+    conn = get_db()
+    cursor = conn.cursor()
+    # Toggle like
+    cursor.execute("SELECT id FROM anonymous_likes WHERE post_id=%s AND username=%s", (pid, username))
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute("DELETE FROM anonymous_likes WHERE id=%s", (existing[0],))
+        cursor.execute("UPDATE anonymous_posts SET like_count = GREATEST(like_count - 1, 0) WHERE id=%s", (pid,))
+        conn.commit()
+        cursor.execute("SELECT like_count FROM anonymous_posts WHERE id=%s", (pid,))
+        new_count = cursor.fetchone()[0]
+        cursor.close(); conn.close()
+        return jsonify({"liked": False, "like_count": new_count})
+    else:
+        cursor.execute("INSERT INTO anonymous_likes (post_id, username) VALUES (%s, %s)", (pid, username))
+        cursor.execute("UPDATE anonymous_posts SET like_count = like_count + 1 WHERE id=%s", (pid,))
+        conn.commit()
+        cursor.execute("SELECT like_count FROM anonymous_posts WHERE id=%s", (pid,))
+        new_count = cursor.fetchone()[0]
+        cursor.close(); conn.close()
+        return jsonify({"liked": True, "like_count": new_count})
+
+
+# ---- 随机昵称生成 ----
+def generate_nickname():
+    adjectives = ["快乐的","安静的","勇敢的","温柔的","调皮的","可爱的","酷酷的","暖暖的","潇洒的","憨憨的"]
+    nouns = ["小树","星星","月亮","微风","小雨","阳光","猫咪","兔子","熊猫","海豚"]
+    return random.choice(adjectives) + random.choice(nouns)
+
+
+# ==============================================================
+# ====== 校友社区论坛 ======
 # ==============================================================
 
 @app.route("/forum")
