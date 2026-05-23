@@ -7878,6 +7878,18 @@ def _init_pet_tables():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         """)
+        # 新增字段（宠物2.0）
+        _ensure_column(cursor, "pets", "personality", "VARCHAR(20) DEFAULT NULL")
+        _ensure_column(cursor, "pets", "evolution_stage", "INT DEFAULT 0")
+        _ensure_column(cursor, "pets", "coins", "INT DEFAULT 0")
+        _ensure_column(cursor, "pets", "mood", "VARCHAR(50) DEFAULT '开心'")
+        _ensure_column(cursor, "pets", "accessories", "TEXT DEFAULT '[]'")
+        _ensure_column(cursor, "pets", "visit_count", "INT DEFAULT 0")
+        _ensure_column(cursor, "pets", "action_count", "INT DEFAULT 0")
+        _ensure_column(cursor, "pets", "feed_count", "INT DEFAULT 0")
+        _ensure_column(cursor, "pets", "play_count", "INT DEFAULT 0")
+        _ensure_column(cursor, "pets", "sleep_count", "INT DEFAULT 0")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS pet_logs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -7888,11 +7900,77 @@ def _init_pet_tables():
                 INDEX idx_pl_user (username, created_at)
             )
         """)
+        # 新表：成就
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pet_achievements (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                achievement_key VARCHAR(50) NOT NULL,
+                unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_pa (username, achievement_key),
+                INDEX idx_pa_user (username)
+            )
+        """)
+        # 新表：装扮/物品库存
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pet_inventory (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                item_type VARCHAR(20) NOT NULL DEFAULT 'accessory',
+                item_key VARCHAR(50) NOT NULL,
+                quantity INT DEFAULT 1,
+                INDEX idx_pi_user (username)
+            )
+        """)
+        # 新表：串门记录
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pet_visits (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                visitor VARCHAR(50) NOT NULL,
+                host VARCHAR(50) NOT NULL,
+                message VARCHAR(200) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_pv_host (host),
+                INDEX idx_pv_visitor (visitor)
+            )
+        """)
+        # 新表：赠礼记录
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pet_gifts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                sender VARCHAR(50) NOT NULL,
+                receiver VARCHAR(50) NOT NULL,
+                item_key VARCHAR(50) NOT NULL,
+                message VARCHAR(200) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_pg_receiver (receiver),
+                INDEX idx_pg_sender (sender)
+            )
+        """)
+        # 新表：宠物日记
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pet_diary (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                event_type VARCHAR(30) NOT NULL,
+                detail VARCHAR(200) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_pd_user (username, created_at)
+            )
+        """)
         conn.commit()
         cursor.close()
         conn.close()
     except pymysql.MySQLError as e:
         print(f"  宠物表初始化失败: {e}")
+
+
+def _ensure_column(cursor, table, column, definition):
+    """安全添加列：如果列不存在则 ALTER TABLE ADD COLUMN"""
+    try:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    except pymysql.MySQLError:
+        pass  # 列已存在，忽略
 
 
 # ---------- 天气 ----------
@@ -9465,58 +9543,6 @@ def pet_page():
     return render_template("pet.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 
-@app.route("/api/pet")
-@login_required
-def api_pet():
-    username = session["username"]
-    _init_pet_tables()
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM pets WHERE username=%s", (username,))
-    row = cursor.fetchone()
-    if not row:
-        cursor.close(); conn.close()
-        return jsonify({"has_pet": False})
-    hunger = row[4]; happiness = row[5]; energy = row[6]
-    level = row[7]; xp = row[8]; hatched = row[9]
-    last_fed = row[10]; last_played = row[11]
-    now = datetime.datetime.utcnow()
-    if hatched:
-        if last_fed:
-            elapsed = (now - last_fed).total_seconds() / 3600.0
-            hunger = max(0, int(hunger - elapsed * 5))
-        if last_played:
-            elapsed = (now - last_played).total_seconds() / 3600.0
-            happiness = max(0, int(happiness - elapsed * 3))
-            energy = min(100, int(energy + elapsed * 10))
-        cursor.execute(
-            "UPDATE pets SET hunger=%s, happiness=%s, energy=%s, updated_at=NOW() WHERE username=%s",
-            (hunger, happiness, energy, username)
-        )
-        conn.commit()
-    cursor.execute(
-        "SELECT action, detail, created_at FROM pet_logs WHERE username=%s ORDER BY created_at DESC LIMIT 10",
-        (username,)
-    )
-    logs = [{"action": l[0], "detail": l[1], "created_at": l[2].strftime("%m-%d %H:%M") if l[2] else ""} for l in cursor.fetchall()]
-    cursor.close(); conn.close()
-    pet_type = row[3]
-    return jsonify({
-        "has_pet": True,
-        "pet": {
-            "pet_name": row[2],
-            "pet_type": pet_type,
-            "hunger": max(0, min(100, hunger)),
-            "happiness": max(0, min(100, happiness)),
-            "energy": max(0, min(100, energy)),
-            "level": max(1, level),
-            "xp": max(0, min(99, xp)),
-            "hatched": bool(hatched)
-        },
-        "logs": logs
-    })
-
-
 @app.route("/api/pet/hatch", methods=["POST"])
 @login_required
 def api_pet_hatch():
@@ -9545,58 +9571,6 @@ def api_pet_hatch():
     conn.commit()
     cursor.close(); conn.close()
     return jsonify({"ok": True})
-
-
-@app.route("/api/pet/action", methods=["POST"])
-@login_required
-def api_pet_action():
-    username = session["username"]
-    _init_pet_tables()
-    data = request.get_json() or {}
-    action = sanitize_input(data.get("action", ""), 10)
-    valid_actions = {"feed": "喂食", "play": "玩耍", "sleep": "睡觉"}
-    if action not in valid_actions:
-        return jsonify({"ok": False, "error": "无效的动作"}), 400
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM pets WHERE username=%s", (username,))
-    row = cursor.fetchone()
-    if not row:
-        cursor.close(); conn.close()
-        return jsonify({"ok": False, "error": "你还没有宠物"}), 400
-    hunger = row[4]; happiness = row[5]; energy = row[6]
-    level = row[7]; xp = row[8]
-    now = datetime.datetime.utcnow()
-    if action == "feed":
-        hunger = min(100, hunger + 30)
-        happiness = min(100, happiness + 5)
-        cursor.execute("UPDATE pets SET hunger=%s, happiness=%s, last_fed=NOW(), updated_at=NOW() WHERE username=%s",
-                       (hunger, happiness, username))
-    elif action == "play":
-        happiness = min(100, happiness + 30)
-        hunger = max(0, hunger - 10)
-        energy = max(0, energy - 15)
-        cursor.execute("UPDATE pets SET happiness=%s, hunger=%s, energy=%s, last_played=NOW(), updated_at=NOW() WHERE username=%s",
-                       (happiness, hunger, energy, username))
-    elif action == "sleep":
-        energy = min(100, energy + 40)
-        cursor.execute("UPDATE pets SET energy=%s, updated_at=NOW() WHERE username=%s",
-                       (energy, username))
-    xp += 10
-    while xp >= 100:
-        level += 1
-        xp -= 100
-    level = max(1, level)
-    xp = max(0, xp)
-    cursor.execute("UPDATE pets SET xp=%s, level=%s WHERE username=%s", (xp, level, username))
-    conn.commit()
-    cursor.execute(
-        "INSERT INTO pet_logs (username, action, detail) VALUES (%s,%s,%s)",
-        (username, action, f"执行了{valid_actions[action]}")
-    )
-    conn.commit()
-    cursor.close(); conn.close()
-    return jsonify({"ok": True, "level_up": (xp == 0)})
 
 
 @app.route("/api/pet/rename", methods=["POST"])
@@ -9639,6 +9613,830 @@ def api_pet_rename():
     conn.commit()
     cursor.close(); conn.close()
     return jsonify({"ok": True})
+
+
+# ==============================================================
+#  宠物 2.0：进化系统
+# ==============================================================
+
+# 进化配置：每种宠物 3 个阶段
+EVOLUTION_CONFIG = {
+    "cat": [
+        {"stage": 0, "emoji": "🐱", "name": "幼猫", "min_level": 1},
+        {"stage": 1, "emoji": "😺", "name": "成猫", "min_level": 10},
+        {"stage": 2, "emoji": "🦁", "name": "狮猫", "min_level": 25},
+    ],
+    "dog": [
+        {"stage": 0, "emoji": "🐶", "name": "幼犬", "min_level": 1},
+        {"stage": 1, "emoji": "🐕", "name": "成犬", "min_level": 10},
+        {"stage": 2, "emoji": "🐺", "name": "狼犬", "min_level": 25},
+    ],
+    "rabbit": [
+        {"stage": 0, "emoji": "🐰", "name": "幼兔", "min_level": 1},
+        {"stage": 1, "emoji": "🐇", "name": "成兔", "min_level": 10},
+        {"stage": 2, "emoji": "🦄", "name": "月兔", "min_level": 25},
+    ],
+    "panda": [
+        {"stage": 0, "emoji": "🐼", "name": "幼熊猫", "min_level": 1},
+        {"stage": 1, "emoji": "🐻", "name": "成熊猫", "min_level": 10},
+        {"stage": 2, "emoji": "🐲", "name": "龙猫", "min_level": 25},
+    ],
+}
+
+def _get_evolution(pet_type, level):
+    """根据等级返回当前进化阶段信息"""
+    stages = EVOLUTION_CONFIG.get(pet_type, EVOLUTION_CONFIG["cat"])
+    current = stages[0]
+    for s in stages:
+        if level >= s["min_level"]:
+            current = s
+    return current
+
+def _get_evolution_stage(pet_type, level):
+    """返回进化阶段编号"""
+    return _get_evolution(pet_type, level)["stage"]
+
+
+# ==============================================================
+#  宠物 2.0：成就系统
+# ==============================================================
+
+ACHIEVEMENTS = {
+    "first_feed": {"name": "初次喂食", "desc": "第一次喂食宠物", "icon": "🍖"},
+    "feed_10": {"name": "小吃货", "desc": "喂食10次", "icon": "🍗"},
+    "feed_50": {"name": "美食家", "desc": "喂食50次", "icon": "🍕"},
+    "feed_100": {"name": "大胃王", "desc": "喂食100次", "icon": "🎂"},
+    "first_play": {"name": "初次玩耍", "desc": "第一次和宠物玩耍", "icon": "🎾"},
+    "play_10": {"name": "玩乐达人", "desc": "玩耍10次", "icon": "⚽"},
+    "play_50": {"name": "运动健将", "desc": "玩耍50次", "icon": "🏆"},
+    "first_sleep": {"name": "初次安睡", "desc": "第一次哄宠物睡觉", "icon": "💤"},
+    "sleep_10": {"name": "好梦连连", "desc": "睡觉10次", "icon": "🌙"},
+    "level_5": {"name": "初露锋芒", "desc": "宠物升到5级", "icon": "⭐"},
+    "level_10": {"name": "小有成就", "desc": "宠物升到10级", "icon": "🌟"},
+    "level_25": {"name": "一代宗师", "desc": "宠物升到25级", "icon": "👑"},
+    "evolution_1": {"name": "蜕变", "desc": "宠物第一次进化", "icon": "🦋"},
+    "evolution_2": {"name": "究极进化", "desc": "宠物完全体进化", "icon": "✨"},
+    "visit_1": {"name": "初次串门", "desc": "第一次拜访别人的宠物", "icon": "🚪"},
+    "visit_10": {"name": "社交达人", "desc": "拜访10次", "icon": "🤝"},
+    "coins_100": {"name": "小财主", "desc": "攒够100硬币", "icon": "💰"},
+    "coins_500": {"name": "百万富翁", "desc": "攒够500硬币", "icon": "💎"},
+}
+
+def _check_achievements(username, conn=None):
+    """检查并解锁成就，返回新解锁的列表"""
+    close_conn = False
+    if not conn:
+        conn = get_db()
+        close_conn = True
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT hunger, happiness, energy, level, xp, evolution_stage, coins,
+               action_count, feed_count, play_count, sleep_count, visit_count
+        FROM pets WHERE username=%s
+    """, (username,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        if close_conn: conn.close()
+        return []
+    level = row[3]; evo_stage = row[5]; coins = row[6]
+    feed_count = row[8]; play_count = row[9]; sleep_count = row[10]; visit_count = row[11]
+
+    cursor.execute("SELECT achievement_key FROM pet_achievements WHERE username=%s", (username,))
+    unlocked = set(r[0] for r in cursor.fetchall())
+
+    checks = {
+        "first_feed": feed_count >= 1,
+        "feed_10": feed_count >= 10,
+        "feed_50": feed_count >= 50,
+        "feed_100": feed_count >= 100,
+        "first_play": play_count >= 1,
+        "play_10": play_count >= 10,
+        "play_50": play_count >= 50,
+        "first_sleep": sleep_count >= 1,
+        "sleep_10": sleep_count >= 10,
+        "level_5": level >= 5,
+        "level_10": level >= 10,
+        "level_25": level >= 25,
+        "evolution_1": evo_stage >= 1,
+        "evolution_2": evo_stage >= 2,
+        "visit_1": visit_count >= 1,
+        "visit_10": visit_count >= 10,
+        "coins_100": coins >= 100,
+        "coins_500": coins >= 500,
+    }
+
+    new_achievements = []
+    for key, met in checks.items():
+        if met and key not in unlocked:
+            cursor.execute(
+                "INSERT INTO pet_achievements (username, achievement_key) VALUES (%s,%s)",
+                (username, key)
+            )
+            new_achievements.append(key)
+            ach = ACHIEVEMENTS.get(key, {})
+            cursor.execute(
+                "INSERT INTO pet_diary (username, event_type, detail) VALUES (%s,%s,%s)",
+                (username, "achievement", f"解锁成就：{ach.get('name', key)} {ach.get('icon', '')}")
+            )
+
+    conn.commit()
+    cursor.close()
+    if close_conn: conn.close()
+    return new_achievements
+
+
+# ==============================================================
+#  宠物 2.0：性格系统
+# ==============================================================
+
+def _calc_personality(feed_n, play_n, sleep_n):
+    """根据行动比例计算性格，需要至少20次行动"""
+    total = feed_n + play_n + sleep_n
+    if total < 20:
+        return None
+    if feed_n >= play_n and feed_n >= sleep_n:
+        return "贪吃"
+    if play_n >= feed_n and play_n >= sleep_n:
+        return "活泼"
+    if sleep_n >= feed_n and sleep_n >= play_n:
+        return "慵懒"
+    return "均衡"
+
+
+# ==============================================================
+#  宠物 2.0：对话系统
+# ==============================================================
+
+DIALOGUE_POOL = {
+    "happy": [
+        "今天心情真好呀～", "主人抱抱！💕", "嘻嘻，好开心！",
+        "想出去玩！", "主人最好了！", "今天天气真好~",
+    ],
+    "hungry": [
+        "肚子咕咕叫了...", "有没有好吃的呀？🥺", "主人我饿了！",
+        "该喂食了吧...", "再不吃东西我要晕了...",
+    ],
+    "tired": [
+        "有点困了...💤", "zzz...好想睡一觉", "今天玩太累了...",
+        "能让我休息一下吗？", "眼皮好重...",
+    ],
+    "bored": [
+        "好无聊啊...", "没人陪我玩...", "主人你在干嘛？",
+        "来玩玩嘛～", "给我点事情做吧！",
+    ],
+    "sick": [
+        "不太舒服...😷", "需要照顾...", "感觉不太好...", "主人帮帮我...",
+    ],
+}
+
+PERSONALITY_DIALOGUE = {
+    "贪吃": {
+        "all": ["今天吃什么？😋", "零食呢零食呢？", "我觉得还能再吃一点！", "好香啊！"],
+    },
+    "活泼": {
+        "all": ["快来玩！🏃", "我跑得快不快？", "嘿嘿，追不上我吧！", "今天也要元气满满！"],
+    },
+    "慵懒": {
+        "all": ["嗯...再睡五分钟...", "躺着真舒服～", "别动我，我正舒服呢...", "今天只想宅着..."],
+    },
+    "均衡": {
+        "all": ["今天也很棒！", "主人陪我一起吧~", "感觉不错！", "每天都开心！"],
+    },
+}
+
+import random as _random
+
+def _get_dialogue(hunger, happiness, energy, personality):
+    """根据状态返回对话"""
+    lines = []
+    if hunger < 30:
+        lines += DIALOGUE_POOL["hungry"]
+    elif hunger < 50:
+        lines += DIALOGUE_POOL["hungry"][:2]
+    if energy < 30:
+        lines += DIALOGUE_POOL["tired"]
+    if happiness < 30:
+        lines += DIALOGUE_POOL["bored"]
+    if hunger < 20 and energy < 20:
+        lines += DIALOGUE_POOL["sick"]
+    if not lines:
+        lines = DIALOGUE_POOL["happy"]
+    if personality and personality in PERSONALITY_DIALOGUE:
+        lines += PERSONALITY_DIALOGUE[personality]["all"]
+    return _random.choice(lines)
+
+
+# ==============================================================
+#  宠物 2.0：装扮商店配置
+# ==============================================================
+
+ACCESSORY_SHOP = {
+    "hat_magic": {"name": "魔法帽", "emoji": "🎩", "cost": 30, "position": "top"},
+    "glasses": {"name": "圆眼镜", "emoji": "👓", "cost": 20, "position": "eyes"},
+    "scarf": {"name": "围巾", "emoji": "🧣", "cost": 25, "position": "neck"},
+    "ribbon": {"name": "蝴蝶结", "emoji": "🎀", "cost": 15, "position": "top"},
+    "crown": {"name": "皇冠", "emoji": "👑", "cost": 100, "position": "top"},
+    "wings": {"name": "天使翅膀", "emoji": "🪽", "cost": 80, "position": "side"},
+    "bowtie": {"name": "领结", "emoji": "🎀", "cost": 15, "position": "neck"},
+    "monocle": {"name": "单片镜", "emoji": "🧐", "cost": 40, "position": "eyes"},
+    "halo": {"name": "光环", "emoji": "😇", "cost": 60, "position": "top"},
+}
+
+
+# ==============================================================
+#  宠物 2.0：修改 API（覆盖旧端点）
+# ==============================================================
+
+@app.route("/api/pet")
+@login_required
+def api_pet_v2():
+    username = session["username"]
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"has_pet": False})
+    hunger = row[4]; happiness = row[5]; energy = row[6]
+    level = row[7]; xp = row[8]; hatched = row[9]
+    last_fed = row[10]; last_played = row[11]
+    personality = row[15] if len(row) > 15 else None
+    evolution_stage = row[16] if len(row) > 16 else 0
+    coins_val = row[17] if len(row) > 17 else 0
+    mood = row[18] if len(row) > 18 else "开心"
+    accessories_str = row[19] if len(row) > 19 else "[]"
+    visit_count = row[20] if len(row) > 20 else 0
+    action_count = row[21] if len(row) > 21 else 0
+    feed_count = row[22] if len(row) > 22 else 0
+    play_count = row[23] if len(row) > 23 else 0
+    sleep_count = row[24] if len(row) > 24 else 0
+    now = datetime.datetime.utcnow()
+    if hatched:
+        if last_fed:
+            elapsed = (now - last_fed).total_seconds() / 3600.0
+            hunger = max(0, int(hunger - elapsed * 5))
+        if last_played:
+            elapsed = (now - last_played).total_seconds() / 3600.0
+            happiness = max(0, int(happiness - elapsed * 3))
+            energy = min(100, int(energy + elapsed * 10))
+        cursor.execute(
+            "UPDATE pets SET hunger=%s, happiness=%s, energy=%s, updated_at=NOW() WHERE username=%s",
+            (hunger, happiness, energy, username)
+        )
+        conn.commit()
+    cursor.execute(
+        "SELECT action, detail, created_at FROM pet_logs WHERE username=%s ORDER BY created_at DESC LIMIT 10",
+        (username,)
+    )
+    logs = [{"action": l[0], "detail": l[1], "created_at": l[2].strftime("%m-%d %H:%M") if l[2] else ""} for l in cursor.fetchall()]
+    cursor.execute("SELECT achievement_key FROM pet_achievements WHERE username=%s", (username,))
+    achievements = [r[0] for r in cursor.fetchall()]
+    cursor.execute("SELECT item_key FROM pet_inventory WHERE username=%s AND item_type='accessory'", (username,))
+    owned_accessories = [r[0] for r in cursor.fetchall()]
+    cursor.close(); conn.close()
+    pet_type = row[3]
+    evo = _get_evolution(pet_type, level)
+    dialogue = _get_dialogue(hunger, happiness, energy, personality)
+    try:
+        accessories_list = json.loads(accessories_str) if accessories_str else []
+    except (json.JSONDecodeError, TypeError):
+        accessories_list = []
+    return jsonify({
+        "has_pet": True,
+        "pet": {
+            "pet_name": row[2],
+            "pet_type": pet_type,
+            "hunger": max(0, min(100, hunger)),
+            "happiness": max(0, min(100, happiness)),
+            "energy": max(0, min(100, energy)),
+            "level": max(1, level),
+            "xp": max(0, min(99, xp)),
+            "hatched": bool(hatched),
+            "personality": personality or "",
+            "evolution_stage": evolution_stage,
+            "evolution": {"stage": evo["stage"], "emoji": evo["emoji"], "name": evo["name"]},
+            "coins": max(0, coins_val),
+            "mood": mood,
+            "accessories": accessories_list,
+            "owned_accessories": owned_accessories,
+            "visit_count": visit_count,
+            "dialogue": dialogue,
+            "achievements": achievements,
+        },
+        "logs": logs
+    })
+
+
+@app.route("/api/pet/dialogue")
+@login_required
+def api_pet_dialogue():
+    """获取一句宠物对话"""
+    username = session["username"]
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT hunger, happiness, energy, personality FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    cursor.close(); conn.close()
+    if not row:
+        return jsonify({"dialogue": "你还没有宠物哦~"})
+    hunger, happiness, energy = row[0] or 100, row[1] or 100, row[2] or 100
+    personality = row[3]
+    return jsonify({"dialogue": _get_dialogue(hunger, happiness, energy, personality)})
+
+
+@app.route("/api/pet/action", methods=["POST"])
+@login_required
+def api_pet_action_v2():
+    username = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    action = sanitize_input(data.get("action", ""), 10)
+    valid_actions = {"feed": "喂食", "play": "玩耍", "sleep": "睡觉"}
+    if action not in valid_actions:
+        return jsonify({"ok": False, "error": "无效的动作"}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你还没有宠物"}), 400
+    hunger = row[4]; happiness = row[5]; energy = row[6]
+    level = row[7]; xp = row[8]
+    personality = row[15] if len(row) > 15 else None
+    evolution_stage = row[16] if len(row) > 16 else 0
+    coins_val = row[17] if len(row) > 17 else 0
+    action_count = row[21] if len(row) > 21 else 0
+    feed_count = row[22] if len(row) > 22 else 0
+    play_count = row[23] if len(row) > 23 else 0
+    sleep_count = row[24] if len(row) > 24 else 0
+    now = datetime.datetime.utcnow()
+    if action == "feed":
+        if hunger >= 95:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "宠物已经吃饱了！"})
+        hunger = min(100, hunger + 30)
+        happiness = min(100, happiness + 5)
+        feed_count += 1
+        cursor.execute("UPDATE pets SET hunger=%s, happiness=%s, last_fed=NOW(), feed_count=%s, updated_at=NOW() WHERE username=%s",
+                       (hunger, happiness, feed_count, username))
+    elif action == "play":
+        if energy < 10:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "宠物太累了，让它休息吧！"})
+        if happiness >= 95:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "宠物已经玩够了！"})
+        happiness = min(100, happiness + 30)
+        hunger = max(0, hunger - 10)
+        energy = max(0, energy - 15)
+        play_count += 1
+        cursor.execute("UPDATE pets SET happiness=%s, hunger=%s, energy=%s, last_played=NOW(), play_count=%s, updated_at=NOW() WHERE username=%s",
+                       (happiness, hunger, energy, play_count, username))
+    elif action == "sleep":
+        if energy >= 95:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "宠物还不困！"})
+        energy = min(100, energy + 40)
+        sleep_count += 1
+        cursor.execute("UPDATE pets SET energy=%s, sleep_count=%s, updated_at=NOW() WHERE username=%s",
+                       (energy, sleep_count, username))
+    xp += 10
+    level_up = False
+    while xp >= 100:
+        level += 1
+        xp -= 100
+        level_up = True
+    level = max(1, level)
+    xp = max(0, xp)
+
+    # 检查进化
+    old_evolution_stage = evolution_stage
+    evolution_stage = _get_evolution_stage(row[3], level)
+    evolution_triggered = evolution_stage > old_evolution_stage
+
+    # 硬币奖励
+    coins_val += 1
+
+    # 检查性格
+    action_count += 1
+    new_personality = _calc_personality(feed_count, play_count, sleep_count)
+
+    cursor.execute(
+        "UPDATE pets SET xp=%s, level=%s, evolution_stage=%s, coins=%s, action_count=%s, personality=%s WHERE username=%s",
+        (xp, level, evolution_stage, coins_val, action_count, new_personality or personality, username)
+    )
+    conn.commit()
+
+    # 写日记
+    if level_up:
+        cursor.execute(
+            "INSERT INTO pet_diary (username, event_type, detail) VALUES (%s,%s,%s)",
+            (username, "level_up", f"升到 Lv.{level}！")
+        )
+    if evolution_triggered:
+        evo = _get_evolution(row[3], level)
+        cursor.execute(
+            "INSERT INTO pet_diary (username, event_type, detail) VALUES (%s,%s,%s)",
+            (username, "evolution", f"进化成{evo['emoji']} {evo['name']}！")
+        )
+    cursor.execute(
+        "INSERT INTO pet_logs (username, action, detail) VALUES (%s,%s,%s)",
+        (username, action, f"执行了{valid_actions[action]}")
+    )
+    conn.commit()
+
+    # 检查成就
+    new_achievements = _check_achievements(username, conn)
+
+    cursor.close(); conn.close()
+    return jsonify({
+        "ok": True,
+        "level_up": level_up,
+        "evolution": evolution_triggered,
+        "evolution_info": _get_evolution(row[3], level) if evolution_triggered else None,
+        "coins_earned": 1,
+        "new_achievements": [ACHIEVEMENTS.get(k, {"name": k, "icon": "🏆"}) for k in new_achievements],
+        "personality": new_personality,
+    })
+
+
+# ==============================================================
+#  宠物 2.0：装扮 API
+# ==============================================================
+
+@app.route("/api/pet/shop")
+@login_required
+def api_pet_shop():
+    """装扮商店列表"""
+    username = session["username"]
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT item_key FROM pet_inventory WHERE username=%s AND item_type='accessory'", (username,))
+    owned = set(r[0] for r in cursor.fetchall())
+    cursor.execute("SELECT accessories, coins FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    cursor.close(); conn.close()
+    coins = row[1] if row else 0
+    try:
+        equipped = json.loads(row[0]) if row and row[0] else []
+    except (json.JSONDecodeError, TypeError):
+        equipped = []
+    items = []
+    for key, info in ACCESSORY_SHOP.items():
+        items.append({
+            "key": key,
+            "name": info["name"],
+            "emoji": info["emoji"],
+            "cost": info["cost"],
+            "owned": key in owned,
+            "equipped": key in equipped,
+        })
+    return jsonify({"items": items, "coins": coins, "equipped": equipped})
+
+
+@app.route("/api/pet/shop/buy", methods=["POST"])
+@login_required
+def api_pet_shop_buy():
+    """购买装扮"""
+    username = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    item_key = sanitize_input(data.get("item_key", ""), 50)
+    if item_key not in ACCESSORY_SHOP:
+        return jsonify({"ok": False, "error": "商品不存在"}), 400
+    item = ACCESSORY_SHOP[item_key]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT coins FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你还没有宠物"}), 400
+    coins = row[0] or 0
+    if coins < item["cost"]:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": f"硬币不足！需要{item['cost']}枚，你只有{coins}枚"}), 400
+    cursor.execute("SELECT id FROM pet_inventory WHERE username=%s AND item_key=%s", (username, item_key))
+    if cursor.fetchone():
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你已经拥有这个装扮了"}), 400
+    cursor.execute("UPDATE pets SET coins = coins - %s WHERE username=%s", (item["cost"], username))
+    cursor.execute(
+        "INSERT INTO pet_inventory (username, item_type, item_key) VALUES (%s,%s,%s)",
+        (username, "accessory", item_key)
+    )
+    cursor.execute(
+        "INSERT INTO pet_diary (username, event_type, detail) VALUES (%s,%s,%s)",
+        (username, "shop", f"购买了{item['emoji']} {item['name']}")
+    )
+    conn.commit()
+    cursor.close(); conn.close()
+    # 检查成就
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT coins FROM pets WHERE username=%s", (username,))
+    coins_now = cursor.fetchone()[0]
+    cursor.close(); conn.close()
+    _check_achievements(username)
+    return jsonify({"ok": True, "coins_left": coins_now})
+
+
+@app.route("/api/pet/accessory/equip", methods=["POST"])
+@login_required
+def api_pet_accessory_equip():
+    """装备/卸下装扮"""
+    username = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    item_key = sanitize_input(data.get("item_key", ""), 50)
+    equip = data.get("equip", True)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT accessories FROM pets WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你还没有宠物"}), 400
+    try:
+        acc = json.loads(row[0]) if row[0] else []
+    except (json.JSONDecodeError, TypeError):
+        acc = []
+    if equip:
+        if item_key not in acc:
+            acc.append(item_key)
+    else:
+        if item_key in acc:
+            acc.remove(item_key)
+    cursor.execute("UPDATE pets SET accessories=%s WHERE username=%s", (json.dumps(acc), username))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"ok": True, "equipped": acc})
+
+
+# ==============================================================
+#  宠物 2.0：社交 API
+# ==============================================================
+
+@app.route("/api/pet/community")
+@login_required
+def api_pet_community():
+    """宠物社区：所有用户的宠物列表 + 排行榜"""
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.username, p.pet_name, p.pet_type, p.level, p.hunger, p.happiness,
+               p.energy, p.evolution_stage, p.coins, p.personality, p.visit_count, p.action_count
+        FROM pets p
+        INNER JOIN users u ON p.username = u.username
+        WHERE p.hatched = 1
+        ORDER BY p.level DESC, p.coins DESC
+        LIMIT 50
+    """)
+    rows = cursor.fetchall()
+    cursor.close(); conn.close()
+    pets = []
+    for r in rows:
+        username2 = r[0]
+        pet_type = r[2]; level = r[3]
+        evo = _get_evolution(pet_type, level)
+        pets.append({
+            "username": username2,
+            "pet_name": r[1],
+            "pet_type": pet_type,
+            "level": level,
+            "hunger": r[4],
+            "happiness": r[5],
+            "energy": r[6],
+            "evolution_emoji": evo["emoji"],
+            "evolution_name": evo["name"],
+            "coins": r[8],
+            "personality": r[9] or "",
+            "visit_count": r[10],
+            "action_count": r[11],
+        })
+    return jsonify({"pets": pets})
+
+
+@app.route("/api/pet/visit/<host_username>")
+@login_required
+def api_pet_visit(host_username):
+    """访问别人的宠物"""
+    visitor = session["username"]
+    host = sanitize_input(host_username, 50)
+    if host == visitor:
+        return jsonify({"ok": False, "error": "这是你自己的宠物！去宠物页面看看吧~"}), 400
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.* FROM pets p
+        INNER JOIN users u ON p.username = u.username
+        WHERE p.username=%s AND p.hatched=1
+    """, (host,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "该用户还没有宠物"}), 404
+    pet_type = row[3]; level = row[7]
+    evo = _get_evolution(pet_type, level)
+    try:
+        acc = json.loads(row[19]) if len(row) > 19 and row[19] else []
+    except (json.JSONDecodeError, TypeError):
+        acc = []
+    # 记录访问
+    cursor.execute(
+        "INSERT INTO pet_visits (visitor, host, message) VALUES (%s,%s,%s)",
+        (visitor, host, f"{visitor} 来串门啦！")
+    )
+    # 增加被访问次数
+    cursor.execute("UPDATE pets SET visit_count = visit_count + 1 WHERE username=%s", (host,))
+    conn.commit()
+    # 写日记
+    cursor.execute(
+        "INSERT INTO pet_diary (username, event_type, detail) VALUES (%s,%s,%s)",
+        (host, "visit", f"{visitor} 来串门了！")
+    )
+    conn.commit()
+    # 最近来访
+    cursor.execute(
+        "SELECT visitor, message, created_at FROM pet_visits WHERE host=%s ORDER BY created_at DESC LIMIT 5",
+        (host,)
+    )
+    recent_visits = [{"visitor": v[0], "message": v[1], "time": v[2].strftime("%m-%d %H:%M") if v[2] else ""} for v in cursor.fetchall()]
+    cursor.close(); conn.close()
+    # 检查主人成就
+    _check_achievements(host)
+    return jsonify({
+        "ok": True,
+        "pet": {
+            "pet_name": row[2],
+            "pet_type": pet_type,
+            "level": level,
+            "hunger": row[4],
+            "happiness": row[5],
+            "energy": row[6],
+            "evolution_emoji": evo["emoji"],
+            "evolution_name": evo["name"],
+            "personality": (row[15] if len(row) > 15 else None) or "",
+            "coins": row[17] if len(row) > 17 else 0,
+            "accessories": acc,
+            "visit_count": row[20] if len(row) > 20 else 0,
+        },
+        "recent_visits": recent_visits
+    })
+
+
+@app.route("/api/pet/gift", methods=["POST"])
+@login_required
+def api_pet_gift():
+    """赠送礼物给别人的宠物"""
+    sender = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    receiver = sanitize_input(data.get("receiver", ""), 50)
+    item_key = sanitize_input(data.get("item_key", ""), 50)
+    message = sanitize_input(data.get("message", ""), 200)
+    if not receiver or not item_key:
+        return jsonify({"ok": False, "error": "参数不完整"}), 400
+    if receiver == sender:
+        return jsonify({"ok": False, "error": "不能送给自己！"}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    # 特殊礼物：硬币
+    if item_key == "coins":
+        amount = data.get("amount", 10)
+        amount = max(1, min(100, int(amount)))
+        cursor.execute("SELECT coins FROM pets WHERE username=%s", (sender,))
+        row = cursor.fetchone()
+        if not row or row[0] < amount:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "硬币不足！"}), 400
+        cursor.execute("UPDATE pets SET coins = coins - %s WHERE username=%s", (amount, sender))
+        cursor.execute("UPDATE pets SET coins = coins + %s WHERE username=%s", (amount, receiver))
+        cursor.execute(
+            "INSERT INTO pet_gifts (sender, receiver, item_key, message) VALUES (%s,%s,%s,%s)",
+            (sender, receiver, f"coins_{amount}", message or f"送了你{amount}枚硬币！")
+        )
+    else:
+        # 送装扮
+        if item_key not in ACCESSORY_SHOP:
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "物品不存在"}), 400
+        cursor.execute("SELECT id FROM pet_inventory WHERE username=%s AND item_key=%s", (sender, item_key))
+        if not cursor.fetchone():
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "你没有这个物品！"}), 400
+        cursor.execute("DELETE FROM pet_inventory WHERE username=%s AND item_key=%s LIMIT 1", (sender, item_key))
+        cursor.execute(
+            "INSERT INTO pet_inventory (username, item_type, item_key) VALUES (%s,%s,%s)",
+            (receiver, "accessory", item_key)
+        )
+        cursor.execute(
+            "INSERT INTO pet_gifts (sender, receiver, item_key, message) VALUES (%s,%s,%s,%s)",
+            (sender, receiver, item_key, message or "送你一个小礼物！")
+        )
+        item = ACCESSORY_SHOP[item_key]
+        cursor.execute(
+            "INSERT INTO pet_diary (username, event_type, detail) VALUES (%s,%s,%s)",
+            (receiver, "gift", f"{sender} 送了{item['emoji']} {item['name']}！")
+        )
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"ok": True})
+
+
+# ==============================================================
+#  宠物 2.0：小游戏 API
+# ==============================================================
+
+@app.route("/api/pet/game/score", methods=["POST"])
+@login_required
+def api_pet_game_score():
+    """小游戏提交分数，兑换硬币"""
+    username = session["username"]
+    _init_pet_tables()
+    data = request.get_json() or {}
+    score = data.get("score", 0)
+    score = max(0, min(99999, int(score)))
+    coins_earned = max(1, score // 10)  # 每10分换1硬币
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM pets WHERE username=%s", (username,))
+    if not cursor.fetchone():
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "你还没有宠物"}), 400
+    cursor.execute("UPDATE pets SET coins = coins + %s WHERE username=%s", (coins_earned, username))
+    cursor.execute(
+        "INSERT INTO pet_diary (username, event_type, detail) VALUES (%s,%s,%s)",
+        (username, "game", f"小游戏得分{score}，赚了{coins_earned}硬币！")
+    )
+    conn.commit()
+    cursor.execute("SELECT coins FROM pets WHERE username=%s", (username,))
+    total_coins = cursor.fetchone()[0]
+    cursor.close(); conn.close()
+    _check_achievements(username)
+    return jsonify({"ok": True, "coins_earned": coins_earned, "total_coins": total_coins})
+
+
+# ==============================================================
+#  宠物 2.0：日记 API
+# ==============================================================
+
+@app.route("/api/pet/diary")
+@login_required
+def api_pet_diary():
+    """宠物日记"""
+    username = session["username"]
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT event_type, detail, created_at FROM pet_diary WHERE username=%s ORDER BY created_at DESC LIMIT 30",
+        (username,)
+    )
+    entries = []
+    for r in cursor.fetchall():
+        entries.append({
+            "event_type": r[0],
+            "detail": r[1],
+            "time": r[2].strftime("%m-%d %H:%M") if r[2] else "",
+        })
+    cursor.close(); conn.close()
+    return jsonify({"entries": entries})
+
+
+# ==============================================================
+#  宠物 2.0：成就列表 API
+# ==============================================================
+
+@app.route("/api/pet/achievements/list")
+@login_required
+def api_pet_achievements_list():
+    """获取所有成就及解锁状态"""
+    username = session["username"]
+    _init_pet_tables()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT achievement_key FROM pet_achievements WHERE username=%s", (username,))
+    unlocked = set(r[0] for r in cursor.fetchall())
+    cursor.close(); conn.close()
+    all_ach = []
+    for key, info in ACHIEVEMENTS.items():
+        all_ach.append({
+            "key": key,
+            "name": info["name"],
+            "desc": info["desc"],
+            "icon": info["icon"],
+            "unlocked": key in unlocked,
+        })
+    return jsonify({"achievements": all_ach})
 
 
 def _log_activity_local(username, action, points):
