@@ -7883,12 +7883,13 @@ def _init_pet_tables():
         _ensure_column(cursor, "pets", "evolution_stage", "INT DEFAULT 0")
         _ensure_column(cursor, "pets", "coins", "INT DEFAULT 0")
         _ensure_column(cursor, "pets", "mood", "VARCHAR(50) DEFAULT '开心'")
-        _ensure_column(cursor, "pets", "accessories", "TEXT DEFAULT '[]'")
+        _ensure_column(cursor, "pets", "accessories", "TEXT")
         _ensure_column(cursor, "pets", "visit_count", "INT DEFAULT 0")
         _ensure_column(cursor, "pets", "action_count", "INT DEFAULT 0")
         _ensure_column(cursor, "pets", "feed_count", "INT DEFAULT 0")
         _ensure_column(cursor, "pets", "play_count", "INT DEFAULT 0")
         _ensure_column(cursor, "pets", "sleep_count", "INT DEFAULT 0")
+        _ensure_column(cursor, "pets", "last_slept", "TIMESTAMP NULL")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS pet_logs (
@@ -9863,16 +9864,17 @@ def api_pet_v2():
     hunger = row[4]; happiness = row[5]; energy = row[6]
     level = row[7]; xp = row[8]; hatched = row[9]
     last_fed = row[10]; last_played = row[11]
-    personality = row[15] if len(row) > 15 else None
-    evolution_stage = row[16] if len(row) > 16 else 0
-    coins_val = row[17] if len(row) > 17 else 0
-    mood = row[18] if len(row) > 18 else "开心"
-    accessories_str = row[19] if len(row) > 19 else "[]"
-    visit_count = row[20] if len(row) > 20 else 0
-    action_count = row[21] if len(row) > 21 else 0
-    feed_count = row[22] if len(row) > 22 else 0
-    play_count = row[23] if len(row) > 23 else 0
-    sleep_count = row[24] if len(row) > 24 else 0
+    personality = row[14] if len(row) > 14 else None
+    evolution_stage = row[15] if len(row) > 15 else 0
+    coins_val = row[16] if len(row) > 16 else 0
+    mood = row[17] if len(row) > 17 else "开心"
+    accessories_str = row[18] if len(row) > 18 else "[]"
+    visit_count = row[19] if len(row) > 19 else 0
+    action_count = row[20] if len(row) > 20 else 0
+    feed_count = row[21] if len(row) > 21 else 0
+    play_count = row[22] if len(row) > 22 else 0
+    sleep_count = row[23] if len(row) > 23 else 0
+    last_slept = row[25] if len(row) > 25 else None
     now = datetime.datetime.utcnow()
     if hatched:
         if last_fed:
@@ -9881,12 +9883,20 @@ def api_pet_v2():
         if last_played:
             elapsed = (now - last_played).total_seconds() / 3600.0
             happiness = max(0, int(happiness - elapsed * 3))
-            energy = min(100, int(energy + elapsed * 10))
-        cursor.execute(
-            "UPDATE pets SET hunger=%s, happiness=%s, energy=%s, updated_at=NOW() WHERE username=%s",
-            (hunger, happiness, energy, username)
-        )
-        conn.commit()
+        # 精力恢复：优先基于睡眠时间（快），否则基于玩耍时间（慢）
+        recovery_elapsed = None
+        if last_slept:
+            recovery_elapsed = (now - last_slept).total_seconds() / 3600.0
+            energy = min(100, int(energy + recovery_elapsed * 8))
+        elif last_played:
+            recovery_elapsed = (now - last_played).total_seconds() / 3600.0
+            energy = min(100, int(energy + recovery_elapsed * 5))
+        if recovery_elapsed is not None:
+            cursor.execute(
+                "UPDATE pets SET hunger=%s, happiness=%s, energy=%s, updated_at=NOW() WHERE username=%s",
+                (hunger, happiness, energy, username)
+            )
+            conn.commit()
     cursor.execute(
         "SELECT action, detail, created_at FROM pet_logs WHERE username=%s ORDER BY created_at DESC LIMIT 10",
         (username,)
@@ -9967,13 +9977,13 @@ def api_pet_action_v2():
         return jsonify({"ok": False, "error": "你还没有宠物"}), 400
     hunger = row[4]; happiness = row[5]; energy = row[6]
     level = row[7]; xp = row[8]
-    personality = row[15] if len(row) > 15 else None
-    evolution_stage = row[16] if len(row) > 16 else 0
-    coins_val = row[17] if len(row) > 17 else 0
-    action_count = row[21] if len(row) > 21 else 0
-    feed_count = row[22] if len(row) > 22 else 0
-    play_count = row[23] if len(row) > 23 else 0
-    sleep_count = row[24] if len(row) > 24 else 0
+    personality = row[14] if len(row) > 14 else None
+    evolution_stage = row[15] if len(row) > 15 else 0
+    coins_val = row[16] if len(row) > 16 else 0
+    action_count = row[20] if len(row) > 20 else 0
+    feed_count = row[21] if len(row) > 21 else 0
+    play_count = row[22] if len(row) > 22 else 0
+    sleep_count = row[23] if len(row) > 23 else 0
     now = datetime.datetime.utcnow()
     if action == "feed":
         if hunger >= 95:
@@ -10003,7 +10013,7 @@ def api_pet_action_v2():
             return jsonify({"ok": False, "error": "宠物还不困！"})
         energy = min(100, energy + 40)
         sleep_count += 1
-        cursor.execute("UPDATE pets SET energy=%s, sleep_count=%s, updated_at=NOW() WHERE username=%s",
+        cursor.execute("UPDATE pets SET energy=%s, sleep_count=%s, last_slept=NOW(), updated_at=NOW() WHERE username=%s",
                        (energy, sleep_count, username))
     xp += 10
     level_up = False
@@ -10194,7 +10204,7 @@ def api_pet_community():
         SELECT p.username, p.pet_name, p.pet_type, p.level, p.hunger, p.happiness,
                p.energy, p.evolution_stage, p.coins, p.personality, p.visit_count, p.action_count
         FROM pets p
-        INNER JOIN users u ON p.username = u.username
+        INNER JOIN users u ON p.username = u.user_name
         WHERE p.hatched = 1
         ORDER BY p.level DESC, p.coins DESC
         LIMIT 50
@@ -10237,7 +10247,7 @@ def api_pet_visit(host_username):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT p.* FROM pets p
-        INNER JOIN users u ON p.username = u.username
+        INNER JOIN users u ON p.username = u.user_name
         WHERE p.username=%s AND p.hatched=1
     """, (host,))
     row = cursor.fetchone()
@@ -10247,7 +10257,7 @@ def api_pet_visit(host_username):
     pet_type = row[3]; level = row[7]
     evo = _get_evolution(pet_type, level)
     try:
-        acc = json.loads(row[19]) if len(row) > 19 and row[19] else []
+        acc = json.loads(row[18]) if len(row) > 18 and row[18] else []
     except (json.JSONDecodeError, TypeError):
         acc = []
     # 记录访问
@@ -10284,10 +10294,10 @@ def api_pet_visit(host_username):
             "energy": row[6],
             "evolution_emoji": evo["emoji"],
             "evolution_name": evo["name"],
-            "personality": (row[15] if len(row) > 15 else None) or "",
-            "coins": row[17] if len(row) > 17 else 0,
+            "personality": (row[14] if len(row) > 14 else None) or "",
+            "coins": row[16] if len(row) > 16 else 0,
             "accessories": acc,
-            "visit_count": row[20] if len(row) > 20 else 0,
+            "visit_count": row[19] if len(row) > 19 else 0,
         },
         "recent_visits": recent_visits
     })
