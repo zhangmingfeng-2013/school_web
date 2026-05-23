@@ -798,6 +798,7 @@ DB_CONFIG = {
     "user": os.environ.get("DB_USER", "root"),
     "password": os.environ.get("DB_PASSWORD", "root@123456"),
     "database": os.environ.get("DB_NAME", "sample"),
+    "init_command": "SET time_zone='+00:00'",
 }
 ALBUM_DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
@@ -805,6 +806,7 @@ ALBUM_DB_CONFIG = {
     "user": os.environ.get("DB_USER", "root"),
     "password": os.environ.get("DB_PASSWORD", "root@123456"),
     "database": os.environ.get("DB_NAME", "sample"),
+    "init_command": "SET time_zone='+00:00'",
 }
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "asdfghjkl;'")
 LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "app.log")
@@ -9504,11 +9506,11 @@ def api_pet():
         "pet": {
             "pet_name": row[2],
             "pet_type": pet_type,
-            "hunger": hunger,
-            "happiness": happiness,
-            "energy": energy,
-            "level": level,
-            "xp": xp,
+            "hunger": max(0, min(100, hunger)),
+            "happiness": max(0, min(100, happiness)),
+            "energy": max(0, min(100, energy)),
+            "level": max(1, level),
+            "xp": max(0, min(99, xp)),
             "hatched": bool(hatched)
         },
         "logs": logs
@@ -9581,9 +9583,11 @@ def api_pet_action():
         cursor.execute("UPDATE pets SET energy=%s, updated_at=NOW() WHERE username=%s",
                        (energy, username))
     xp += 10
-    if xp >= 100:
+    while xp >= 100:
         level += 1
         xp -= 100
+    level = max(1, level)
+    xp = max(0, xp)
     cursor.execute("UPDATE pets SET xp=%s, level=%s WHERE username=%s", (xp, level, username))
     conn.commit()
     cursor.execute(

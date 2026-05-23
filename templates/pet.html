@@ -306,13 +306,13 @@ function renderPet(data) {
     document.getElementById('petLevel').textContent = 'Lv.' + p.level;
     document.getElementById('xpLevel').textContent = p.level;
 
-    document.getElementById('hungerBar').style.width = p.hunger + '%';
-    document.getElementById('hungerVal').textContent = p.hunger;
-    document.getElementById('happinessBar').style.width = p.happiness + '%';
-    document.getElementById('happinessVal').textContent = p.happiness;
-    document.getElementById('energyBar').style.width = p.energy + '%';
-    document.getElementById('energyVal').textContent = p.energy;
-    document.getElementById('xpBar').style.width = p.xp + '%';
+    document.getElementById('hungerBar').style.width = Math.max(0, Math.min(100, p.hunger)) + '%';
+    document.getElementById('hungerVal').textContent = Math.max(0, Math.min(100, p.hunger));
+    document.getElementById('happinessBar').style.width = Math.max(0, Math.min(100, p.happiness)) + '%';
+    document.getElementById('happinessVal').textContent = Math.max(0, Math.min(100, p.happiness));
+    document.getElementById('energyBar').style.width = Math.max(0, Math.min(100, p.energy)) + '%';
+    document.getElementById('energyVal').textContent = Math.max(0, Math.min(100, p.energy));
+    document.getElementById('xpBar').style.width = Math.max(0, Math.min(100, p.xp)) + '%';
 
     var logHtml = '';
     (data.logs || []).forEach(function(l) {
