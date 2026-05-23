@@ -11150,7 +11150,7 @@ if __name__ == "__main__":
                 channel_timeout=int(os.environ.get("WAITRESS_TIMEOUT", "60")),
                 # 隐藏服务器标识
                 ident=None,
-                clear_untrusted_proxy_headers=True,
+                clear_untrusted_proxy_headers=True
             )
         except ImportError:
             print("  Waitress 未安装，回退到 Werkzeug 开发服务器")
