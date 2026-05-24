@@ -13,10 +13,35 @@ import requests
 import datetime
 import fnmatch
 import pymysql
-from collections import deque
-from functools import wraps
-from werkzeug.security import generate_password_hash, check_password_hash
+import atexit
+import waitress
+import plugins
 import bcrypt
+import io
+import logging
+import ssl
+import werkzeug.serving
+import calendar as cal_mod
+import socket as sock
+import time as _time
+import random as _captcha_random
+import random as _random
+from importlib.metadata import version as pkg_version
+from collections import deque
+import subprocess, shlex
+from datetime import datetime, timedelta
+from functools import wraps
+from flask import make_response
+from werkzeug.security import generate_password_hash, check_password_hash
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from flask import (
+    Flask, render_template, request, redirect, url_for,
+    session, flash, jsonify, send_from_directory, send_file, abort, Response, g,
+    render_template_string, make_response,
+)
+from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
+from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
 
 
 def safe_check_password_hash(pwhash: str, password: str) -> bool:
@@ -37,16 +62,7 @@ def safe_check_password_hash(pwhash: str, password: str) -> bool:
             except Exception:
                 return False
         return False
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
-import io
-from flask import (
-    Flask, render_template, request, redirect, url_for,
-    session, flash, jsonify, send_from_directory, send_file, abort, Response, g,
-    render_template_string, make_response,
-)
-from flask_cors import CORS
-from werkzeug.middleware.proxy_fix import ProxyFix
-from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
+
 
 
 # ---------- 简易内存速率限制 ----------
@@ -146,7 +162,7 @@ RATE_LIMITS = {
     "login":      (int(os.environ.get("RATE_LOGIN_MAX", "5")),    int(os.environ.get("RATE_LOGIN_WINDOW", "60"))),
     "register":   (int(os.environ.get("RATE_REGISTER_MAX", "5")),  int(os.environ.get("RATE_REGISTER_WINDOW", "60"))),
 }
-import plugins
+
 
 app = Flask(__name__)
 
@@ -171,7 +187,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_SECURE=bool(os.environ.get("HTTPS")),  # 生产 HTTPS 环境自动启用 Secure；HTTP 内网环境设为 False
-    PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=2),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=2)
 )
 
 # ---------- 安全工具 User-Agent 过滤 ----------
@@ -219,7 +235,7 @@ def inject_i18n():
     """将翻译函数、语言信息、缓存破坏器注入所有模板"""
     lang = session.get("lang", "zh-CN")
     perm = session.get("permission", "guest")
-    import time as _time
+
     return {
         "_": lambda key, default=None, **kw: _(key, lang, default, **kw),
         "lang": lang,
@@ -586,7 +602,7 @@ def _generate_captcha():
 
 # ---------- 图形验证码 ----------
 # 验证码字符集（模块级，供 _generate_captcha 和 api_captcha 共用）
-import random as _captcha_random
+
 _captcha_chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 @app.route("/api/captcha")
 def api_captcha():
@@ -597,7 +613,7 @@ def api_captcha():
     if not rate_limiter.check((client_ip, "captcha"), max_requests=_limit, window=_window):
         return jsonify({"error": "请求过于频繁"}), 429
 
-    import random as _random
+
     code = _generate_captcha()  # 统一使用预生成函数，与表单 code 一致
 
     # 创建验证码图片（加大尺寸，字体更大更清晰）
@@ -664,7 +680,7 @@ def api_captcha():
     buf = io.BytesIO()
     img.save(buf, "PNG")
     buf.seek(0)
-    from flask import make_response
+
     resp = make_response(send_file(buf, mimetype="image/png"))
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
@@ -1083,7 +1099,7 @@ def _mask_cell(col_name, value):
     return str(value) if value is not None else ""
 
 def write_log(action, detail=""):
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     entry = f"[{ts}] {action}"
     if detail:
         entry += f" - {detail}"
@@ -1241,7 +1257,7 @@ def login():
         captcha_input = request.form.get("captcha", "").strip().lower()
 
         # ---- 诊断日志：记录每次登录尝试的详细信息 ----
-        import logging
+
         _login_logger = logging.getLogger('login_diag')
         _login_logger.setLevel(logging.DEBUG)
         if not _login_logger.handlers:
@@ -1591,7 +1607,7 @@ def forgot_password():
                     )
                     cursor.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW()")
                     token = uuid.uuid4().hex
-                    expires = datetime.datetime.now() + datetime.timedelta(minutes=10)
+                    expires = datetime.now() + timedelta(minutes=10)
                     cursor.execute(
                         "INSERT INTO password_reset_tokens (username, token, expires_at) VALUES (%s,%s,%s)",
                         (username, token, expires)
@@ -2001,7 +2017,7 @@ os.makedirs(AVATAR_CACHE_DIR, exist_ok=True)
 @app.route("/api/avatar/<seed>")
 def api_avatar(seed):
     """生成初始头像PNG"""
-    from PIL import Image, ImageDraw, ImageFont
+
     size = request.args.get("size", 140, type=int)
     bgcolor = request.args.get("bg", "667eea")
     color = request.args.get("color", "fff")
@@ -2356,7 +2372,7 @@ def api_system_info():
     """返回系统信息的JSON，供前端定时刷新"""
     try:
         boot_time = psutil.boot_time()
-        uptime_seconds = int(datetime.datetime.now().timestamp() - boot_time)
+        uptime_seconds = int(datetime.now().timestamp() - boot_time)
         hours, remainder = divmod(uptime_seconds, 3600)
         minutes, _ = divmod(remainder, 60)
 
@@ -2611,7 +2627,7 @@ def api_network_ping():
     # 安全过滤：只允许域名和IP
     if not re.match(r'^[a-zA-Z0-9.\-:]+$', target):
         return jsonify({"ok": False, "error": "Invalid target"}), 400
-    import subprocess, shlex
+
     cmd = ["ping", "-c", str(count), target]
     if platform.system() == "Windows":
         cmd = ["ping", "-n", str(count), target]
@@ -2693,7 +2709,7 @@ def api_network_dns():
     results = []
     try:
         if record_type == "A":
-            import socket as sock
+
             try:
                 results = [sock.gethostbyname(target)]
             except sock.gaierror as ge:
@@ -2772,7 +2788,7 @@ def api_network_ssl():
         return jsonify({"ok": False, "error": "Target required"}), 400
     if not re.match(r'^[a-zA-Z0-9.\-]+$', target):
         return jsonify({"ok": False, "error": "Invalid target"}), 400
-    import ssl
+
     from datetime import datetime
     try:
         ctx = ssl.create_default_context()
@@ -5019,8 +5035,8 @@ def api_admin_ip_stats():
             result.append({
                 "ip": ip,
                 "requests": count,
-                "first_request": datetime.datetime.fromtimestamp(first_req).strftime("%H:%M:%S"),
-                "last_request": datetime.datetime.fromtimestamp(last_req).strftime("%H:%M:%S"),
+                "first_request": datetime.fromtimestamp(first_req).strftime("%H:%M:%S"),
+                "last_request": datetime.fromtimestamp(last_req).strftime("%H:%M:%S"),
                 "rate_per_sec": round(count / max(now - first_req, 1), 2) if count > 1 else count,
                 "blocked": False,
                 "block_remaining": 0
@@ -5041,7 +5057,7 @@ def api_admin_ip_stats():
         for ip, last_active in list(ip_last_active.items()):
             for r in result:
                 if r["ip"] == ip:
-                    r["last_active"] = datetime.datetime.fromtimestamp(last_active).strftime("%H:%M:%S") if last_active else "-"
+                    r["last_active"] = datetime.fromtimestamp(last_active).strftime("%H:%M:%S") if last_active else "-"
                     r["idle_sec"] = int(now - last_active) if last_active else 0
                     break
     result.sort(key=lambda x: x["requests"], reverse=True)
@@ -5264,7 +5280,7 @@ def logs_clear():
     try:
         ip = request.remote_addr or "0.0.0.0"
         user = session.get("username", "unknown")
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         clear_entry = f"[{now}] 清空日志 - IP: {ip}, 用户: {user}\n"
         with open(LOG_FILE, "w", encoding="utf-8") as f:
             f.write(clear_entry)
@@ -5446,7 +5462,7 @@ def api_calendar_events():
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         if year and month:
             # 查当月的第一天到最后一天
-            import calendar as cal_mod
+
             last_day = cal_mod.monthrange(year, month)[1]
             date_from = f"{year}-{month:02d}-01"
             date_to = f"{year}-{month:02d}-{last_day:02d}"
@@ -5662,7 +5678,7 @@ def _get_backup_files():
             fpath = os.path.join(BACKUP_DIR, f)
             if os.path.isfile(fpath) and f.endswith(".tar.gz"):
                 stat = os.stat(fpath)
-                created = datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                created = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
                 backups.append({
                     "name": f,
                     "size": stat.st_size,
@@ -5689,7 +5705,7 @@ def api_backup_create():
     import subprocess
     import tarfile
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"backup_{timestamp}.tar.gz"
     filepath = os.path.join(BACKUP_DIR, filename)
     project_root = os.path.dirname(os.path.abspath(__file__))
@@ -5729,7 +5745,7 @@ def api_backup_create():
             "size": size,
             "file_count": file_count,
             "dirs": dir_structure,
-            "created": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
     except Exception as e:
         if os.path.exists(filepath):
@@ -6083,22 +6099,22 @@ def api_utils_uuid():
 @login_required
 def api_utils_timestamp():
     ts = request.args.get("ts", "").strip()
-    import time, datetime
+    import time
     now = int(time.time())
     if not ts:
-        return jsonify({"ok": True, "now": now, "now_readable": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+        return jsonify({"ok": True, "now": now, "now_readable": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
     try:
         val = int(ts)
         # 13-digit → ms, 10-digit → s
         if val > 1e12:
             val = val // 1000
-        dt = datetime.datetime.fromtimestamp(val)
+        dt = datetime.fromtimestamp(val)
         return jsonify({"ok": True, "ts": val, "readable": dt.strftime("%Y-%m-%d %H:%M:%S"), "iso": dt.isoformat()})
     except (ValueError, OSError):
         # Try parsing human-readable
         for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d"]:
             try:
-                dt = datetime.datetime.strptime(ts, fmt)
+                dt = datetime.strptime(ts, fmt)
                 ts_val = int(dt.timestamp())
                 return jsonify({"ok": True, "ts": ts_val, "readable": dt.strftime("%Y-%m-%d %H:%M:%S")})
             except ValueError:
@@ -7516,7 +7532,7 @@ def api_admin_reset_approve(req_id):
             cursor.close(); conn.close()
             return jsonify({"ok": False, "error": f"申请状态不是待审核"})
         token = uuid.uuid4().hex
-        expires = datetime.datetime.now() + datetime.timedelta(minutes=30)
+        expires = datetime.now() + timedelta(minutes=30)
         cursor.execute(
             "UPDATE password_reset_tokens SET token=%s, request_status='approved', expires_at=%s WHERE id=%s",
             (token, expires, req_id)
@@ -7782,6 +7798,7 @@ def _init_confession_tables():
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS anonymous_posts (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL DEFAULT '',
                     nickname VARCHAR(20) NOT NULL,
                     content TEXT NOT NULL,
                     emoji VARCHAR(5) DEFAULT '💬',
@@ -7791,6 +7808,12 @@ def _init_confession_tables():
                     INDEX idx_ap_created (created_at)
                 )
             """)
+            # 确保 username 列存在（兼容旧表）
+            try:
+                cursor.execute("ALTER TABLE anonymous_posts ADD COLUMN username VARCHAR(50) NOT NULL DEFAULT ''")
+                conn.commit()
+            except Exception:
+                pass  # 列已存在
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS anonymous_replies (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -8416,11 +8439,11 @@ def checkin_page():
 def api_checkin_status():
     """获取今日签到状态 + 年度签到日期"""
     username = session["username"]
-    year = request.args.get("year", type=int) or datetime.datetime.utcnow().year
+    year = request.args.get("year", type=int) or datetime.utcnow().year
     conn = get_db()
     cursor = conn.cursor()
     # 今日是否已签到
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
     cursor.execute("SELECT mood, note FROM checkins WHERE username=%s AND checkin_date=%s", (username, today))
     today_row = cursor.fetchone()
     # 年度所有签到日期
@@ -8440,11 +8463,11 @@ def api_checkin_status():
     streak = 0
     if checked_today:
         streak = 1
-        check_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        check_date = datetime.utcnow() - timedelta(days=1)
         date_set = {r[0] for r in rows}
         while check_date.strftime("%Y-%m-%d") in date_set:
             streak += 1
-            check_date -= datetime.timedelta(days=1)
+            check_date -= timedelta(days=1)
 
     return jsonify({
         "checked_today": checked_today,
@@ -8464,7 +8487,7 @@ def api_checkin():
     data = request.get_json() or {}
     mood = data.get("mood", "😊")
     note = sanitize_input(data.get("note", ""), 200)
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
 
     conn = get_db()
     cursor = conn.cursor()
@@ -8488,10 +8511,10 @@ def api_checkin():
 
     date_set = {r[0] for r in rows}
     streak = 1
-    check_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+    check_date = datetime.utcnow() - timedelta(days=1)
     while check_date.strftime("%Y-%m-%d") in date_set:
         streak += 1
-        check_date -= datetime.timedelta(days=1)
+        check_date -= timedelta(days=1)
 
     return jsonify({
         "ok": True,
@@ -9592,7 +9615,7 @@ def api_pet_hatch():
     if cursor.fetchone():
         cursor.close(); conn.close()
         return jsonify({"ok": False, "error": "你已经有一只宠物了"}), 400
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     cursor.execute(
         "INSERT INTO pets (username, pet_name, pet_type, hatched, last_fed) VALUES (%s,%s,%s,1,NOW())",
         (username, "小可爱", pet_type)
@@ -9908,7 +9931,7 @@ def api_pet_v2():
     sleep_count = row[22] if len(row) > 22 else 0
     accessories_str = row[24] if len(row) > 24 else "[]"
     last_slept = row[23] if len(row) > 23 else None
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     if hatched:
         if last_fed:
             elapsed = (now - last_fed).total_seconds() / 3600.0
@@ -10017,7 +10040,7 @@ def api_pet_action_v2():
     feed_count = (row[20] or 0) if len(row) > 20 else 0
     play_count = (row[21] or 0) if len(row) > 21 else 0
     sleep_count = (row[22] or 0) if len(row) > 22 else 0
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     if action == "feed":
         if hunger >= 95:
             cursor.close(); conn.close()
@@ -10592,7 +10615,7 @@ def api_confession_posts():
         cursor.execute("SELECT COUNT(*) FROM anonymous_posts")
         total = cursor.fetchone()[0]
         cursor.execute(
-            "SELECT id, nickname, content, emoji, like_count, reply_count, created_at FROM anonymous_posts ORDER BY id DESC LIMIT %s OFFSET %s",
+            "SELECT id, username, nickname, content, emoji, like_count, reply_count, created_at FROM anonymous_posts ORDER BY id DESC LIMIT %s OFFSET %s",
             (per_page, offset_val)
         )
         rows = cursor.fetchall()
@@ -10624,10 +10647,11 @@ def api_confession_posts():
         cur2.close(); conn2.close()
 
         posts = [{
-            "id": r[0], "nickname": r[1], "content": r[2], "emoji": r[3],
-            "like_count": r[4], "reply_count": r[5], "created_at": str(r[6]),
+            "id": r[0], "nickname": r[2], "content": r[3], "emoji": r[4],
+            "like_count": r[5], "reply_count": r[6], "created_at": str(r[7]),
             "replies": replies_map.get(r[0], []),
-            "liked": r[0] in liked_set
+            "liked": r[0] in liked_set,
+            "is_owner": r[1] == username or session.get("permission") == "administrator"
         } for r in rows]
         conn.close()
         return jsonify({"posts": posts, "total": total, "has_more": offset_val + per_page < total})
@@ -10642,8 +10666,8 @@ def api_confession_posts():
         nickname = data.get("nickname", generate_nickname())
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO anonymous_posts (nickname, content, emoji) VALUES (%s, %s, %s)",
-            (nickname, content, emoji)
+            "INSERT INTO anonymous_posts (username, nickname, content, emoji) VALUES (%s, %s, %s, %s)",
+            (username, nickname, content, emoji)
         )
         conn.commit()
         pid = cursor.lastrowid
@@ -10702,6 +10726,31 @@ def api_confession_like(pid):
         new_count = cursor.fetchone()[0]
         cursor.close(); conn.close()
         return jsonify({"liked": True, "like_count": new_count})
+
+
+@app.route("/api/confession/posts/<int:pid>", methods=["DELETE"])
+@login_required
+def api_confession_delete(pid):
+    """删除树洞帖子：本人或管理员可删"""
+    username = session["username"]
+    is_admin = session.get("permission") == "administrator"
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT username FROM anonymous_posts WHERE id=%s", (pid,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close(); conn.close()
+        return jsonify({"error": "帖子不存在"}), 404
+    if not is_admin and row[0] != username:
+        cursor.close(); conn.close()
+        return jsonify({"error": "无权删除此帖子"}), 403
+    # 删除关联的回复和点赞
+    cursor.execute("DELETE FROM anonymous_replies WHERE post_id=%s", (pid,))
+    cursor.execute("DELETE FROM anonymous_likes WHERE post_id=%s", (pid,))
+    cursor.execute("DELETE FROM anonymous_posts WHERE id=%s", (pid,))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({"ok": True})
 
 
 # ---- 随机昵称生成 ----
@@ -11365,7 +11414,7 @@ def _kill_orphan_port(port: int):
         pass  # 清理失败不阻塞启动
 
 if __name__ == "__main__":
-    import atexit
+
     atexit.register(rate_limiter.shutdown)
 
     print("=" * 50)
@@ -11392,11 +11441,11 @@ if __name__ == "__main__":
     
     if use_waitress:
         try:
-            import waitress
+
             
             threads = int(os.environ.get("WAITRESS_THREADS", "8"))
             
-            from importlib.metadata import version as pkg_version
+
             print(f"  服务器引擎: Waitress {pkg_version('waitress')}")
             print(f"  线程池大小: {threads}")
             print(f"  最大连接数: {os.environ.get('WAITRESS_CONNECTION_LIMIT', '100')}")
@@ -11423,7 +11472,7 @@ if __name__ == "__main__":
     if not use_waitress:
         # Werkzeug 开发服务器回退
         # 不泄露服务器类型/版本
-        import werkzeug.serving
+
         werkzeug.serving.WSGIRequestHandler.version_string = lambda self: ""
         werkzeug.serving.WSGIRequestHandler.sys_version = ''
         app.run(host="0.0.0.0", port=4444, debug=debug_mode, threaded=True)
