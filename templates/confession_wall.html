@@ -47,7 +47,7 @@
 .cf-post-nickname { font-weight: 600; color: #8b5cf6; font-size: .9rem; }
 .cf-post-time { font-size: .75rem; color: var(--bs-secondary-color); margin-left: auto; }
 .cf-post-content { line-height: 1.7; margin-bottom: .75rem; word-break: break-word; }
-.cf-post-actions { display: flex; gap: 1rem; font-size: .85rem; }
+.cf-post-actions { display: flex; gap: 1rem; font-size: .85rem; align-items: center; }
 .cf-action-btn {
     background: none; border: none; cursor: pointer; color: var(--bs-secondary-color);
     padding: .3rem .5rem; border-radius: 8px; display: flex; align-items: center; gap: .3rem;
@@ -78,6 +78,12 @@
     background: transparent; color: #8b5cf6; font-weight: 600; cursor: pointer;
 }
 .cf-empty { text-align: center; padding: 3rem; color: var(--bs-secondary-color); }
+.cf-delete-btn {
+    background: none; border: none; cursor: pointer; color: var(--bs-secondary-color);
+    padding: .3rem .5rem; border-radius: 8px; font-size: .85rem;
+    transition: all .15s; margin-left: auto;
+}
+.cf-delete-btn:hover { color: #ef4444; background: rgba(239,68,68,.08); }
 </style>
 
 <div class="cf-container">
@@ -111,10 +117,10 @@
 
     <!-- Post list -->
     <div id="cfPostList"></div>
-    <div class="cf-load-more" id="cfLoadMore" style="display:none;">
+    <div class="cf-load-more d-none" id="cfLoadMore">
         <button data-csp-click="cfLoadMore">加载更多...</button>
     </div>
-    <div class="cf-empty" id="cfEmpty" style="display:none;">🌳 还没有树洞哦，来做第一个倾诉的人吧~</div>
+    <div class="cf-empty d-none" id="cfEmpty">🌳 还没有树洞哦，来做第一个倾诉的人吧~</div>
 </div>
 {% endblock %}
 
@@ -129,7 +135,7 @@ var loading = false;
 var nicknames = ['快乐的','安静的','勇敢的','温柔的','调皮的','可爱的','酷酷的','暖暖的','潇洒的','憨憨的'];
 var nouns = ['小树','星星','月亮','微风','小雨','阳光','猫咪','兔子','熊猫','海豚'];
 function genNick() { return nicknames[Math.floor(Math.random()*nicknames.length)] + nouns[Math.floor(Math.random()*nouns.length)]; }
-var myNickname = sessionStorage.getItem('cf_nickname') || genNick();
+var myNickname = (sessionStorage.getItem('cf_nickname') || genNick() || '匿名小树');
 sessionStorage.setItem('cf_nickname', myNickname);
 document.getElementById('cfNickname').textContent = myNickname;
 
@@ -141,9 +147,13 @@ function refreshNickname() {
 
 function selectEmoji(emoji) {
     currentEmoji = emoji;
-    document.querySelectorAll('.cf-emoji-btn').forEach(function(b) { b.classList.remove('selected'); });
-    var t = document.querySelector('[data-csp-args*="\\"' + emoji + '\\""]');
-    if (t) t.classList.add('selected');
+    document.querySelectorAll('.cf-emoji-btn').forEach(function(b) {
+        try {
+            var args = JSON.parse(b.getAttribute('data-csp-args'));
+            if (args[0] === emoji) { b.classList.add('selected'); }
+            else { b.classList.remove('selected'); }
+        } catch(e) { b.classList.remove('selected'); }
+    });
 }
 
 function cfPost() {
@@ -205,6 +215,7 @@ function renderPost(p, position) {
         '<div class="cf-post-actions">' +
             '<button class="cf-action-btn' + (p.liked ? ' liked' : '') + '" data-csp-click="cfLike" data-csp-args=\'[' + p.id + ']\'>' + (p.liked ? '❤️' : '🤍') + ' <span id="cfLikeCount-' + p.id + '">' + p.like_count + '</span></button>' +
             '<button class="cf-action-btn" data-csp-click="cfToggleReplies" data-csp-args=\'[' + p.id + ']\'>💬 <span>' + p.reply_count + '</span></button>' +
+            (p.is_owner ? '<button class="cf-delete-btn" data-csp-click="cfDeletePost" data-csp-args=\'[' + p.id + ']\'>🗑️</button>' : '') +
         '</div>' +
         '<div class="cf-replies" id="cfReplies-' + p.id + '">' + repliesHtml +
             '<div class="cf-reply-form"><input class="cf-reply-input" id="cfReplyInput-' + p.id + '" placeholder="回复...">' +
@@ -227,8 +238,6 @@ function cfLike(pid) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
         document.getElementById('cfLikeCount-' + pid).textContent = d.like_count;
-        var btn = document.querySelector('[data-csp-args*="' + pid + '"] .cf-action-btn');
-        // Find the like button in this card
         var card = document.getElementById('cfPost-' + pid);
         var likeBtns = card.querySelectorAll('.cf-action-btn');
         likeBtns.forEach(function(b) {
@@ -237,6 +246,25 @@ function cfLike(pid) {
                 if (d.liked) b.classList.add('liked'); else b.classList.remove('liked');
             }
         });
+    });
+}
+
+function cfDeletePost(pid) {
+    if (!confirm('确定要删除这条树洞吗？删除后不可恢复。')) return;
+    fetch('/api/confession/posts/' + pid, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) { alert(d.error); return; }
+        // 移除卡片动画并刷新
+        var card = document.getElementById('cfPost-' + pid);
+        if (card) {
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.95)';
+            card.style.transition = 'all .2s';
+            setTimeout(function() { loadPosts(true); }, 200);
+        } else {
+            loadPosts(true);
+        }
     });
 }
 
@@ -252,7 +280,6 @@ function cfReply(pid) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
         input.value = '';
-        // Refresh posts
         currentPage = Math.max(1, currentPage);
         loadPosts(true);
     });

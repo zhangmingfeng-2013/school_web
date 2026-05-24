@@ -77,12 +77,16 @@
 }
 .as-page-btn.active { background: #6366f1; color: #fff; border-color: #6366f1; }
 .as-page-btn:disabled { opacity: .4; cursor: not-allowed; }
+.as-btn-round { border-radius: 20px !important; }
+.as-btn-submit { border-radius: 25px !important; padding: .6rem 2rem !important; }
+.as-hint-text { font-size: .8rem; }
+.as-empty-state { grid-column: 1 / -1; }
 </style>
 
 <div class="as-container" id="asListView">
     <div class="as-header">
         <h2 class="mb-0">📖 校友故事</h2>
-        <button class="btn btn-primary btn-sm ms-auto" data-csp-click="asShowWrite" style="border-radius:20px;">✏️ 写故事</button>
+        <button class="btn btn-primary btn-sm ms-auto as-btn-round" data-csp-click="asShowWrite">✏️ 写故事</button>
     </div>
     <div class="as-tabs">
         <button class="as-tab active" data-csp-click="asSwitchTab" data-csp-args='["approved"]'>✅ 精选故事</button>
@@ -93,14 +97,14 @@
 </div>
 
 <!-- Write page -->
-<div id="asWriteView" style="display:none;">
+<div id="asWriteView" class="d-none">
     <div class="as-write">
-        <div class="as-header"><button class="btn btn-outline-secondary btn-sm" data-csp-click="asShowList" style="border-radius:20px;">← 返回</button></div>
+        <div class="as-header"><button class="btn btn-outline-secondary btn-sm as-btn-round" data-csp-click="asShowList">← 返回</button></div>
         <h3 class="mb-3">✏️ 写故事</h3>
         <input type="text" id="asTitle" placeholder="故事标题..." maxlength="200">
         <textarea id="asContent" placeholder="写下你的校友回忆..."></textarea>
-        <button class="btn btn-primary" data-csp-click="asSubmit" style="border-radius:25px;padding:.6rem 2rem;">📨 提交审核</button>
-        <p class="text-muted mt-2" style="font-size:.8rem;">提交后将由管理员审核后发布</p>
+        <button class="btn btn-primary as-btn-submit" data-csp-click="asSubmit">📨 提交审核</button>
+        <p class="text-muted mt-2 as-hint-text">提交后将由管理员审核后发布</p>
     </div>
 </div>
 
@@ -117,7 +121,7 @@
         <div class="as-modal-content" id="asModalContent"></div>
         <div class="as-modal-actions">
             <button class="btn btn-sm btn-outline-danger" data-csp-click="asLike" id="asLikeBtn">🤍 <span id="asLikeCount">0</span></button>
-            <span style="margin-left:auto;"><span id="asModalStatus"></span></span>
+            <span class="ms-auto"><span id="asModalStatus"></span></span>
         </div>
         <div class="as-comments" id="asComments"></div>
         <div class="as-comment-form">
@@ -153,7 +157,7 @@ function loadStories() {
         totalPages = d.total_pages;
         grid.innerHTML = '';
         if (d.stories.length === 0) {
-            grid.innerHTML = '<div class="text-center p-5 text-muted" style="grid-column:1/-1;">📭 还没有故事</div>';
+            grid.innerHTML = '<div class="text-center p-5 text-muted as-empty-state">📭 还没有故事</div>';
         }
         d.stories.forEach(function(s) {
             var coverHtml = s.cover_image
