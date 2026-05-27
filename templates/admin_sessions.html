@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}会话管理 - 管理员{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h3>🔍 在线会话管理</h3>
+    <p class="text-muted small">实时查看所有活跃会话，可踢出异常用户。每 30 秒自动刷新。</p>
+    
+    <div class="table-responsive mt-3">
+        <table class="table table-sm table-hover" id="sessionsTable">
+            <thead style="background:#f8f9fa;">
+                <tr>
+                    <th>用户名</th>
+                    <th>IP 地址</th>
+                    <th>浏览器</th>
+                    <th>登录时间</th>
+                    <th>最后活跃</th>
+                    <th>空闲</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="sessionsBody">
+                <tr><td colspan="7" class="text-center text-muted">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <button class="btn btn-outline-primary btn-sm mt-2" onclick="refreshSessions()">🔄 刷新</button>
+    <small class="text-muted ms-2">共 <strong id="sessionCount">0</strong> 个会话</small>
+    <a href="/dashboard" class="btn btn-outline-secondary btn-sm mt-2 ms-2">← 返回</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+var autoRefresh;
+
+function refreshSessions() {
+    fetch('/api/admin/sessions', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var tbody = document.getElementById('sessionsBody');
+            if (!data.ok || !data.sessions) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">加载失败</td></tr>';
+                return;
+            }
+            document.getElementById('sessionCount').textContent = data.sessions.length;
+            if (data.sessions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无活跃会话</td></tr>';
+                return;
+            }
+            var currentUser = '{{ session.username }}';
+            tbody.innerHTML = data.sessions.map(function(s) {
+                var badge = s.idle_seconds < 120 
+                    ? '<span class="badge bg-success">在线</span>' 
+                    : (s.idle_seconds < 600 
+                        ? '<span class="badge bg-warning text-dark">空闲</span>' 
+                        : '<span class="badge bg-secondary">离开</span>');
+                var ua = s.user_agent.length > 40 ? s.user_agent.substring(0, 40) + '...' : s.user_agent;
+                var isSelf = s.username === currentUser;
+                var kickBtn = isSelf 
+                    ? '<button class="btn btn-sm btn-outline-secondary" disabled>自己</button>'
+                    : '<button class="btn btn-sm btn-outline-danger" onclick="kickSession(\'' + s.session_key + '\', \'' + s.username + '\')">踢出</button>';
+                return '<tr>' +
+                    '<td><strong>' + s.username + '</strong> ' + badge + '</td>' +
+                    '<td><code>' + s.ip + '</code></td>' +
+                    '<td><small class="text-muted">' + (ua || '-') + '</small></td>' +
+                    '<td>' + s.login_time + '</td>' +
+                    '<td>' + s.last_activity + '</td>' +
+                    '<td>' + s.idle_str + '</td>' +
+                    '<td>' + kickBtn + '</td>' +
+                    '</tr>';
+            }).join('');
+        })
+        .catch(function() {
+            document.getElementById('sessionsBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger">网络错误</td></tr>';
+        });
+}
+
+function kickSession(sessionKey, username) {
+    if (!confirm('确定要踢出用户 ' + username + ' 吗？\n该用户下次请求时将被强制退出登录。')) return;
+    fetch('/api/admin/sessions/kick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_key: sessionKey }),
+        credentials: 'same-origin'
+    }).then(function(r) { return r.json(); })
+      .then(function(data) {
+          alert(data.message || data.error);
+          refreshSessions();
+      })
+      .catch(function() {
+          alert('操作失败，请重试');
+      });
+}
+
+refreshSessions();
+autoRefresh = setInterval(refreshSessions, 30000);
+
+window.addEventListener('beforeunload', function() {
+    clearInterval(autoRefresh);
+});
+</script>
+{% endblock %}

@@ -379,6 +379,52 @@
     </script>
     {% endif %}
     <script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    {% if session.username %}
+    <!-- 多用户同时在线：心跳保持会话活跃 -->
+    <script nonce="{{ csp_nonce }}">
+    (function() {
+        'use strict';
+        var csrfToken = '{{ session.csrf_token }}';
+        var heartbeatTimer;
+        
+        function sendHeartbeat() {
+            fetch('/api/heartbeat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                credentials: 'same-origin'
+            }).then(function(r) { return r.json(); })
+              .then(function(data) {
+                  if (data.ok) {
+                      var el = document.getElementById('online-count');
+                      if (el && data.online_count !== undefined) {
+                          el.textContent = data.online_count;
+                      }
+                  }
+              }).catch(function(){});
+        }
+        
+        // 页面可见时发心跳，切后台时暂停
+        function startHeartbeat() {
+            sendHeartbeat();
+            heartbeatTimer = setInterval(sendHeartbeat, 60000); // 60 秒一次
+        }
+        function stopHeartbeat() {
+            if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+        }
+        
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) { startHeartbeat(); }
+            else { stopHeartbeat(); }
+        });
+        
+        // 初始延迟 10 秒后开始
+        setTimeout(startHeartbeat, 10000);
+    })();
+    </script>
+    {% endif %}
     {% block scripts %}{% endblock %}
 </body>
 </html>

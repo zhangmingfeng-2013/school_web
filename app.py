@@ -42,6 +42,7 @@ from flask import (
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
+import session_manager
 
 
 def safe_check_password_hash(pwhash: str, password: str) -> bool:
@@ -194,7 +195,9 @@ app.config.update(
 _BLOCKED_UAS = [
     "sqlmap", "nikto", "nessus", "nmap", "acunetix", "burpsuite",
     "dirbuster", "openvas", "hydra", "amass", "gobuster", "wpscan",
-    "zgrab", "masscan", "whatweb", "httprint", "jaeles"
+    "zgrab", "masscan", "whatweb", "httprint", "jaeles", "zaproxy",
+    "davtest", "wfuzz", "sqlint", "sqlworm", "sqlquery", "sqlmapper",
+    "wapiti", "skipfish", "nmap", "zenmap", "w3af", "dirb", "nuclei"
 ]
 
 
@@ -297,6 +300,7 @@ def _init_db_once():
         _init_announcement_table()
         _init_life_tables()
         _init_forum_tables()
+        _init_session_tables()
         _init_db_done = True
 
 
@@ -692,7 +696,7 @@ login_lockout = {}  # {username: (attempts, lockout_until)}
 
 rate_lock = threading.Lock()
 
-# ---------- IP 会话超时（2分钟无动作自动登出） ----------
+# ---------- IP 会话超时（已由 session_manager 数据库追踪替代，保留作为兜底） ----------
 SESSION_IDLE_TIMEOUT = 1800  # 秒（30 分钟空闲超时）
 ip_last_active = {}         # {ip: last_activity_timestamp}
 session_lock = threading.Lock()
@@ -780,8 +784,52 @@ def check_session_idle_timeout():
     return None
 
 
+# ---------- 多用户同时在线：会话追踪 before_request ----------
+
+@app.before_request
+def assign_session_key():
+    """为每个浏览器会话分配唯一 session_key"""
+    if "session_key" not in session:
+        session["session_key"] = uuid.uuid4().hex
+
+
+@app.before_request
+def track_session_activity():
+    """每次请求更新数据库中的会话活跃时间"""
+    if "username" not in session:
+        return None
+    path = request.path
+    if path.startswith("/static/") or path.startswith("/assets/") or path == "/api/heartbeat":
+        return None
+    
+    session_key = session.get("session_key")
+    username = session.get("username")
+    ip = request.remote_addr or "0.0.0.0"
+    
+    if session_key and username:
+        session_manager.update_activity(session_key, username, ip)
+
+
+@app.before_request
+def check_kicked():
+    """检查当前会话是否被管理员踢出"""
+    if "username" not in session:
+        return None
+    path = request.path
+    if path in ("/", "/login", "/register", "/logout"):
+        return None
+    if path.startswith("/static/") or path.startswith("/assets/"):
+        return None
+    
+    session_key = session.get("session_key")
+    if session_key and not session_manager.is_session_valid(session_key):
+        session.clear()
+        flash("您的会话已被管理员终止", "warning")
+        return redirect(url_for("login"))
+
+
 # ---------- 全站验证码门禁 ----------
-CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/dashboard", "/admin", "/admin/reset_requests", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/src/rules", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
+CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/api/heartbeat", "/api/online_users", "/dashboard", "/admin", "/admin/sessions", "/admin/reset_requests", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/src/rules", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
 CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements")
 
 @app.before_request
@@ -1318,6 +1366,14 @@ def login():
                     session["username"] = username
                     session["permission"] = result[1]
                     session["csrf_token"] = os.urandom(32).hex()
+                    # 注册数据库会话（多用户同时在线追踪）
+                    session["session_key"] = uuid.uuid4().hex
+                    session_manager.register_session(
+                        session_key=session["session_key"],
+                        username=username,
+                        ip=client_ip,
+                        user_agent=request.headers.get("User-Agent", "")[:500]
+                    )
                     # 如果密码是明文匹配的，升级为 hash
                     if result[0] == password:
                         hashed = generate_password_hash(password)
@@ -1447,6 +1503,13 @@ def logout():
                                csrf_token=session.get("csrf_token", ""))
     # POST 请求：执行登出
     ip = request.remote_addr or "0.0.0.0"
+    # 标记数据库会话为非活跃
+    session_manager.logout_session(
+        session_key=session.get("session_key", ""),
+        username=session.get("username", ""),
+        ip=ip,
+        reason="logout"
+    )
     with session_lock:
         ip_last_active.pop(ip, None)
     session.clear()
@@ -2494,6 +2557,78 @@ def api_system_users():
         "total_blocked": len([u for u in users if u["blocked"]]),
         "total_whitelisted": len([u for u in users if u["whitelisted"]]),
     })
+
+
+# ---------- 多用户同时在线 API ----------
+
+@app.route("/api/heartbeat", methods=["POST"])
+@login_required
+def api_heartbeat():
+    """前端心跳：保持会话活跃"""
+    ok = session_manager.heartbeat(
+        session_key=session.get("session_key", ""),
+        username=session.get("username", ""),
+        ip=request.remote_addr or "0.0.0.0"
+    )
+    online_count = session_manager.get_online_count()
+    return jsonify({"ok": ok, "online_count": online_count})
+
+
+@app.route("/api/online_users", methods=["GET"])
+@login_required
+def api_online_users():
+    """返回当前在线用户列表（按 username 去重）"""
+    sessions = session_manager.get_active_sessions(include_idle=False)
+    # 同一用户可能有多个 session，取最活跃的那个
+    user_map = {}
+    for s in sessions:
+        u = s["username"]
+        if u not in user_map or s["idle_seconds"] < user_map[u]["idle_seconds"]:
+            user_map[u] = s
+    
+    online_users = sorted(user_map.values(), key=lambda x: x["idle_seconds"])
+    
+    return jsonify({
+        "ok": True,
+        "online_count": len(online_users),
+        "online_users": online_users,
+        "total_sessions": len(sessions),
+    })
+
+
+@app.route("/api/admin/sessions", methods=["GET"])
+@login_required
+@admin_required
+def api_admin_sessions():
+    """管理员查看所有活跃会话"""
+    sessions = session_manager.get_active_sessions(include_idle=True)
+    return jsonify({
+        "ok": True,
+        "sessions": sessions,
+        "total": len(sessions),
+    })
+
+
+@app.route("/api/admin/sessions/kick", methods=["POST"])
+@login_required
+@admin_required
+def api_admin_kick_session():
+    """管理员强制踢出用户会话"""
+    data = request.get_json(silent=True) or {}
+    session_key = data.get("session_key", "").strip()
+    if not session_key:
+        return jsonify({"ok": False, "error": "缺少 session_key"}), 400
+    
+    ok, msg = session_manager.kick_session(session_key, session.get("username", ""))
+    return jsonify({"ok": ok, "message": msg})
+
+
+@app.route("/admin/sessions")
+@login_required
+@admin_required
+def admin_sessions_page():
+    """管理员会话管理页面"""
+    return render_template("admin_sessions.html")
 
 
 # ---------- 路由：网络工具 ----------
@@ -7784,6 +7919,54 @@ def _init_forum_tables():
             return
 
 
+def _init_session_tables():
+    """多用户同时在线 — 会话追踪表"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                session_key VARCHAR(64) NOT NULL UNIQUE COMMENT 'Flask session 唯一标识',
+                username VARCHAR(50) NOT NULL,
+                ip_address VARCHAR(45) NOT NULL,
+                user_agent VARCHAR(500) DEFAULT '',
+                login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                is_active TINYINT DEFAULT 1,
+                INDEX idx_username (username),
+                INDEX idx_last_activity (last_activity),
+                INDEX idx_is_active (is_active)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS session_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                session_key VARCHAR(64) NOT NULL,
+                username VARCHAR(50) NOT NULL,
+                event_type VARCHAR(20) NOT NULL COMMENT 'login, heartbeat, logout, timeout, kicked',
+                ip_address VARCHAR(45),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_session (session_key),
+                INDEX idx_username (username),
+                INDEX idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        # 兼容旧表：添加 allow_multi_login 列
+        try:
+            cursor.execute("ALTER TABLE user_profiles ADD COLUMN allow_multi_login TINYINT DEFAULT 1")
+            conn.commit()
+        except Exception:
+            pass
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"  会话表初始化失败: {e}")
+
+
 def _init_confession_tables():
     """匿名树洞表"""
     global _confession_tables_done
@@ -11228,6 +11411,14 @@ def api_login():
                 session["username"] = username
                 session["permission"] = result[1]
                 session["csrf_token"] = os.urandom(32).hex()
+                # 注册数据库会话（多用户同时在线追踪）
+                session["session_key"] = uuid.uuid4().hex
+                session_manager.register_session(
+                    session_key=session["session_key"],
+                    username=username,
+                    ip=client_ip,
+                    user_agent=request.headers.get("User-Agent", "")[:500]
+                )
                 if result[0] == password:
                     # 升级密码为 hash
                     try:
@@ -11431,6 +11622,21 @@ if __name__ == "__main__":
         print(f"  局域网访问: http://192.168.3.160:5800")
     print(f"  调试模式: {'开启' if os.environ.get('FLASK_DEBUG') else '关闭'}")
     print("=" * 50)
+    
+    # 启动后台会话清理线程
+    def _session_cleanup_loop():
+        import threading
+        def _loop():
+            while True:
+                time.sleep(session_manager.CLEANUP_INTERVAL)
+                try:
+                    session_manager.cleanup_expired_sessions()
+                except Exception:
+                    pass
+        t = threading.Thread(target=_loop, daemon=True)
+        t.start()
+    _session_cleanup_loop()
+    
     debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
     _init_plugins()
     

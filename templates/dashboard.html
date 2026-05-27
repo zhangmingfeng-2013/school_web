@@ -6,6 +6,9 @@
     <span class="badge fs-6 {% if permission == 'administrator' %}bg-danger{% elif permission == 'vip' %}bg-warning text-dark{% elif permission == 'guest' %}bg-secondary{% else %}bg-info{% endif %}">
         {{ '🔑 ' + _('dashboard_perm_admin') if permission == 'administrator' else ('⭐ ' + _('dashboard_perm_vip') if permission == 'vip' else ('👤 ' + _('dashboard_perm_guest') if permission == 'guest' else '👤 ' + _('dashboard_perm_user'))) }}
     </span>
+    <div class="mt-2" style="font-size:.85rem;color:#666;">
+        🟢 当前在线：<strong id="online-count">--</strong> 人
+    </div>
 </div>
 
 <!-- 公告栏 -->
@@ -105,6 +108,18 @@
                 <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span style="font-size:2rem;">🛡️</span></div>
                 <h5>{{ _('dashboard_feature_admin') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_admin_desc') }}</p>
+            </div></div>
+        </a>
+    </div>
+    {% endif %}
+
+    {% if permission == 'administrator' %}
+    <div class="col-md-6 col-lg-4">
+        <a href="/admin/sessions" class="text-decoration-none text-dark">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔍</span></div>
+                <h5>会话管理</h5>
+                <p class="text-muted small">查看和管理在线用户会话</p>
             </div></div>
         </a>
     </div>
@@ -744,6 +759,15 @@
 {% endblock %}
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
+// 页面加载时获取在线人数
+fetch('/api/online_users', { credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            document.getElementById('online-count').textContent = data.online_count;
+        }
+    });
+
 function openWebDialog() { new bootstrap.Modal(document.getElementById('webDialog')).show(); }
 function goWeb() {
     var url = document.getElementById('webUrl').value.trim();
