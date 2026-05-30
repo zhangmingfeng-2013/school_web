@@ -207,7 +207,6 @@ body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei
             <template #title><el-icon><Tools/></el-icon><span>工具</span></template>
             <el-menu-item index="/network_tools">🌐 网络工具</el-menu-item>
             <el-menu-item index="/system_monitor">📊 系统监控</el-menu-item>
-            <el-menu-item index="/file_manager">📁 文件管理</el-menu-item>
             <el-menu-item index="/db_query">🗄️ 数据库查询</el-menu-item>
             <el-menu-item index="/converter">🔄 格式转换</el-menu-item>
             <el-menu-item index="/utils">🧰 实用工具</el-menu-item>
@@ -477,7 +476,6 @@ const DashboardPage = {
         {icon:'📡',name:'RSS阅读',desc:'订阅资讯',path:'/rss'},
         {icon:'👤',name:'关于作者',desc:'开发者信息',path:'/author'},
         {icon:'❤️',name:'捐赠支持',desc:'支持开发者',path:'/donate'},
-        {icon:'📁',name:'文件管理',desc:'上传下载',path:'/file_manager'},
         {icon:'📅',name:'日历',desc:'日程管理',path:'/calendar'},
         {icon:'📝',name:'便签',desc:'快速记录',path:'/notes'},
         {icon:'🔖',name:'书签',desc:'收藏链接',path:'/bookmarks'},
@@ -942,7 +940,6 @@ const routes = [
   { path:'/markdown', component:{...PlaceholderPage, props:()=>({title:'📄 Markdown编辑',icon:'📄'})}, meta:{auth:true} },
   { path:'/network_tools', component:NetworkToolsPage, meta:{auth:true} },
   { path:'/system_monitor', component:SystemMonitorPage, meta:{auth:true} },
-  { path:'/file_manager', component:{...PlaceholderPage, props:()=>({title:'📁 文件管理',icon:'📁'})}, meta:{auth:true} },
   { path:'/db_query', component:{...PlaceholderPage, props:()=>({title:'🗄️ 数据库查询',icon:'🗄️'})}, meta:{auth:true} },
   { path:'/converter', component:{...PlaceholderPage, props:()=>({title:'🔄 格式转换',icon:'🔄'})}, meta:{auth:true} },
   { path:'/utils', component:{...PlaceholderPage, props:()=>({title:'🧰 实用工具',icon:'🧰'})}, meta:{auth:true} },

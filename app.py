@@ -828,7 +828,7 @@ def check_kicked():
 
 # ---------- 全站验证码门禁 ----------
 CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/api/heartbeat", "/api/online_users", "/dashboard", "/admin", "/admin/sessions", "/admin/reset_requests", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/src/rules", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/file_manager", "/api/album/", "/api/file/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements")
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/api/album/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements")
 
 @app.before_request
 def check_global_captcha():
@@ -1241,35 +1241,6 @@ def db_captcha_required(f):
         if request.path.startswith("/api/"):
             return jsonify({"error": "需要数据库操作验证"}), 403
         return render_template("db_captcha.html",
-                               username=session["username"],
-                               permission=session["permission"],
-                               csrf_token=session.get("csrf_token", ""))
-    return decorated
-
-
-# ---------- 文件管理器密码二次验证 ----------
-def fm_password_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if session.get("fm_verified"):
-            return f(*args, **kwargs)
-        if request.method == "POST" and request.form.get("fm_password"):
-            pwd = request.form.get("fm_password", "").strip()
-            conn = get_db()
-            if conn:
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT User_Password FROM users WHERE User_Name = %s", (session["username"],))
-                    result = cursor.fetchone()
-                    cursor.close()
-                    conn.close()
-                    if result and safe_check_password_hash(result[0], pwd):
-                        session["fm_verified"] = True
-                        return redirect(request.path)
-                except:
-                    pass
-            flash("密码错误", "danger")
-        return render_template("fm_password.html",
                                username=session["username"],
                                permission=session["permission"],
                                csrf_token=session.get("csrf_token", ""))
@@ -4858,122 +4829,6 @@ def api_translator():
         return jsonify({"error": f"无法连接到 {provider_url}，请检查 API 地址"}), 502
     except Exception as e:
         return jsonify({"error": f"请求失败: {str(e)}"}), 500
-
-
-def _safe_realpath(path):
-    """确保路径是真实路径且不包含 '..' 路径穿越"""
-    path = os.path.realpath(path)
-    # 限制在用户主目录下
-    allowed_base = os.path.realpath(os.path.expanduser("~"))
-    if not path.startswith(allowed_base):
-        return allowed_base
-    return path
-
-
-@app.route("/file_manager", methods=["GET", "POST"])
-@login_required
-@non_guest_required
-@fm_password_required
-def file_manager():
-    current_path = _safe_realpath(request.form.get("path", os.path.expanduser("~")))
-    dirs = []
-    files = []
-    error = ""
-
-    if request.method == "POST" and "go_up" in request.form:
-        parent = os.path.dirname(current_path)
-        current_path = _safe_realpath(parent)
-
-    try:
-        items = os.listdir(current_path)
-        for item in sorted(items):
-            full = os.path.join(current_path, item)
-            if os.path.isdir(full):
-                dirs.append(item)
-            else:
-                try:
-                    size = os.path.getsize(full)
-                    if size < 1024:
-                        size_str = f"{size} B"
-                    elif size < 1024**2:
-                        size_str = f"{size/1024:.1f} KB"
-                    else:
-                        size_str = f"{size/(1024**2):.1f} MB"
-                except:
-                    size_str = "?"
-                files.append({"name": item, "size": size_str})
-    except PermissionError:
-        error = "没有权限访问该目录"
-    except Exception as e:
-        error = str(e)
-
-    return render_template("file_manager.html",
-                           current_path=current_path,
-                           dirs=dirs,
-                           files=files,
-                           error=error,
-                           username=session["username"],
-                           permission=session["permission"])
-
-
-# ---------- 文件管理器 API：上传 ----------
-@app.route("/api/file/upload", methods=["POST"])
-@login_required
-def api_file_upload():
-    target_dir = _safe_realpath(request.form.get("path", os.path.expanduser("~")))
-    if "file" not in request.files:
-        return jsonify({"error": "未选择文件"}), 400
-    f = request.files["file"]
-    if not f.filename:
-        return jsonify({"error": "未选择文件"}), 400
-    # 安全文件名
-    safe_name = re.sub(r"[^\w\-.]", "_", f.filename)
-    if not safe_name:
-        return jsonify({"error": "无效文件名"}), 400
-    # 大小限制 50MB
-    f.seek(0, 2)
-    size = f.tell()
-    f.seek(0)
-    if size > 50 * 1024 * 1024:
-        return jsonify({"error": "文件不能超过50MB"}), 400
-    dest = os.path.join(target_dir, safe_name)
-    try:
-        f.save(dest)
-        write_log("文件管理上传", f"文件: {safe_name}, 路径: {target_dir}, 操作者: {session['username']}")
-        return jsonify({"success": True, "name": safe_name})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ---------- 文件管理器 API：下载（仅管理员） ----------
-@app.route("/api/file/download", methods=["GET"])
-@login_required
-def api_file_download():
-    filepath = _safe_realpath(request.args.get("path", ""))
-    if not os.path.isfile(filepath):
-        return jsonify({"error": "文件不存在"}), 404
-    dir_name = os.path.dirname(filepath)
-    file_name = os.path.basename(filepath)
-    # 确认路径穿越防护
-    if _safe_realpath(filepath) != filepath:
-        return jsonify({"error": "路径非法"}), 403
-    return send_from_directory(dir_name, file_name, as_attachment=True)
-
-
-# ---------- 文件管理器 API：删除（仅管理员） ----------
-@app.route("/api/file/delete", methods=["POST"])
-@login_required
-@admin_required
-def api_file_delete():
-    filepath = _safe_realpath(request.form.get("path", ""))
-    if not os.path.isfile(filepath):
-        return jsonify({"error": "文件不存在"}), 404
-    try:
-        os.remove(filepath)
-        write_log("文件管理删除", f"文件: {filepath}, 操作者: {session['username']}")
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 # ---------- 路由：备忘录 ----------

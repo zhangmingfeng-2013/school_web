@@ -153,23 +153,6 @@
     </div>
     {% endif %}
 
-    <!-- 文件管理器（访客不可用） -->
-    {% if permission != 'guest' %}
-    <div class="col-md-6 col-lg-4">
-        <a href="{{ url_for('file_manager') }}" class="text-decoration-none text-dark">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <div class="feature-icon bg-warning bg-opacity-10 mx-auto">
-                        <span style="font-size:2rem;">📁</span>
-                    </div>
-                    <h5>文件管理器</h5>
-                    <p class="text-muted small">浏览 Mac Mini 文件目录</p>
-                </div>
-            </div>
-        </a>
-    </div>
-    {% endif %}
-
     <!-- 查询数据库（非访客） -->
     {% if permission != 'guest' %}
     <div class="col-md-6 col-lg-4">

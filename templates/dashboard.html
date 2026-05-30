@@ -151,18 +151,6 @@
 
     {% if permission != 'guest' %}
     <div class="col-md-6 col-lg-4">
-        <a href="{{ url_for('file_manager') }}" class="text-decoration-none text-dark">
-            <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span style="font-size:2rem;">📁</span></div>
-                <h5>{{ _('dashboard_feature_files') }}</h5>
-                <p class="text-muted small">{{ _('dashboard_feature_files_desc') }}</p>
-            </div></div>
-        </a>
-    </div>
-    {% endif %}
-
-    {% if permission != 'guest' %}
-    <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('db_query') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
                 <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">🗄️</span></div>
