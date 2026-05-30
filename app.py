@@ -25,13 +25,11 @@ import calendar as cal_mod
 import socket as sock
 import time as _time
 import random as _captcha_random
-import random as _random
 from importlib.metadata import version as pkg_version
 from collections import deque
-import subprocess, shlex
+import subprocess
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from flask import (
