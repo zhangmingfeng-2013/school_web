@@ -296,6 +296,7 @@ def _init_db_once():
         _init_marketplace_table()
         _init_src_table()
         _init_announcement_table()
+        _init_complaints_table()
         _init_life_tables()
         _init_forum_tables()
         _init_session_tables()
@@ -480,6 +481,32 @@ def _init_announcement_table():
                 content TEXT NOT NULL,
                 created_by VARCHAR(50) NOT NULL,
                 is_active TINYINT DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except pymysql.MySQLError:
+        pass
+
+
+def _init_complaints_table():
+    """确保 complaints 表存在 — 投诉建议箱"""
+    conn = get_db()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS complaints (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                content TEXT NOT NULL,
+                is_read TINYINT DEFAULT 0,
+                reply TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -828,7 +855,7 @@ def check_kicked():
 
 # ---------- 全站验证码门禁 ----------
 CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/api/heartbeat", "/api/online_users", "/dashboard", "/admin", "/admin/sessions", "/admin/reset_requests", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/src/rules", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/api/album/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements")
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/api/album/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements", "/api/complaint/", "/api/forum/", "/api/backup/", "/api/checkin", "/api/pet/", "/api/study/", "/api/pomodoro/", "/api/portal/", "/api/translator", "/api/pdf/", "/api/confession/", "/api/alumni/", "/api/auth/")
 
 @app.before_request
 def check_global_captcha():
@@ -840,6 +867,9 @@ def check_global_captcha():
     if session.get("global_captcha_verified"):
         return None
     if request.method == "POST" and request.form.get("captcha"):
+        # 确保验证码存在再验证（防止多标签页竞争消耗导致空码）
+        if not session.get("captcha_code"):
+            _generate_captcha()
         ok, err_msg = _verify_captcha(request.form.get("captcha", ""))
         if ok:
             session["global_captcha_verified"] = True
@@ -10623,6 +10653,159 @@ def api_announcements_delete(aid):
         cursor.execute("UPDATE dashboard_announcements SET is_active=0 WHERE id=%s", (aid,))
         conn.commit(); cursor.close(); conn.close()
         return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ==============================================================
+# ====== 投诉建议箱 ======
+# ==============================================================
+
+@app.route("/api/complaint/submit", methods=["POST"])
+@login_required
+def api_complaint_submit():
+    """提交投诉建议"""
+    _init_complaints_table()
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    content = (data.get("content") or "").strip()
+    if not title or not content:
+        return jsonify({"ok": False, "error": "标题和内容不能为空"}), 400
+    if len(title) > 200:
+        return jsonify({"ok": False, "error": "标题不能超过200字"}), 400
+    if len(content) > 5000:
+        return jsonify({"ok": False, "error": "内容不能超过5000字"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO complaints (username, title, content) VALUES (%s, %s, %s)",
+            (session["username"], title, content)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True, "message": "投诉已提交，管理员将尽快处理"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/complaint/list", methods=["GET"])
+@login_required
+def api_complaint_list():
+    """查看投诉列表（仅管理员）"""
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可查看"}), 403
+    _init_complaints_table()
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        cursor.execute(
+            "SELECT id, username, title, content, is_read, reply, status, created_at "
+            "FROM complaints ORDER BY created_at DESC"
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        for r in rows:
+            r["created_at"] = str(r["created_at"]) if r["created_at"] else ""
+        return jsonify({"ok": True, "complaints": rows, "total": len(rows)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/complaint/my", methods=["GET"])
+@login_required
+def api_complaint_my():
+    """查看自己的投诉及管理员回复"""
+    _init_complaints_table()
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        cursor.execute(
+            "SELECT id, title, content, is_read, reply, status, created_at "
+            "FROM complaints WHERE username=%s ORDER BY created_at DESC",
+            (session["username"],)
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        for r in rows:
+            r["created_at"] = str(r["created_at"]) if r["created_at"] else ""
+        return jsonify({"ok": True, "complaints": rows, "total": len(rows)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/complaint/read/<int:cid>", methods=["POST"])
+@login_required
+def api_complaint_mark_read(cid):
+    """标记投诉为已读（仅管理员）"""
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE complaints SET is_read=1 WHERE id=%s", (cid,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/complaint/delete/<int:cid>", methods=["DELETE"])
+@login_required
+def api_complaint_delete(cid):
+    """删除投诉（仅管理员）"""
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM complaints WHERE id=%s", (cid,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True, "message": "已删除"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/complaint/reply/<int:cid>", methods=["POST"])
+@login_required
+def api_complaint_reply(cid):
+    """回复投诉（仅管理员）"""
+    if session.get("permission") != "administrator":
+        return jsonify({"ok": False, "error": "仅管理员可操作"}), 403
+    data = request.get_json(silent=True) or {}
+    reply = (data.get("reply") or "").strip()
+    if not reply:
+        return jsonify({"ok": False, "error": "回复内容不能为空"}), 400
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE complaints SET reply=%s, status='replied' WHERE id=%s",
+            (reply, cid)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"ok": True, "message": "回复成功"})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 

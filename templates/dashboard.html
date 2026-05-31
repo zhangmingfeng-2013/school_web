@@ -27,6 +27,24 @@
     </div>
 </div>
 
+<!-- 投诉建议箱 -->
+<div class="card mt-4" style="border:2px solid #e74c3c;box-shadow:0 4px 24px rgba(231,76,60,.12);">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h4 class="mb-1 text-danger" style="font-weight:700;">📬 投诉建议箱</h4>
+                <p class="text-muted mb-0" style="font-size:.85rem;">你的声音很重要 — 提交意见、建议或投诉，管理员将认真对待每一条反馈</p>
+            </div>
+            <div class="d-flex gap-2">
+                {% if permission == 'administrator' %}
+                <button class="btn btn-outline-danger" data-csp-click="openComplaintInbox">📋 查看信箱</button>
+                {% endif %}
+                <button class="btn btn-danger" data-csp-click="openComplaintModal">✏️ 提交反馈</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if leaderboard %}
 <div class="card mt-4" style="border:none;box-shadow:0 4px 24px rgba(0,0,0,.08);">
     <div class="card-body">
@@ -1096,6 +1114,371 @@ document.getElementById('announceManageList').addEventListener('click', function
     deleteAnnounce(parseInt(btn.getAttribute('data-aid')));
 });
 </script>
+
+<!-- 投诉提交模态框 -->
+<div class="modal fade" id="complaintModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title" id="complaintModalTitle">📬 提交投诉建议</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <!-- 提交表单视图 -->
+            <div id="complaintFormView">
+                <!-- 投诉提交守则 -->
+                <div class="alert alert-info">
+                    <strong>📋 投诉提交守则</strong>
+                    <ul class="mb-0 mt-1" style="font-size:.9rem;">
+                        <li>请如实描述问题，提供必要的时间、地点等细节信息</li>
+                        <li>禁止恶意投诉、虚假举报或人身攻击</li>
+                        <li>投诉内容将严格保密，仅管理员可见</li>
+                        <li>管理员将在 3 个工作日内给予回复</li>
+                        <li>重复提交相同问题将延迟处理时间</li>
+                        <li>提交即表示同意以上条款</li>
+                    </ul>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">投诉标题 <span class="text-danger">*</span></label>
+                    <input type="text" id="complaintTitle" class="form-control" placeholder="简要概括你的问题..." maxlength="200">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">详细描述 <span class="text-danger">*</span></label>
+                    <textarea id="complaintContent" class="form-control" rows="6" placeholder="请详细描述你的投诉或建议内容..." maxlength="5000"></textarea>
+                    <div class="text-muted text-end mt-1"><span id="complaintCharCount">0</span>/5000</div>
+                </div>
+                <div id="complaintSubmitStatus"></div>
+            </div>
+            <!-- 我的投诉视图 -->
+            <div id="complaintMyView" style="display:none;">
+                <div id="complaintMyList" style="max-height:55vh;overflow-y:auto;">
+                    <div class="text-center text-muted py-4">加载中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" id="complaintFormFooter">
+            <button type="button" class="btn btn-outline-info me-auto" data-csp-click="showMyComplaints">📋 我的投诉</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-danger" data-csp-click="submitComplaint">提交</button>
+        </div>
+        <div class="modal-footer" id="complaintMyFooter" style="display:none;">
+            <button type="button" class="btn btn-outline-danger me-auto" data-csp-click="showComplaintForm">✏️ 新建投诉</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+    </div></div>
+</div>
+
+<!-- 投诉信箱模态框（仅管理员） -->
+<div class="modal fade" id="complaintInboxModal" tabindex="-1">
+    <div class="modal-dialog modal-xl"><div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title">📋 投诉建议箱 — 管理员视图</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <!-- 投诉列表视图 -->
+            <div id="complaintListView">
+                <div class="mb-2">
+                    <span class="badge bg-secondary" id="complaintTotal">0</span> 条投诉
+                    <span class="badge bg-warning ms-2" id="complaintUnread">0</span> 条未读
+                </div>
+                <div id="complaintInboxList" style="max-height:60vh;overflow-y:auto;">
+                    <div class="text-center text-muted py-4">加载中...</div>
+                </div>
+            </div>
+            <!-- 内联回复表单 -->
+            <div id="complaintReplyView" style="display:none;">
+                <button class="btn btn-sm btn-outline-secondary mb-3" data-csp-click="backToComplaintList">← 返回列表</button>
+                <div class="mb-2 p-3 bg-light rounded">
+                    <strong id="replyComplaintTitle"></strong>
+                    <p class="mb-0 text-muted small" id="replyComplaintContent"></p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">回复内容</label>
+                    <textarea id="complaintReplyInput" class="form-control" rows="4" placeholder="输入回复..."></textarea>
+                </div>
+                <div id="complaintReplyStatus"></div>
+                <div class="mt-2">
+                    <input type="hidden" id="replyComplaintId" value="">
+                    <button class="btn btn-info text-white" data-csp-click="submitComplaintReply">💬 发送回复</button>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" id="complaintInboxFooter">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            <button type="button" class="btn btn-outline-danger" data-csp-click="refreshComplaintInbox">🔄 刷新</button>
+        </div>
+    </div></div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+// 投诉建议功能
+function openComplaintModal() {
+    // 重置为提交表单视图
+    document.getElementById('complaintModalTitle').textContent = '📬 提交投诉建议';
+    document.getElementById('complaintFormView').style.display = '';
+    document.getElementById('complaintFormFooter').style.display = '';
+    document.getElementById('complaintMyView').style.display = 'none';
+    document.getElementById('complaintMyFooter').style.display = 'none';
+    document.getElementById('complaintTitle').value = '';
+    document.getElementById('complaintContent').value = '';
+    document.getElementById('complaintCharCount').textContent = '0';
+    document.getElementById('complaintSubmitStatus').innerHTML = '';
+    var el = document.getElementById('complaintModal');
+    var modal = bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el);
+    modal.show();
+}
+
+// 字数统计
+document.getElementById('complaintContent').addEventListener('input', function() {
+    document.getElementById('complaintCharCount').textContent = this.value.length;
+});
+
+function submitComplaint() {
+    var title = document.getElementById('complaintTitle').value.trim();
+    var content = document.getElementById('complaintContent').value.trim();
+    var statusEl = document.getElementById('complaintSubmitStatus');
+
+    if (!title) { statusEl.innerHTML = '<div class="alert alert-danger py-1">请输入投诉标题</div>'; return; }
+    if (!content) { statusEl.innerHTML = '<div class="alert alert-danger py-1">请输入投诉内容</div>'; return; }
+
+    statusEl.innerHTML = '<div class="alert alert-info py-1">提交中...</div>';
+    fetch('/api/complaint/submit', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: title, content: content})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            statusEl.innerHTML = '<div class="alert alert-success py-1">✅ ' + data.message + '</div>';
+            document.getElementById('complaintTitle').value = '';
+            document.getElementById('complaintContent').value = '';
+            document.getElementById('complaintCharCount').textContent = '0';
+            setTimeout(function() {
+                var el = document.getElementById('complaintModal');
+                var modal = bootstrap.Modal.getInstance(el);
+                if (modal) modal.hide();
+            }, 1500);
+        } else {
+            statusEl.innerHTML = '<div class="alert alert-danger py-1">❌ ' + (data.error || '提交失败') + '</div>';
+        }
+    })
+    .catch(function(e) {
+        statusEl.innerHTML = '<div class="alert alert-danger py-1">❌ 网络错误: ' + e.message + '</div>';
+    });
+}
+
+function openComplaintInbox() {
+    // 确保回复视图隐藏，列表视图显示
+    backToComplaintList();
+    var modalEl = document.getElementById('complaintInboxModal');
+    var modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modal.show();
+    loadComplaintInbox();
+}
+
+function refreshComplaintInbox() {
+    loadComplaintInbox();
+}
+
+// 我的投诉视图切换
+function showMyComplaints() {
+    document.getElementById('complaintModalTitle').textContent = '📋 我的投诉';
+    document.getElementById('complaintFormView').style.display = 'none';
+    document.getElementById('complaintFormFooter').style.display = 'none';
+    document.getElementById('complaintMyView').style.display = '';
+    document.getElementById('complaintMyFooter').style.display = '';
+    loadMyComplaints();
+}
+
+function showComplaintForm() {
+    document.getElementById('complaintModalTitle').textContent = '📬 提交投诉建议';
+    document.getElementById('complaintMyView').style.display = 'none';
+    document.getElementById('complaintMyFooter').style.display = 'none';
+    document.getElementById('complaintFormView').style.display = '';
+    document.getElementById('complaintFormFooter').style.display = '';
+    document.getElementById('complaintSubmitStatus').innerHTML = '';
+}
+
+function loadMyComplaints() {
+    var listEl = document.getElementById('complaintMyList');
+    listEl.innerHTML = '<div class="text-center text-muted py-4">加载中...</div>';
+    fetch('/api/complaint/my', { credentials: 'include' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.ok) {
+            listEl.innerHTML = '<div class="alert alert-danger">加载失败</div>';
+            return;
+        }
+        if (!data.complaints || !data.complaints.length) {
+            listEl.innerHTML = '<div class="text-center text-muted py-4">📭 你还没有提交过投诉</div>';
+            return;
+        }
+        var html = '';
+        data.complaints.forEach(function(c) {
+            var statusBadge = '';
+            if (c.status === 'pending') statusBadge = '<span class="badge bg-warning">待处理</span>';
+            else if (c.status === 'replied') statusBadge = '<span class="badge bg-success">已回复</span>';
+            html += '<div class="card mb-2">' +
+                '<div class="card-body py-2">' +
+                '<strong>' + escapeHtml(c.title) + '</strong> ' + statusBadge +
+                '<div class="text-muted small">🕐 ' + (c.created_at||'').slice(0,16) + '</div>' +
+                '<div class="mt-1" style="font-size:.9rem;">' + escapeHtml(c.content) + '</div>';
+            if (c.reply) {
+                html += '<div class="mt-1 p-2 bg-light rounded" style="font-size:.85rem;">' +
+                    '<span class="text-info">💬 管理员回复：</span>' + escapeHtml(c.reply) + '</div>';
+            }
+            html += '</div></div>';
+        });
+        listEl.innerHTML = html;
+    })
+    .catch(function(e) {
+        listEl.innerHTML = '<div class="alert alert-danger">网络错误: ' + e.message + '</div>';
+    });
+}
+
+function loadComplaintInbox() {
+    var listEl = document.getElementById('complaintInboxList');
+    listEl.innerHTML = '<div class="text-center text-muted py-4">加载中...</div>';
+    fetch('/api/complaint/list', { credentials: 'include' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.ok) {
+            listEl.innerHTML = '<div class="alert alert-danger">' + (data.error || '加载失败') + '</div>';
+            return;
+        }
+        document.getElementById('complaintTotal').textContent = data.total;
+        var unread = data.complaints.filter(function(c) { return !c.is_read; }).length;
+        document.getElementById('complaintUnread').textContent = unread;
+
+        if (!data.complaints.length) {
+            listEl.innerHTML = '<div class="text-center text-muted py-4">📭 暂无投诉</div>';
+            return;
+        }
+
+        var html = '';
+        data.complaints.forEach(function(c) {
+            var statusBadge = '';
+            if (c.status === 'pending') statusBadge = '<span class="badge bg-warning">待处理</span>';
+            else if (c.status === 'replied') statusBadge = '<span class="badge bg-success">已回复</span>';
+            var readBadge = c.is_read ? '' : '<span class="badge bg-danger ms-1">未读</span>';
+            html += '<div class="card mb-2 complaint-item" style="' + (c.is_read ? '' : 'border-left:3px solid #e74c3c;') + '">' +
+                '<div class="card-body py-2">' +
+                '<div class="d-flex justify-content-between align-items-start">' +
+                '<div class="flex-grow-1">' +
+                '<strong>' + escapeHtml(c.title) + '</strong> ' + statusBadge + ' ' + readBadge +
+                '<div class="text-muted small">👤 ' + escapeHtml(c.username) + ' · 🕐 ' + (c.created_at||'').slice(0,16) + '</div>' +
+                '<div class="mt-1" style="font-size:.9rem;">' + escapeHtml(c.content.slice(0, 200)) + (c.content.length > 200 ? '...' : '') + '</div>';
+            if (c.reply) {
+                html += '<div class="mt-1 p-2 bg-light rounded" style="font-size:.85rem;">' +
+                    '<span class="text-info">💬 管理员回复：</span>' + escapeHtml(c.reply) + '</div>';
+            }
+            html += '</div>' +
+                '<div class="d-flex gap-1 flex-shrink-0">' +
+                (!c.is_read ? '<button class="btn btn-sm btn-outline-secondary complaint-read-btn" data-csp-click="markComplaintRead" data-cid="' + c.id + '">✅ 标为已读</button>' : '') +
+                '<button class="btn btn-sm btn-outline-info complaint-reply-btn" data-csp-click="openComplaintReply" data-cid="' + c.id + '" data-ctitle="' + escapeAttr(c.title) + '" data-ccontent="' + escapeAttr(c.content.slice(0,200)) + '">💬 回复</button>' +
+                '<button class="btn btn-sm btn-outline-danger complaint-delete-btn" data-csp-click="deleteComplaint" data-cid="' + c.id + '">🗑️ 删除</button>' +
+                '</div></div></div></div>';
+        });
+        listEl.innerHTML = html;
+    })
+    .catch(function(e) {
+        listEl.innerHTML = '<div class="alert alert-danger">❌ 网络错误: ' + e.message + '</div>';
+    });
+}
+
+function markComplaintRead(cid) {
+    fetch('/api/complaint/read/' + cid, { method: 'POST', credentials: 'include' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) loadComplaintInbox();
+    });
+}
+
+function deleteComplaint(cid) {
+    if (!confirm('确定要删除这条投诉吗？')) return;
+    fetch('/api/complaint/delete/' + cid, { method: 'DELETE', credentials: 'include' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) loadComplaintInbox();
+        else alert(data.error || '删除失败');
+    });
+}
+
+function openComplaintReply(cid, title, content) {
+    document.getElementById('replyComplaintId').value = cid;
+    document.getElementById('replyComplaintTitle').textContent = '📌 ' + title;
+    document.getElementById('replyComplaintContent').textContent = content;
+    document.getElementById('complaintReplyInput').value = '';
+    document.getElementById('complaintReplyStatus').innerHTML = '';
+    // 切换到内联回复视图
+    document.getElementById('complaintListView').style.display = 'none';
+    document.getElementById('complaintInboxFooter').style.display = 'none';
+    document.getElementById('complaintReplyView').style.display = '';
+}
+
+function backToComplaintList() {
+    document.getElementById('complaintReplyView').style.display = 'none';
+    document.getElementById('complaintListView').style.display = '';
+    document.getElementById('complaintInboxFooter').style.display = '';
+}
+
+function submitComplaintReply() {
+    var cid = document.getElementById('replyComplaintId').value;
+    var reply = document.getElementById('complaintReplyInput').value.trim();
+    var statusEl = document.getElementById('complaintReplyStatus');
+    if (!reply) { statusEl.innerHTML = '<div class="alert alert-danger py-1">请输入回复内容</div>'; return; }
+    statusEl.innerHTML = '<div class="alert alert-info py-1">提交中...</div>';
+    fetch('/api/complaint/reply/' + cid, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reply: reply})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            statusEl.innerHTML = '<div class="alert alert-success py-1">✅ 回复成功</div>';
+            setTimeout(function() {
+                backToComplaintList();
+                loadComplaintInbox();
+            }, 1000);
+        } else {
+            statusEl.innerHTML = '<div class="alert alert-danger py-1">❌ ' + (data.error || '回复失败') + '</div>';
+        }
+    });
+}
+
+// escapeAttr for HTML attribute values
+function escapeAttr(s) {
+    return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// escapeJsStr for inline strings
+function escapeJsStr(s) {
+    return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/\n/g,'\\n').replace(/\r/g,'\\r');
+}
+
+// Boot complaint card click handlers
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-csp-click]');
+    if (!btn) return;
+    var action = btn.getAttribute('data-csp-click');
+    if (action === 'openComplaintModal') openComplaintModal();
+    else if (action === 'openComplaintInbox') openComplaintInbox();
+    else if (action === 'refreshComplaintInbox') refreshComplaintInbox();
+    else if (action === 'submitComplaint') submitComplaint();
+    else if (action === 'submitComplaintReply') submitComplaintReply();
+    else if (action === 'backToComplaintList') backToComplaintList();
+    else if (action === 'showMyComplaints') showMyComplaints();
+    else if (action === 'showComplaintForm') showComplaintForm();
+    else if (action === 'markComplaintRead') markComplaintRead(parseInt(btn.getAttribute('data-cid')));
+    else if (action === 'openComplaintReply') openComplaintReply(parseInt(btn.getAttribute('data-cid')), btn.getAttribute('data-ctitle') || '', btn.getAttribute('data-ccontent') || '');
+    else if (action === 'deleteComplaint') deleteComplaint(parseInt(btn.getAttribute('data-cid')));
+});
+</script>
+
 <div class="modal fade" id="adminReqModal" tabindex="-1">
     <div class="modal-dialog modal-lg"><div class="modal-content">
         <div class="modal-header"><h5 class="modal-title">📋 Admin Review</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
