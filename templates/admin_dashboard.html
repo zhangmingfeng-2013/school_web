@@ -106,6 +106,7 @@
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-cybermap">🌍 网络请求地图</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-plugins">🧩 插件管理</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-marketplace">🏪 {{ _('market_title') }}</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-rules">📋 管理员守则</a></li>
     <li class="nav-item"><a class="nav-link" href="/backup">💾 数据备份</a></li>
 </ul>
 
@@ -1400,4 +1401,57 @@ async function editMarketPlugin(id, name, desc, version, author, icon) {
     }
 }
 </script>
+
+<!-- Tab: 管理员守则 -->
+<div class="tab-pane fade" id="tab-rules">
+    <div class="card">
+        <div class="card-header bg-danger bg-opacity-10">
+            <span class="fw-bold">📋 管理员守则与责任</span>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <strong>⚠️ 重要提示：</strong>管理员权限意味着责任。请仔细阅读并遵守以下守则。
+            </div>
+
+            <h5 class="text-danger mt-3">一、基本职责</h5>
+            <ul class="list-group list-group-flush mb-3">
+                <li class="list-group-item">1. 维护网站正常运营，确保服务稳定可用</li>
+                <li class="list-group-item">2. 定期检查系统安全状况，及时发现和报告异常</li>
+                <li class="list-group-item">3. 监控用户行为，防止滥用和违规内容</li>
+                <li class="list-group-item">4. 妥善处理用户反馈和投诉</li>
+                <li class="list-group-item">5. 定期备份重要数据，保障数据安全</li>
+            </ul>
+
+            <h5 class="text-danger mt-4">二、权限规范</h5>
+            <ul class="list-group list-group-flush mb-3">
+                <li class="list-group-item">1. 不得滥用管理权限侵犯用户隐私</li>
+                <li class="list-group-item">2. 未经授权不得修改其他用户的账号信息</li>
+                <li class="list-group-item">3. IP 封禁应有理有据，不得随意封禁</li>
+                <li class="list-group-item">4. 管理操作需记录日志，做到可追溯</li>
+                <li class="list-group-item">5. 不得将管理账号借予他人使用</li>
+            </ul>
+
+            <h5 class="text-danger mt-4">三、安全要求</h5>
+            <ul class="list-group list-group-flush mb-3">
+                <li class="list-group-item">1. 使用强密码，定期更换管理员密码</li>
+                <li class="list-group-item">2. 关注系统安全更新，及时修复漏洞</li>
+                <li class="list-group-item">3. 不在不安全的网络环境下登录管理后台</li>
+                <li class="list-group-item">4. 离开时及时退出管理后台</li>
+                <li class="list-group-item">5. 发现安全漏洞立即报告并修复</li>
+            </ul>
+
+            <h5 class="text-danger mt-4">四、违规处理</h5>
+            <ul class="list-group list-group-flush mb-3">
+                <li class="list-group-item">1. 违反守则将视情节严重程度给予警告或撤销权限</li>
+                <li class="list-group-item">2. 造成严重后果的将保留追究法律责任的权利</li>
+                <li class="list-group-item">3. 因管理失误导致的数据损失由管理员承担责任</li>
+            </ul>
+
+            <div class="text-muted mt-4 pt-3 border-top text-center">
+                <small>本守则自 2026年5月31日 起生效 · 由系统管理员维护更新</small>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
