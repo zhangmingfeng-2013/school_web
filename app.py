@@ -721,10 +721,8 @@ login_lockout = {}  # {username: (attempts, lockout_until)}
 
 rate_lock = threading.Lock()
 
-# ---------- IP 会话超时（已由 session_manager 数据库追踪替代，保留作为兜底） ----------
+# ---------- 多用户在线会话超时 ----------
 SESSION_IDLE_TIMEOUT = 1800  # 秒（30 分钟空闲超时）
-ip_last_active = {}         # {ip: last_activity_timestamp}
-session_lock = threading.Lock()
 
 @app.before_request
 def check_rate_limit():
@@ -779,33 +777,34 @@ def check_rate_limit():
 
 @app.before_request
 def check_session_idle_timeout():
-    """如果 IP 在 SESSION_IDLE_TIMEOUT 秒内无任何动作，下次请求强制重新登录"""
-    # 排除不需要超时检测的路由
+    """基于会话的时间戳检查空闲超时，多用户同 IP 互不干扰"""
     skip_prefixes = ("/static/", "/assets/", "/favicon.ico", "/share/", "/plugin-market/")
     path = request.path
     if any(path.startswith(p) for p in skip_prefixes):
         return None
-    # 登录/注册/登出 页面是超时后要去的，不检测
     if path in ("/", "/register", "/logout"):
         return None
 
-    ip = request.remote_addr or "0.0.0.0"
+    if "username" not in session:
+        return None
+
     now = time.time()
+    last_request = session.get("_last_request_time", 0)
 
-    with session_lock:
-        # 检查该 IP 是否已超时（仅对已登录用户）
-        if "username" in session:
-            last = ip_last_active.get(ip, 0)
-            if last and (now - last) > SESSION_IDLE_TIMEOUT:
-                # 超时了，清除会话
-                idle_minutes = int((now - last) / 60)
-                session.clear()
-                del ip_last_active[ip]
-                flash(f"由于 {idle_minutes} 分钟未操作，已自动退出登录", "warning")
-                return redirect(url_for("login"))
-            # 更新最后活跃时间
-            ip_last_active[ip] = now
+    if last_request and (now - last_request) > SESSION_IDLE_TIMEOUT:
+        # 超时，标记数据库会话为非活跃并清除
+        idle_minutes = int((now - last_request) / 60)
+        session_manager.logout_session(
+            session_key=session.get("session_key", ""),
+            username=session.get("username", ""),
+            ip=request.remote_addr or "0.0.0.0",
+            reason="timeout"
+        )
+        session.clear()
+        flash(f"由于 {idle_minutes} 分钟未操作，已自动退出登录", "warning")
+        return redirect(url_for("login"))
 
+    session["_last_request_time"] = now
     return None
 
 
@@ -855,7 +854,7 @@ def check_kicked():
 
 # ---------- 全站验证码门禁 ----------
 CAPTCHA_SKIP = {"/", "/register", "/logout", "/forgot_password", "/reset_password", "/calculator", "/calculator/sci", "/calculator/net", "/notes", "/change_password", "/profile", "/author", "/chat", "/api/captcha", "/api/heartbeat", "/api/online_users", "/dashboard", "/admin", "/admin/sessions", "/admin/reset_requests", "/donate", "/calendar", "/network_tools", "/system_monitor", "/db_query", "/db_update", "/marketplace", "/api/marketplace", "/utils", "/api/utils", "/src", "/src/my", "/src/admin", "/src/rules", "/weather", "/expenses", "/habits", "/pomodoro", "/bookmarks", "/converter", "/rss", "/daily_quote", "/games", "/qrcode", "/image_compress", "/api_tester", "/markdown", "/unit_converter", "/text_diff", "/jwt_decoder", "/countdown", "/sql_formatter", "/mock_data", "/random_tools", "/git_cheatsheet", "/password_analyzer", "/file_converter"}
-CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/api/album/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements", "/api/complaint/", "/api/forum/", "/api/backup/", "/api/checkin", "/api/pet/", "/api/study/", "/api/pomodoro/", "/api/portal/", "/api/translator", "/api/pdf/", "/api/confession/", "/api/alumni/", "/api/auth/")
+CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/table/", "/api/album/", "/api/chat/", "/api/leaderboard", "/api/admin/", "/api/admin-", "/api/notifications", "/api/profile/", "/api/avatar", "/api/system", "/api/vip", "/api/lang/", "/api/calendar/", "/api/network/", "/plugin-market/", "/api/utils/", "/api/src/", "/api/weather", "/api/expenses", "/api/habits", "/api/habit_logs", "/api/bookmarks", "/api/converter", "/api/rss/", "/api/daily_quote", "/api/qrcode", "/api/image_compress", "/api/api_tester/", "/api/announcements", "/api/complaint/", "/api/forum/", "/api/backup/", "/api/checkin", "/api/pet/", "/api/study/", "/api/pomodoro/", "/api/portal/", "/api/translator", "/api/pdf/", "/api/confession/", "/api/alumni/", "/api/auth/", "/api/my/")
 
 @app.before_request
 def check_global_captcha():
@@ -1162,17 +1161,48 @@ _SCRIPT_TAG = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL
 _HTML_TAG = re.compile(r"<[^>]+>")
 
 def sanitize_input(text, max_length=1000):
-    """清洗用户输入：去除 HTML/JS 标签，限制长度"""
+    """清洗用户输入：去除 HTML/JS 标签，限制长度，过滤 SQL 危险字符"""
     if not text:
         return ""
     text = str(text).strip()
     text = _SCRIPT_TAG.sub("", text)
     text = _HTML_TAG.sub("", text)
-    return text[:max_length]
+    # 移除 SQL 注释和控制字符（纵深防御，即使查询已参数化）
+    text = text.replace('\x00', '')  # null byte
+    text = text[:max_length]
+    return text
 
 def _mask_cell(col_name, value):
     """直接返回原始值"""
     return str(value) if value is not None else ""
+
+
+def _safe_identifier(name):
+    """安全地清理 SQL 标识符（表名/列名），剥离反引号并校验合法字符。
+    返回清理后的标识符，不合法返回 None。"""
+    if not name or not isinstance(name, str):
+        return None
+    name = name.replace('`', '').strip()
+    # 只允许字母、数字、下划线，且必须以字母或下划线开头
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+        return None
+    return name
+
+
+def _get_valid_columns(conn, table_name):
+    """获取表的合法列名集合（内部先做标识符安全校验）。"""
+    table_name = _safe_identifier(table_name)
+    if not table_name:
+        return set()
+    try:
+        cursor = conn.cursor()
+        # 表名已通过 _safe_identifier 正则校验，安全拼接
+        cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
+        cols = {r[0] for r in cursor.fetchall()}
+        cursor.close()
+        return cols
+    except Exception:
+        return set()
 
 def write_log(action, detail=""):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1362,13 +1392,21 @@ def login():
                 if pwd_valid:
                     # 登录成功：清除失败记录
                     login_lockout.pop(username, None)
+                    # 生成新的 session_key
+                    new_session_key = uuid.uuid4().hex
+                    # 多用户同时在线：检查是否允许
+                    allow_multi = session_manager.get_user_allow_multi_login(username)
+                    if not allow_multi:
+                        # 不允许同时在线，踢出所有旧会话
+                        session_manager.kick_user_sessions(username, except_session_key=new_session_key)
                     session["username"] = username
                     session["permission"] = result[1]
                     session["csrf_token"] = os.urandom(32).hex()
+                    session["_last_request_time"] = time.time()
                     # 注册数据库会话（多用户同时在线追踪）
-                    session["session_key"] = uuid.uuid4().hex
+                    session["session_key"] = new_session_key
                     session_manager.register_session(
-                        session_key=session["session_key"],
+                        session_key=new_session_key,
                         username=username,
                         ip=client_ip,
                         user_agent=request.headers.get("User-Agent", "")[:500]
@@ -1509,8 +1547,6 @@ def logout():
         ip=ip,
         reason="logout"
     )
-    with session_lock:
-        ip_last_active.pop(ip, None)
     session.clear()
     flash("已退出登录", "info")
     return redirect(url_for("login"))
@@ -2495,34 +2531,40 @@ def api_system_info():
 @login_required
 @admin_required
 def api_system_users():
-    """返回当前在线用户及活动信息"""
+    """返回当前在线用户及活动信息（基于数据库会话追踪）"""
     now = time.time()
+    sessions = session_manager.get_active_sessions(include_idle=False)
+    # 按 username 去重，每个用户只显示最活跃的会话
+    user_map = {}
+    for s in sessions:
+        u = s["username"]
+        if u not in user_map or s["idle_seconds"] < user_map[u]["idle_seconds"]:
+            user_map[u] = s
+
     users = []
-    with session_lock:
-        for ip, last_active in list(ip_last_active.items()):
-            idle = int(now - last_active)
-            # 只展示 10 分钟内有活动的
-            if idle > 600:
-                continue
-            blocked = ip in ip_blocked and now < ip_blocked[ip]
-            whitelisted = ip in ip_whitelist
-            manual_blocked = ip in ip_manual_blocked and now < ip_manual_blocked[ip]
+    for username, s in user_map.items():
+        ip = s["ip"]
+        blocked = ip in ip_blocked and now < ip_blocked[ip]
+        whitelisted = ip in ip_whitelist
+        manual_blocked = ip in ip_manual_blocked and now < ip_manual_blocked[ip]
 
-            # 速率统计
-            reqs = 0
-            with rate_lock:
-                if ip in ip_requests:
-                    reqs = len(ip_requests[ip])
+        # 速率统计
+        reqs = 0
+        with rate_lock:
+            if ip in ip_requests:
+                reqs = len(ip_requests[ip])
 
-            users.append({
-                "ip": ip,
-                "idle_seconds": idle,
-                "idle_str": f"{idle}s" if idle < 60 else f"{idle//60}m{idle%60}s",
-                "requests": reqs,
-                "blocked": blocked,
-                "whitelisted": whitelisted,
-                "manual_blocked": manual_blocked,
-            })
+        users.append({
+            "username": username,
+            "ip": ip,
+            "idle_seconds": s["idle_seconds"],
+            "idle_str": s["idle_str"],
+            "login_time": s["login_time"],
+            "requests": reqs,
+            "blocked": blocked,
+            "whitelisted": whitelisted,
+            "manual_blocked": manual_blocked,
+        })
 
     # 数据库中的注册用户统计
     total_users = 0
@@ -2535,10 +2577,10 @@ def api_system_users():
             cursor.execute("SELECT COUNT(*) FROM users")
             row = cursor.fetchone()
             total_users = row[0] if row else 0
-            cursor.execute("SELECT COUNT(*) FROM users WHERE permission='administrator'")
+            cursor.execute("SELECT COUNT(*) FROM users WHERE Access_Permission='administrator'")
             row = cursor.fetchone()
             admin_count = row[0] if row else 0
-            cursor.execute("SELECT COUNT(*) FROM users WHERE permission='vip'")
+            cursor.execute("SELECT COUNT(*) FROM users WHERE Access_Permission='vip'")
             row = cursor.fetchone()
             vip_count = row[0] if row else 0
             cursor.close()
@@ -2628,6 +2670,70 @@ def api_admin_kick_session():
 def admin_sessions_page():
     """管理员会话管理页面"""
     return render_template("admin_sessions.html")
+
+
+# ---------- 多用户在线：普通用户自管理会话 API ----------
+
+@app.route("/api/my/sessions", methods=["GET"])
+@login_required
+def api_my_sessions():
+    """获取当前用户的所有活跃会话"""
+    username = session.get("username", "")
+    sessions = session_manager.get_user_sessions(username)
+    current_key = session.get("session_key", "")
+    return jsonify({
+        "ok": True,
+        "current_session_key": current_key,
+        "sessions": sessions,
+        "total": len(sessions),
+    })
+
+
+@app.route("/api/my/sessions/kick", methods=["POST"])
+@login_required
+def api_my_sessions_kick():
+    """用户自行踢出某个设备（不能踢自己当前设备）"""
+    data = request.get_json(silent=True) or {}
+    session_key = data.get("session_key", "").strip()
+    if not session_key:
+        return jsonify({"ok": False, "error": "缺少 session_key"}), 400
+    current_key = session.get("session_key", "")
+    if session_key == current_key:
+        return jsonify({"ok": False, "error": "不能踢出当前设备，请使用退出登录"}), 400
+    ok, msg = session_manager.end_session(session_key, session.get("username", ""))
+    return jsonify({"ok": ok, "message": msg})
+
+
+@app.route("/api/my/multi_login", methods=["GET", "POST"])
+@login_required
+def api_multi_login_setting():
+    """查询/设置是否允许多设备同时在线"""
+    username = session.get("username", "")
+    if request.method == "GET":
+        allow = session_manager.get_user_allow_multi_login(username)
+        return jsonify({"ok": True, "allow_multi_login": allow})
+    # POST: 切换设置
+    data = request.get_json(silent=True) or {}
+    allow = data.get("allow_multi_login", True)
+    conn = get_db()
+    if not conn:
+        return jsonify({"ok": False, "error": "数据库连接失败"}), 500
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO user_profiles (username, allow_multi_login) VALUES (%s, %s) ON DUPLICATE KEY UPDATE allow_multi_login=%s",
+            (username, int(allow), int(allow))
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        # 如果关闭了多设备登录，踢出所有其他设备
+        if not allow:
+            current_key = session.get("session_key", "")
+            session_manager.kick_user_sessions(username, except_session_key=current_key)
+        return jsonify({"ok": True, "allow_multi_login": bool(allow)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ---------- 路由：网络工具 ----------
@@ -3013,13 +3119,14 @@ def db_query():
             pass
 
     if request.method == "POST":
-        selected_table = request.form.get("table", "")
+        table_raw = request.form.get("table", "")
+        selected_table = _safe_identifier(table_raw)
         if selected_table and selected_table in tables:
             conn = get_db()
             if conn:
                 try:
                     cursor = conn.cursor()
-                    # 使用反引号包裹表名防止注入（并通过白名单校验）
+                    # 表名已通过 _safe_identifier 正则 + SHOW TABLES 白名单双重校验
                     cursor.execute(f"SELECT * FROM `{selected_table}`")
                     columns = [desc[0] for desc in cursor.description] if cursor.description else []
                     raw_data = cursor.fetchall()
@@ -3048,6 +3155,9 @@ def db_query():
 @admin_required
 @db_captcha_required
 def api_table_data(table):
+    table = _safe_identifier(table)
+    if not table:
+        return jsonify({"error": "非法的表名"}), 400
     conn = get_db()
     if not conn:
         return jsonify({"error": "数据库连接失败"}), 500
@@ -3058,6 +3168,7 @@ def api_table_data(table):
         valid_tables = [r[0] for r in cursor.fetchall()]
         if table not in valid_tables:
             return jsonify({"error": "表不存在"}), 404
+        # 表名已通过 _safe_identifier + SHOW TABLES 双重校验
         cursor.execute(f"DESCRIBE `{table}`")
         cols = cursor.fetchall()
         cursor.execute(f"SELECT * FROM `{table}`")
@@ -3085,6 +3196,9 @@ def api_table_data(table):
 @admin_required
 @db_captcha_required
 def api_table_insert(table):
+    table = _safe_identifier(table)
+    if not table:
+        return jsonify({"error": "非法的表名"}), 400
     data = request.get_json()
     if not data:
         return jsonify({"error": "无数据"}), 400
@@ -3093,7 +3207,20 @@ def api_table_insert(table):
         return jsonify({"error": "数据库连接失败"}), 500
     try:
         cursor = conn.cursor()
-        cols = ", ".join(f"`{k}`" for k in data.keys())
+        cursor.execute("SHOW TABLES")
+        valid_tables = [r[0] for r in cursor.fetchall()]
+        if table not in valid_tables:
+            cursor.close()
+            return jsonify({"error": "表不存在"}), 404
+        # 获取合法列名（复用同一连接，先关闭当前 cursor）
+        cursor.close()
+        valid_cols = _get_valid_columns(conn, table)
+        cursor = conn.cursor()
+        invalid = [k for k in data.keys() if _safe_identifier(k) not in valid_cols]
+        if invalid:
+            cursor.close()
+            return jsonify({"error": f"非法列名: {', '.join(invalid)}"}), 400
+        cols = ", ".join(f"`{_safe_identifier(k)}`" for k in data.keys())
         vals = ", ".join("%s" for _ in data)
         sql = f"INSERT INTO `{table}` ({cols}) VALUES ({vals})"
         cursor.execute(sql, list(data.values()))
@@ -3111,6 +3238,9 @@ def api_table_insert(table):
 @admin_required
 @db_captcha_required
 def api_table_update(table):
+    table = _safe_identifier(table)
+    if not table:
+        return jsonify({"error": "非法的表名"}), 400
     data = request.get_json()
     if not data or "pk" not in data or "pk_col" not in data:
         return jsonify({"error": "缺少主键信息"}), 400
@@ -3124,8 +3254,31 @@ def api_table_update(table):
         return jsonify({"error": "数据库连接失败"}), 500
     try:
         cursor = conn.cursor()
-        set_clause = ", ".join(f"`{k}` = %s" for k in fields.keys())
-        sql = f"UPDATE `{table}` SET {set_clause} WHERE `{pk_col}` = %s"
+        cursor.execute("SHOW TABLES")
+        valid_tables = [r[0] for r in cursor.fetchall()]
+        if table not in valid_tables:
+            cursor.close()
+            return jsonify({"error": "表不存在"}), 404
+        cursor.close()
+        valid_cols = _get_valid_columns(conn, table)
+        cursor = conn.cursor()
+        # 校验主键列
+        pk_col_safe = _safe_identifier(pk_col)
+        if not pk_col_safe or pk_col_safe not in valid_cols:
+            return jsonify({"error": f"非法主键列: {pk_col}"}), 400
+        # 校验所有更新列
+        invalid = []
+        safe_fields = {}
+        for k, v in fields.items():
+            k_safe = _safe_identifier(k)
+            if not k_safe or k_safe not in valid_cols:
+                invalid.append(k)
+            else:
+                safe_fields[k_safe] = v
+        if invalid:
+            return jsonify({"error": f"非法列名: {', '.join(invalid)}"}), 400
+        set_clause = ", ".join(f"`{k}` = %s" for k in safe_fields.keys())
+        sql = f"UPDATE `{table}` SET {set_clause} WHERE `{pk_col_safe}` = %s"
         cursor.execute(sql, list(fields.values()) + [pk_val])
         conn.commit()
         cursor.close()
@@ -3141,6 +3294,9 @@ def api_table_update(table):
 @admin_required
 @db_captcha_required
 def api_table_delete(table, pk_val):
+    table = _safe_identifier(table)
+    if not table:
+        return jsonify({"error": "非法的表名"}), 400
     pk_col = request.args.get("pk_col", "")
     if not pk_col:
         return jsonify({"error": "缺少主键字段"}), 400
@@ -3149,7 +3305,19 @@ def api_table_delete(table, pk_val):
         return jsonify({"error": "数据库连接失败"}), 500
     try:
         cursor = conn.cursor()
-        sql = f"DELETE FROM `{table}` WHERE `{pk_col}` = %s"
+        cursor.execute("SHOW TABLES")
+        valid_tables = [r[0] for r in cursor.fetchall()]
+        if table not in valid_tables:
+            cursor.close()
+            return jsonify({"error": "表不存在"}), 404
+        cursor.close()
+        valid_cols = _get_valid_columns(conn, table)
+        cursor = conn.cursor()
+        pk_col_safe = _safe_identifier(pk_col)
+        if not pk_col_safe or pk_col_safe not in valid_cols:
+            cursor.close()
+            return jsonify({"error": f"非法主键列: {pk_col}"}), 400
+        sql = f"DELETE FROM `{table}` WHERE `{pk_col_safe}` = %s"
         cursor.execute(sql, [pk_val])
         conn.commit()
         cursor.close()
@@ -5071,13 +5239,18 @@ def api_admin_ip_stats():
                     "block_remaining": int(blocked_until - now),
                     "block_probes": ip_blocked_probes.get(ip, 0)
                 })
-    with session_lock:
-        for ip, last_active in list(ip_last_active.items()):
-            for r in result:
-                if r["ip"] == ip:
-                    r["last_active"] = datetime.fromtimestamp(last_active).strftime("%H:%M:%S") if last_active else "-"
-                    r["idle_sec"] = int(now - last_active) if last_active else 0
-                    break
+    # 从数据库获取活跃会话的 IP 信息（替代内存 ip_last_active）
+    active_ips = session_manager.get_active_ips()
+    for r in result:
+        ip = r["ip"]
+        if ip in active_ips:
+            last_active = active_ips[ip]
+            try:
+                r["last_active"] = datetime.fromtimestamp(float(last_active)).strftime("%H:%M:%S")
+                r["idle_sec"] = int(now - float(last_active))
+            except (TypeError, ValueError):
+                r["last_active"] = "-"
+                r["idle_sec"] = 0
     result.sort(key=lambda x: x["requests"], reverse=True)
     # 标记白名单和手动封禁
     for r in result:
@@ -11376,8 +11549,13 @@ def api_forum_notifications_read():
 def api_logout():
     """JSON API 登出"""
     ip = request.remote_addr or "0.0.0.0"
-    with session_lock:
-        ip_last_active.pop(ip, None)
+    # 标记数据库会话为非活跃
+    session_manager.logout_session(
+        session_key=session.get("session_key", ""),
+        username=session.get("username", ""),
+        ip=ip,
+        reason="api_logout"
+    )
     session.clear()
     return jsonify({"ok": True, "message": "已退出登录"})
 @app.route("/vue3")

@@ -134,7 +134,7 @@ async function fetchUserInfo() {
                 if (u.blocked) badge += '<span class="badge bg-danger ms-1">封</span>';
                 if (u.manual_blocked) badge += '<span class="badge bg-dark ms-1">手动</span>';
                 const c = u.idle_seconds>120?'text-warning':u.idle_seconds>60?'text-muted':'text-success';
-                html += `<div class="d-flex justify-content-between py-1 border-bottom"><div><code style="font-size:12px">${u.ip}</code>${badge}</div><div><small class="${c}">${u.idle_str}</small><small class="ms-1">${u.requests}次</small></div></div>`;
+                html += `<div class="d-flex justify-content-between py-1 border-bottom"><div><strong>${u.username || '?'}</strong> <code style="font-size:11px">${u.ip}</code>${badge}</div><div><small class="${c}">${u.idle_str}</small><small class="ms-1">${u.requests}次</small></div></div>`;
             }
             html += '</div>';
         }
@@ -149,13 +149,13 @@ function renderUserDetail(d) {
     h += `<h6>🌐 在线IP详情 (${d.online_users.length})</h6>`;
     if (!d.online_users.length) { h += '<p class="text-muted text-center py-3">暂无活跃连接</p>'; }
     else {
-        h += '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>IP</th><th>空闲</th><th>请求数</th><th>状态</th></tr></thead><tbody>';
+        h += '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>用户</th><th>IP</th><th>空闲</th><th>请求数</th><th>状态</th></tr></thead><tbody>';
         for (const u of d.online_users) {
             let st = u.whitelisted ? '<span class="badge bg-success">白名单</span>' : '';
             if (u.blocked) st += '<span class="badge bg-danger ms-1">已封禁</span>';
             if (u.manual_blocked) st += '<span class="badge bg-dark ms-1">手动封</span>';
             if (!st) st = '<span class="badge bg-light text-dark">正常</span>';
-            h += `<tr><td><code>${u.ip}</code></td><td>${u.idle_str}</td><td>${u.requests}</td><td>${st}</td></tr>`;
+            h += `<tr><td><strong>${u.username || '?'}</strong></td><td><code>${u.ip}</code></td><td>${u.idle_str}</td><td>${u.requests}</td><td>${st}</td></tr>`;
         }
         h += '</tbody></table></div>';
     }

@@ -274,3 +274,176 @@ def is_session_valid(session_key):
         return bool(row[0])
     except Exception:
         return True
+
+
+def get_session_last_activity(session_key):
+    """获取会话最后活跃时间（用于空闲超时检查）"""
+    conn = _get_conn()
+    if not conn:
+        return None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT last_activity FROM active_sessions WHERE session_key=%s AND is_active=1",
+            (session_key,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+        return None
+    except Exception:
+        return None
+
+
+def get_user_sessions(username):
+    """获取指定用户的所有活跃会话"""
+    conn = _get_conn()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, session_key, username, ip_address, user_agent,
+                   login_time, last_activity,
+                   TIMESTAMPDIFF(SECOND, last_activity, NOW()) AS idle_seconds
+            FROM active_sessions
+            WHERE username=%s AND is_active=1
+            ORDER BY last_activity DESC
+        """, (username,))
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return [
+            {
+                "id": r[0],
+                "session_key": r[1],
+                "username": r[2],
+                "ip": r[3],
+                "user_agent": r[4],
+                "login_time": r[5].strftime("%Y-%m-%d %H:%M:%S") if r[5] else "",
+                "last_activity": r[6].strftime("%Y-%m-%d %H:%M:%S") if r[6] else "",
+                "idle_seconds": r[7],
+                "idle_str": f"{r[7]}s" if r[7] < 60 else f"{r[7]//60}m{r[7]%60}s"
+            }
+            for r in rows
+        ]
+    except Exception:
+        return []
+
+
+def end_session(session_key, username):
+    """用户自行终止某个会话（只能终止自己的）"""
+    conn = _get_conn()
+    if not conn:
+        return False, "数据库连接失败"
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT username FROM active_sessions WHERE session_key=%s AND is_active=1",
+            (session_key,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return False, "会话不存在或已离线"
+        if row[0] != username:
+            cursor.close()
+            conn.close()
+            return False, "只能终止自己的会话"
+        cursor.execute(
+            "UPDATE active_sessions SET is_active=0 WHERE session_key=%s",
+            (session_key,)
+        )
+        cursor.execute(
+            "INSERT INTO session_events (session_key, username, event_type, ip_address) VALUES (%s, %s, 'self_end', '')",
+            (session_key, username)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True, "会话已终止"
+    except Exception as e:
+        return False, str(e)
+
+
+def kick_user_sessions(username, except_session_key=None):
+    """踢出用户的所有活跃会话（用于 allow_multi_login=0 时强制单会话）"""
+    conn = _get_conn()
+    if not conn:
+        return
+    try:
+        cursor = conn.cursor()
+        if except_session_key:
+            cursor.execute(
+                "UPDATE active_sessions SET is_active=0 WHERE username=%s AND is_active=1 AND session_key!=%s",
+                (username, except_session_key)
+            )
+        else:
+            cursor.execute(
+                "UPDATE active_sessions SET is_active=0 WHERE username=%s AND is_active=1",
+                (username,)
+            )
+        kicked = cursor.rowcount
+        if kicked:
+            cursor.execute(
+                "INSERT INTO session_events (session_key, username, event_type, ip_address) VALUES (%s, %s, 'kicked_multi', '')",
+                (except_session_key or '', username)
+            )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        if kicked:
+            print(f"  [多登录限制] 踢出用户 {username} 的 {kicked} 个旧会话")
+    except Exception:
+        pass
+
+
+def get_active_ips():
+    """获取当前活跃的 IP 列表（用于系统监控，替代内存 ip_last_active）"""
+    conn = _get_conn()
+    if not conn:
+        return {}
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT ip_address, MAX(last_activity) AS last_active
+            FROM active_sessions
+            WHERE is_active=1 AND last_activity >= NOW() - INTERVAL %s SECOND
+            GROUP BY ip_address
+        """, (SESSION_IDLE_TIMEOUT,))
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        # 返回 {ip: last_active_timestamp}
+        import datetime as dt
+        result = {}
+        for r in rows:
+            if r[1]:
+                result[r[0]] = r[1].timestamp() if hasattr(r[1], 'timestamp') else r[1]
+        return result
+    except Exception:
+        return {}
+
+
+def get_user_allow_multi_login(username):
+    """查询用户是否允许多设备同时在线"""
+    conn = _get_conn()
+    if not conn:
+        return True  # DB 故障时默认允许
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT allow_multi_login FROM user_profiles WHERE username=%s",
+            (username,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if row and row[0] is not None:
+            return bool(row[0])
+        return True  # 默认允许
+    except Exception:
+        return True

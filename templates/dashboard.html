@@ -7,7 +7,11 @@
         {{ '🔑 ' + _('dashboard_perm_admin') if permission == 'administrator' else ('⭐ ' + _('dashboard_perm_vip') if permission == 'vip' else ('👤 ' + _('dashboard_perm_guest') if permission == 'guest' else '👤 ' + _('dashboard_perm_user'))) }}
     </span>
     <div class="mt-2" style="font-size:.85rem;color:#666;">
-        🟢 当前在线：<strong id="online-count">--</strong> 人
+        {{ _('dashboard_online_count') }}：<strong id="online-count">--</strong> 人
+        <span id="online-users-toggle" style="cursor:pointer;margin-left:8px;color:#3b82f6;font-size:.8rem;" data-csp-click="toggleOnlineUsers">{{ _('device_manager_expand') }}</span>
+        <div id="online-users-list" style="display:none;margin-top:6px;font-size:.8rem;max-height:200px;overflow-y:auto;">
+            <span class="text-muted">{{ _('common_loading') }}</span>
+        </div>
     </div>
 </div>
 
@@ -749,6 +753,17 @@
             </div></div>
         </a>
     </div>
+
+    <!-- 多用户在线：设备管理 -->
+    <div class="col-md-6 col-lg-4">
+        <a href="javascript:void(0)" data-csp-click="showDeviceManager" class="text-decoration-none text-dark">
+            <div class="card h-100" style="border:2px solid rgba(103,194,58,.3)"><div class="card-body text-center">
+                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(103,194,58,.12),rgba(64,158,255,.12))!important;"><span style="font-size:2rem;">📱</span></div>
+                <h5>{{ _('device_manager_title') }}</h5>
+                <p class="text-muted small">{{ _('device_manager_desc') }}</p>
+            </div></div>
+        </a>
+    </div>
 </div>
 
 <!-- 跳转网页弹窗 -->
@@ -766,13 +781,44 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
 // 页面加载时获取在线人数
-fetch('/api/online_users', { credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.ok) {
-            document.getElementById('online-count').textContent = data.online_count;
-        }
-    });
+function refreshOnlineUsers() {
+    fetch('/api/online_users', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                var countEl = document.getElementById('online-count');
+                if (countEl) countEl.textContent = data.online_count;
+                var listEl = document.getElementById('online-users-list');
+                if (listEl && data.online_users && data.online_users.length > 0) {
+                    var isMultiSession = data.total_sessions > data.online_count;
+                    var html = '';
+                    data.online_users.forEach(function(u) {
+                        var idleBadge = u.idle_seconds < 120 ? '🟢' : (u.idle_seconds < 600 ? '🟡' : '🟠');
+                        html += '<div style="padding:2px 0;">' + idleBadge + ' <strong>' + u.username + '</strong>' +
+                            (u.username === '{{ session.username }}' ? ' <span style="color:#999;font-size:.75rem;">' + dmMe + '</span>' : '') +
+                            ' <span style="color:#999;font-size:.7rem;">' + u.idle_str + '</span></div>';
+                    });
+                    if (isMultiSession) {
+                        html += '<div style="font-size:.7rem;color:#999;margin-top:2px;">' + dmSessionsHint.replace('{total}', data.total_sessions) + '</div>';
+                    }
+                    listEl.innerHTML = html;
+                }
+            }
+        });
+}
+function toggleOnlineUsers() {
+    var list = document.getElementById('online-users-list');
+    var toggle = document.getElementById('online-users-toggle');
+    if (list.style.display === 'none') {
+        list.style.display = 'block';
+        toggle.textContent = dmCollapse;
+        refreshOnlineUsers();
+    } else {
+        list.style.display = 'none';
+        toggle.textContent = dmExpand;
+    }
+}
+refreshOnlineUsers();
 
 function openWebDialog() { new bootstrap.Modal(document.getElementById('webDialog')).show(); }
 function goWeb() {
@@ -815,6 +861,95 @@ function reviewAdminReq(id, action) {
         .then(r => r.json()).then(d => { alert(d.message||d.error); location.reload(); }).catch(() => alert('Failed'));
 }
 
+// ====== 多用户在线：设备管理弹窗 ======
+function showDeviceManager() {
+    fetch('/api/my/sessions', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) { alert(sesFetchError); return; }
+            var html = '<div class="table-responsive"><table class="table table-sm table-hover mb-0">';
+            html += '<thead><tr><th>' + dmColDevice + '</th><th>' + dmColIP + '</th><th>' + dmColLogin + '</th><th>' + dmColActivity + '</th><th>' + dmColAction + '</th></tr></thead><tbody>';
+            var currentKey = data.current_session_key;
+            data.sessions.forEach(function(s) {
+                var isCurrent = s.session_key === currentKey;
+                var badge = isCurrent ? '<span class="badge bg-success">' + dmCurrentDevice + '</span>' : (s.idle_seconds < 120 ? '<span class="badge bg-primary">' + dmActive + '</span>' : '<span class="badge bg-warning text-dark">' + dmIdle + '</span>');
+                var ua = s.user_agent ? (s.user_agent.length > 30 ? s.user_agent.substring(0, 30) + '...' : s.user_agent) : dmUnknownUA;
+                var kickBtn = isCurrent
+                    ? '<button class="btn btn-sm btn-outline-secondary" disabled>' + dmCurrentBtn + '</button>'
+                    : '<button class="btn btn-sm btn-outline-danger" data-csp-click="kickMySession" data-csp-args="[\'' + s.session_key + '\', \'' + s.username + '\']">' + dmKick + '</button>';
+                html += '<tr>' +
+                    '<td>' + badge + ' <small>' + ua + '</small></td>' +
+                    '<td><code>' + s.ip + '</code></td>' +
+                    '<td><small>' + s.login_time + '</small></td>' +
+                    '<td><small>' + s.last_activity + ' (' + s.idle_str + ')</small></td>' +
+                    '<td>' + kickBtn + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            // 多设备登录开关
+            fetch('/api/my/multi_login', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(mlData) {
+                    var allowMulti = mlData.allow_multi_login;
+                    html += '<hr class="my-2"><div class="form-check form-switch">';
+                    html += '<input class="form-check-input" type="checkbox" id="multiLoginSwitch" ' + (allowMulti ? 'checked' : '') + ' data-csp-change="toggleMultiLogin">';
+                    html += '<label class="form-check-label" for="multiLoginSwitch"><strong>' + dmMultiLoginSwitch + '</strong></label>';
+                    html += '<div class="text-muted small">' + dmMultiLoginHint + '</div></div>';
+                    showModal(html);
+                });
+        });
+}
+
+function showModal(html) {
+    var modalHtml = '<div class="modal fade" id="deviceModal" tabindex="-1">' +
+        '<div class="modal-dialog modal-lg"><div class="modal-content">' +
+        '<div class="modal-header"><h5 class="modal-title">' + dmModalTitle + '</h5>' +
+        '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>' +
+        '<div class="modal-body">' + html + '</div></div></div></div>';
+    var oldModal = document.getElementById('deviceModal');
+    if (oldModal) oldModal.remove();
+    var div = document.createElement('div');
+    div.id = 'deviceModalContainer';
+    div.innerHTML = modalHtml;
+    document.body.appendChild(div);
+    var modal = new bootstrap.Modal(document.getElementById('deviceModal'));
+    modal.show();
+}
+
+function kickMySession(sessionKey, username) {
+    if (!confirm(sesKickConfirm.replace('{username}', username))) return;
+    fetch('/api/my/sessions/kick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_key: sessionKey }),
+        credentials: 'same-origin'
+    }).then(function(r) { return r.json(); })
+      .then(function(data) {
+          if (data.ok) {
+              var modal = bootstrap.Modal.getInstance(document.getElementById('deviceModal'));
+              if (modal) modal.hide();
+              showDeviceManager();
+          }
+          alert(data.message || data.error);
+      })
+      .catch(function() { alert(sesKickError); });
+}
+
+function toggleMultiLogin(e) {
+    var allowed = this.checked;
+    fetch('/api/my/multi_login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allow_multi_login: allowed }),
+        credentials: 'same-origin'
+    }).then(function(r) { return r.json(); })
+      .then(function(data) {
+          if (!data.ok) { alert(data.error); return; }
+          // 刷新设备列表
+          showDeviceManager();
+      });
+}
+
 // ====== 排行榜实时刷新 ======
 var curUsername = {{ username|tojson }};
 var curPermission = {{ permission|tojson }};
@@ -823,6 +958,29 @@ var rankLabel = {{ _('dashboard_your_rank')|tojson }};
 var rankScoreUnit = {{ _('dashboard_rank_score')|tojson }};
 var adminReqText = {{ _('dashboard_admin_request')|tojson }};
 var loadingText = {{ _('common_loading')|tojson }};
+// 多用户在线 i18n
+var dmExpand = {{ _('device_manager_expand')|tojson }};
+var dmCollapse = {{ _('device_manager_collapse')|tojson }};
+var dmMe = {{ _('device_manager_me')|tojson }};
+var dmSessionsHint = {{ _('device_manager_sessions_hint')|tojson }};
+var dmCurrentDevice = {{ _('device_manager_current_device')|tojson }};
+var dmActive = {{ _('device_manager_active')|tojson }};
+var dmIdle = {{ _('device_manager_idle')|tojson }};
+var dmKick = {{ _('device_manager_kick')|tojson }};
+var dmCurrentBtn = {{ _('device_manager_current_btn')|tojson }};
+var dmUnknownUA = {{ _('device_manager_unknown_ua')|tojson }};
+var dmMultiLoginSwitch = {{ _('device_manager_multi_login_switch')|tojson }};
+var dmMultiLoginHint = {{ _('device_manager_multi_login_hint')|tojson }};
+var dmModalTitle = {{ _('device_manager_modal_title')|tojson }};
+var dmColDevice = {{ _('device_manager_col_device')|tojson }};
+var dmColIP = {{ _('device_manager_col_ip')|tojson }};
+var dmColLogin = {{ _('device_manager_col_login')|tojson }};
+var dmColActivity = {{ _('device_manager_col_activity')|tojson }};
+var dmColAction = {{ _('device_manager_col_action')|tojson }};
+var sesFetchError = {{ _('session_fetch_error')|tojson }};
+var sesKickError = {{ _('session_kick_error')|tojson }};
+var sesKickSelfError = {{ _('session_kick_self_error')|tojson }};
+var sesKickConfirm = {{ _('session_kick_confirm')|tojson }};
 
 function refreshLeaderboard() {
     var body = document.getElementById('leaderboardBody');
