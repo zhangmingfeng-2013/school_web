@@ -1,3 +1,38 @@
+"""多合一校园工具箱 Web 应用
+
+技术栈：Flask (Python) + MySQL (pymysql) + Pillow + Jinja2 + Waitress
+
+主要功能模块：
+  - 用户认证（登录/注册/找回密码/密码修改）
+  - 仪表盘 & 活跃度排行榜
+  - 毕业相册（图片上传/评论/点赞/标签/弹幕）
+  - 即时聊天（世界频道/私聊/好友系统）
+  - AI 写作助手 & 智能翻译
+  - 论坛/公告/投诉建议/匿名树洞
+  - 校友录 & 校友故事
+  - 学习工具（待办/抽认卡）
+  - 生活工具（记账/习惯追踪/番茄钟/签到打卡）
+  - 网络工具（Ping/路由追踪/Whois/DNS/端口扫描）
+  - 系统监控 & 在线用户管理
+  - 数据库可视化查询/编辑
+  - 插件系统 & 插件市场
+  - 实用小工具（密码生成/哈希/Base64/JSON/二维码等）
+  - 信息无障碍：多语言支持 (i18n)
+  - 安全响应中心 (SRC)
+  - 虚拟宠物系统
+  - RSS 阅读器 & 每日一言
+
+安全特性：
+  - CSRF 保护
+  - 图形验证码
+  - IP 速率限制 & 自动封禁
+  - 安全响应头（CSP/HSTS/XFO 等）
+  - 登录防爆破
+  - 会话空闲超时
+  - SQL 标识符白名单校验
+  - 密码明文→哈希自动升级
+"""
+
 import os
 import re
 import uuid
@@ -64,11 +99,23 @@ def safe_check_password_hash(pwhash: str, password: str) -> bool:
 
 
 
+# ========== 安全工具函数 ==========
+
 # ---------- 简易内存速率限制 ----------
 class RateLimiter:
-    """简易内存速率限制（文件持久化，重启不丢失）"""
+    """简易内存速率限制（文件持久化，重启不丢失）
+
+    基于滑动窗口算法限制单个 key (ip+route) 的请求频率。
+    数据持久化到 JSON 文件，重启后自动加载，超过窗口期的旧记录被清理。
+    """
 
     def __init__(self, persist_file=None):
+        """
+        初始化速率限制器
+
+        Args:
+            persist_file: str 或 None，持久化文件路径。为 None 时不保存/加载。
+        """
         self._lock = threading.Lock()
         self._buckets = {}  # {(ip, route): [ts, ...]}
         self._persist_file = persist_file
@@ -78,7 +125,20 @@ class RateLimiter:
             self._load()
 
     def check(self, key, max_requests=10, window=60):
-        """检查 key 是否超过限制，返回 True=允许, False=拒绝"""
+        """
+        检查 key 是否超过速率限制。
+
+        滑动窗口算法：保留 window 秒内的请求时间戳，
+        如果数量 >= max_requests 则拒绝。
+
+        Args:
+            key: tuple，通常是 (ip, route_name)
+            max_requests: 窗口内允许的最大请求数
+            window: 时间窗口（秒）
+
+        Returns:
+            True=允许通过, False=超过限制
+        """
         now = time.time()
         cutoff = now - window
         with self._lock:
@@ -94,7 +154,11 @@ class RateLimiter:
             return True
 
     def _schedule_save(self):
-        """去抖保存：延迟 2 秒保存，多次 rapid 调用合并"""
+        """
+        去抖保存：延迟 2 秒存盘，多次 rapid 调用合并为一次写入。
+
+        避免高频请求下频繁写文件，通过取消前一个定时器实现合并。
+        """
         if not self._persist_file:
             return
         if self._save_timer:
@@ -103,7 +167,12 @@ class RateLimiter:
         self._save_timer.start()
 
     def _load(self):
-        """从文件加载持久化状态"""
+        """
+        从文件加载持久化状态。
+
+        仅加载 65 秒内的记录（最大窗口 60s + 5s 缓冲），
+        避免加载已过期的旧数据。
+        """
         try:
             if os.path.exists(self._persist_file):
                 with open(self._persist_file, "r") as f:
@@ -129,7 +198,13 @@ class RateLimiter:
             print(f"  加载速率限制状态失败: {e}")
 
     def _save(self):
-        """将当前状态保存到文件"""
+        """
+        将内存中的速率状态序列化保存到文件。
+
+        tuple key 以 "|" 拼接为字符串存储，
+        重启时 _load() 反向解析。
+        安全：至少写入时先获取锁，不阻塞读。
+        """
         if not self._persist_file:
             return
         try:
@@ -144,7 +219,11 @@ class RateLimiter:
             pass
 
     def shutdown(self):
-        """优雅关闭，强制保存"""
+        """
+        优雅关闭：取消待执行的定时器并强制保存一次。
+
+        注册为 atexit 回调，确保程序退出时不丢失最新数据。
+        """
         if self._save_timer:
             self._save_timer.cancel()
         self._save()
@@ -201,7 +280,15 @@ _BLOCKED_UAS = [
 
 @app.before_request
 def block_security_scanners():
-    """拦截常见安全扫描工具的 UA"""
+    """
+    拦截常见安全扫描工具的 User-Agent。
+
+    URL: 全局（所有请求）
+    功能：通过黑名单匹配 UA 字符串，命中时直接返回 403 空响应。
+    安全：在解析请求体之前拦截，节省 CPU 和带宽。
+    """
+    # before_request 执行顺序: 第 1 个
+    # 安全：硬编码扫描工具 UA 黑名单，不依赖外部配置
     ua = request.headers.get("User-Agent", "").lower()
     for blocked in _BLOCKED_UAS:
         if blocked in ua:
@@ -210,14 +297,29 @@ def block_security_scanners():
 
 @app.before_request
 def set_csp_nonce():
-    """为每个请求生成 CSP nonce"""
+    """
+    为每个 HTTP 请求生成唯一的 CSP nonce 值。
+
+    URL: 全局
+    功能：在 g 对象上设置 csp_nonce，用于 HTML 模板中的 <script nonce="...">
+    安全：每个请求的 nonce 不同，防止 inline script 注入被复用。
+    """
+    # before_request 执行顺序: 第 2 个
     g.csp_nonce = os.urandom(16).hex()
 
 
+# ========== 多语言支持 ==========
 # ---------- 多语言支持 ----------
 @app.before_request
 def set_language():
-    """检测并设置当前请求的语言"""
+    """
+    检测并设置当前会话的语言偏好。
+
+    URL: 全局
+    功能：通过请求头 / Cookie / 用户设置检测语言，写入 session。
+    如果用户已登录，将语言偏好持久化到数据库 user_profiles.lang。
+    """
+    # before_request 执行顺序: 第 3 个
     lang = detect_lang(request, session)
     session["lang"] = lang
     # 如果用户已登录，持久化语言偏好到数据库
@@ -252,7 +354,12 @@ def inject_i18n():
 
 
 def _save_user_lang(username, lang):
-    """持久化用户语言偏好到数据库"""
+    """
+    持久化用户语言偏好到数据库 user_profiles.lang 字段。
+
+    异常时不抛出，仅静默失败（不阻塞请求）。
+    在 set_language before_request 中被调用。
+    """
     try:
         conn = get_db()
         if conn:
@@ -270,6 +377,12 @@ def _save_user_lang(username, lang):
 
 @app.route("/api/lang/switch", methods=["POST"])
 def api_lang_switch():
+    """
+    切换语言 API（URL: /api/lang/switch, POST）。
+
+    权限：任意用户（未登录也可切换）
+    功能：校验语言参数是否在 SUPPORTED_LANGS 中，更新 session，设置 lang Cookie。
+    """
     """切换语言"""
     data = request.get_json(silent=True) or {}
     lang = data.get("lang")
@@ -290,6 +403,13 @@ _forum_tables_done = False
 _confession_tables_done = False
 _alumni_stories_tables_done = False
 def _init_db_once():
+    """
+    一站式初始化所有核心数据库表。
+
+    包含：密码重置表、插件市场表、安全报告表、公告表、
+    投诉表、生活工具表、论坛表、会话追踪表。
+    使用 _db_init_done 全局锁确保只执行一次。
+    """
     global _db_init_done
     if not _db_init_done:
         _init_reset_table()
@@ -304,7 +424,12 @@ def _init_db_once():
 
 
 def _init_reset_table():
-    """确保 password_reset_tokens 和 user_profiles 表存在"""
+    """
+    初始化密码重置/用户资料/活跃度/管理员申请/日历事件表。
+
+    CREATE TABLE IF NOT EXISTS 保证幂等；
+    ALTER TABLE 添加校友录字段（兼容旧表）。
+    """
     conn = get_db()
     if not conn:
         return
@@ -404,7 +529,11 @@ def _init_reset_table():
 
 
 def _init_marketplace_table():
-    """确保 plugin_marketplace 表存在 — 管理员上传的 HTML/Vue 插件"""
+    """
+    创建 plugin_marketplace 表 — 管理员上传的 HTML/Vue 插件元信息。
+
+    存储：插件名、显示名、描述、版本、作者、文件类型、上传者等。
+    """
     conn = get_db()
     if not conn:
         return
@@ -433,7 +562,11 @@ def _init_marketplace_table():
 
 
 def _init_src_table():
-    """确保 src_reports 表存在 — 安全响应中心漏洞报告"""
+    """
+    创建 src_reports 表 — SRC 漏洞报告。
+
+    存储漏洞标题、类型、严重级别、影响 URL、复现步骤、状态等。
+    """
     conn = get_db()
     if not conn:
         return
@@ -469,7 +602,11 @@ def _init_src_table():
 
 
 def _init_announcement_table():
-    """确保 dashboard_announcements 表存在 — 仪表盘公告栏"""
+    """
+    创建 dashboard_announcements 表 — 仪表盘顶部公告栏。
+
+    支持软删除（is_active 字段）。
+    """
     conn = get_db()
     if not conn:
         return
@@ -492,7 +629,11 @@ def _init_announcement_table():
 
 
 def _init_complaints_table():
-    """确保 complaints 表存在 — 投诉建议箱"""
+    """
+    创建 complaints 表 — 用户投诉与建议。
+
+    包含：标题、内容、已读标记、管理员回复、状态字段。
+    """
     conn = get_db()
     if not conn:
         return
@@ -530,7 +671,12 @@ DEFAULT_RATE_CONFIG = {
 }
 
 def _load_rate_config():
-    """从文件加载速率配置，失败则使用默认值"""
+    """
+    从 rate_config.json 文件加载速率配置。
+
+    以 DEFAULT_RATE_CONFIG 为基准，覆盖已保存的值。
+    读取失败时回退到默认值。
+    """
     if os.path.exists(RATE_CONFIG_FILE):
         try:
             with open(RATE_CONFIG_FILE, "r") as f:
@@ -544,7 +690,11 @@ def _load_rate_config():
     return dict(DEFAULT_RATE_CONFIG)
 
 def _save_rate_config():
-    """保存速率配置到文件"""
+    """
+    保存速率配置到 rate_config.json 文件。
+
+    管理员通过 API 动态修改配置后调用此函数持久化。
+    """
     try:
         with open(RATE_CONFIG_FILE, "w") as f:
             json.dump(rate_config, f)
@@ -564,7 +714,12 @@ recent_blocks_lock = threading.Lock()
 WHITELIST_FILE = os.path.join(os.path.dirname(__file__), "ip_whitelist.json")
 
 def _load_whitelist():
-    """从文件加载白名单"""
+    """
+    从 ip_whitelist.json 文件加载 IP 白名单。
+
+    Returns:
+        set(str) IP 地址集合
+    """
     if os.path.exists(WHITELIST_FILE):
         try:
             with open(WHITELIST_FILE, "r") as f:
@@ -574,7 +729,11 @@ def _load_whitelist():
     return set()
 
 def _save_whitelist():
-    """保存白名单到文件"""
+    """
+    将 IP 白名单保存到 ip_whitelist.json 文件。
+
+    管理员通过管理页修改白名单后调用此函数持久化。
+    """
     try:
         with open(WHITELIST_FILE, "w") as f:
             json.dump(sorted(ip_whitelist), f)
@@ -584,7 +743,8 @@ def _save_whitelist():
 ip_whitelist = _load_whitelist()
 
 def _verify_captcha(user_input):
-    """验证图形验证码。统一入口，返回 (success: bool, error_msg: str)
+    """
+    验证图形验证码。统一入口，返回 (success: bool, error_msg: str)。
     
     图片显示大写字母（23456789ABCDEFGHJKLMNPQRSTUVWXYZ），
     session 存储小写码，比较时忽略大小写。
@@ -618,7 +778,16 @@ def _verify_captcha(user_input):
 
 
 def _generate_captcha():
-    """预生成验证码存入 session，供表单使用。已有未过期码则复用，防止重复生成导致 session 膨胀。"""
+    """
+    预生成验证码存入 session，供表单使用。
+
+    已有未过期（5分钟内）的验证码则复用，防止重复生成导致 session 膨胀。
+    生成的验证码是小写字母数字串（从 _captcha_chars 随机取 4 个字符）。
+    供 api_captcha 生成图片时和表单渲染时调用，确保图片与 session code 一致。
+
+    Returns:
+        str: 小写验证码字符串
+    """
     stored = session.get("captcha_code")
     captcha_time = session.get("captcha_time", 0)
     if stored and (time.time() - captcha_time < 300):
@@ -635,6 +804,14 @@ def _generate_captcha():
 _captcha_chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 @app.route("/api/captcha")
 def api_captcha():
+    """
+    生成图形验证码图片（URL: /api/captcha, GET）。
+
+    权限：任意用户
+    功能：生成 200x70 的 PNG 验证码图片，包含 4 个字符的干扰线/噪点/旋转。
+          安全：使用 no-store 缓存头防止缓存；验证码一次性使用防重放。
+          速率限制：captcha 速率（默认 10 次/60 秒）。
+    """
     """生成图形验证码。优先复用 session 中未过期的 code，保证图片与 session 一致。"""
     # 验证码接口速率限制
     client_ip = request.remote_addr or "unknown"
@@ -726,6 +903,15 @@ SESSION_IDLE_TIMEOUT = 1800  # 秒（30 分钟空闲超时）
 
 @app.before_request
 def check_rate_limit():
+    """
+    全局 IP 速率限制与封禁（before_request 执行顺序: 第 4 个）。
+
+    URL: 全局（跳过 /static/ /assets/ /favicon.ico /share/）
+    功能：滑动窗口统计每个 IP 的请求数，超过 RATE_LIMIT 则封禁 BLOCK_DURATION 秒。
+          封禁期间继续试探次数达到 BLOCK_PROBE_LIMIT 会延长封禁（BLOCK_EXTEND 秒）。
+          支持白名单（ip_whitelist）和手动封禁（ip_manual_blocked）。
+    安全：使用 threading.Lock 保证并发安全。
+    """
     # 静态文件和分享链接跳过速率限制
     path = request.path
     if any(path.startswith(p) for p in ("/static/", "/assets/", "/favicon.ico", "/share/")):
@@ -777,7 +963,14 @@ def check_rate_limit():
 
 @app.before_request
 def check_session_idle_timeout():
-    """基于会话的时间戳检查空闲超时，多用户同 IP 互不干扰"""
+    """
+    基于会话的时间戳检查空闲超时（before_request 执行顺序: 第 5 个）。
+
+    URL: 跳过 /static/ /assets/ /favicon.ico /share/ /plugin-market/ 及首页/注册/登出
+    功能：记录每个请求的 _last_request_time 到 session，
+          若超过 SESSION_IDLE_TIMEOUT（30 分钟）未操作，自动登出并调用 session_manager.logout_session。
+          多用户同 IP 互不干扰（基于 session 而非 IP）。
+    """
     skip_prefixes = ("/static/", "/assets/", "/favicon.ico", "/share/", "/plugin-market/")
     path = request.path
     if any(path.startswith(p) for p in skip_prefixes):
@@ -812,14 +1005,27 @@ def check_session_idle_timeout():
 
 @app.before_request
 def assign_session_key():
-    """为每个浏览器会话分配唯一 session_key"""
+    """
+    为每个浏览器会话分配唯一的 session_key（before_request 执行顺序: 第 6 个）。
+
+    URL: 全局
+    功能：如果 session 尚无 session_key，生成一个 uuid4 hex 并存入。
+          用于多设备会话追踪、踢出指定设备、心跳检测等。
+          每个浏览器标签页 / 设备获得独立的 session_key（前提是独立 session）。
+    """
     if "session_key" not in session:
         session["session_key"] = uuid.uuid4().hex
 
 
 @app.before_request
 def track_session_activity():
-    """每次请求更新数据库中的会话活跃时间"""
+    """
+    每次请求更新数据库中的会话活跃时间（before_request 执行顺序: 第 7 个）。
+
+    URL: 跳过 /static/ /assets/ /api/heartbeat
+    功能：将 session_key + username + ip 写入 active_sessions 表的 last_activity。
+          供管理员查看在线用户、idle 时间、以及会话管理使用。
+    """
     if "username" not in session:
         return None
     path = request.path
@@ -836,7 +1042,14 @@ def track_session_activity():
 
 @app.before_request
 def check_kicked():
-    """检查当前会话是否被管理员踢出"""
+    """
+    检查当前会话是否被管理员踢出（before_request 执行顺序: 第 8 个）。
+
+    URL: 跳过 /static/ /assets/ 和首页/登录/注册/登出
+    功能：调用 session_manager.is_session_valid 检查 session_key 是否有效。
+          被踢出的 session 自动清空并重定向到登录页。
+          安全：无效的 session 无法访问任何受限页面。
+    """
     if "username" not in session:
         return None
     path = request.path
@@ -858,6 +1071,16 @@ CAPTCHA_SKIP_PREFIX = ("/static/", "/assets/", "/favicon.ico", "/share/", "/api/
 
 @app.before_request
 def check_global_captcha():
+    """
+    全站验证码门禁 — 部分敏感页面需要验证码后才能访问（before_request 执行顺序: 第 9 个）。
+
+    URL: 跳过 CAPTCHA_SKIP 列表和 CAPTCHA_SKIP_PREFIX 前缀
+    功能：登录后首次访问某些页面需要输入验证码（防机器人爬虫）。
+          验证通过后设置 global_captcha_verified 到 session，同会话后续免验证。
+          POST 请求自动验证 form 中的 captcha 字段。
+          API 请求返回 403 JSON。
+    """
+    # 安全：启用二次验证的页面列表明确在白名单中，未列出的敏感页面全局拦截
     if "username" not in session:
         return None
     path = request.path
@@ -909,6 +1132,20 @@ LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "app.log")
 # ---------- 安全响应头 ----------
 @app.after_request
 def add_security_headers(response):
+    """
+    为每个 HTTP 响应添加安全响应头。
+
+    功能：
+      - X-Content-Type-Options: nosniff（防 MIME 类型混淆）
+      - X-Frame-Options: SAMEORIGIN（防点击劫持）
+      - Referrer-Policy: strict-origin-when-cross-origin（限制 referer 泄露）
+      - Content-Security-Policy: 使用 nonce 限制脚本资源，限制 form-action、
+        frame-ancestors、connect-src 等（防 XSS + 数据外泄）
+      - Permissions-Policy: 禁用摄像头/麦克风/位置（防隐私 API 滥用）
+      - HSTS: 仅生产环境启用（max-age=1年，含子域名）
+      - HTML/JSON 响应强制 no-cache（防敏感数据缓存）
+      - 隐藏 Server 头（防信息泄露）
+    """
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -947,12 +1184,30 @@ def add_security_headers(response):
 
 # ---------- 工具函数 ----------
 def get_db():
+    """
+    获取主数据库连接。
+
+    使用 DB_CONFIG 配置连接 MySQL，连接失败时返回 None 而非抛出异常。
+    调用方需检查返回值是否为 None。
+
+    Returns:
+        pymysql.Connection 或 None
+    """
     try:
         return pymysql.connect(**DB_CONFIG)
     except pymysql.MySQLError as e:
         return None
 
 def get_album_db():
+    """
+    获取相册数据库连接（与主库配置相同），并确保相册扩展表已初始化。
+
+    每次获取连接时调用 _init_album_tables 确保新表存在，
+    兼容不同版本代码之间的 schema 差异。
+
+    Returns:
+        pymysql.Connection 或 None
+    """
     try:
         conn = pymysql.connect(**ALBUM_DB_CONFIG)
         _init_album_tables(conn)
@@ -962,7 +1217,15 @@ def get_album_db():
 
 # ---------- 初始化相册扩展表 ----------
 def _init_album_tables(conn):
-    """创建相册扩展功能所需的表（如果不存在）"""
+    """
+    初始化相册扩展功能所需的数据库表。
+
+    包含：大事记(album_events)、同学录(album_classmates)、毕业寄语(album_wishes)、
+    照片标签(album_tags/image_tags)、毕业歌单(album_playlist)、弹幕(album_danmaku)、
+    分享链接(album_share_links)、聊天(chat_messages)、好友(friendships)、
+    AI 对话(ai_conversations/config)、学习工具(study_todos/flashcards)。
+    兼容旧表：对 album_classmates 尝试添加 class_name 和 graduation_year 列。
+    """
     cursor = conn.cursor()
     # 大事记时间轴
     cursor.execute("""
@@ -1161,7 +1424,22 @@ _SCRIPT_TAG = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL
 _HTML_TAG = re.compile(r"<[^>]+>")
 
 def sanitize_input(text, max_length=1000):
-    """清洗用户输入：去除 HTML/JS 标签，限制长度，过滤 SQL 危险字符"""
+    """
+    清洗用户输入：去除 HTML/JS 标签，限制长度，过滤 SQL 危险字符。
+
+    安全：
+      1. 移除 <script>...</script> 标签（正则不区分大小写 + DOTALL）
+      2. 移除所有剩余 HTML 标签（纵深防御）
+      3. 移除 null byte（防止 SQL 截断攻击）
+      4. 截断至 max_length 防止长文本攻击
+
+    Args:
+        text: 用户输入的原始字符串
+        max_length: 截断最大长度（默认 1000）
+
+    Returns:
+        清洗后的安全字符串
+    """
     if not text:
         return ""
     text = str(text).strip()
@@ -1173,13 +1451,35 @@ def sanitize_input(text, max_length=1000):
     return text
 
 def _mask_cell(col_name, value):
-    """直接返回原始值"""
+    """
+    对数据库查询结果的单个单元格做脱敏处理。
+
+    安全：对于密码/敏感信息列，掩码显示；非敏感列返回原始值。
+
+    Args:
+        col_name: 列名，用于判断是否敏感列
+        value: 原始值
+
+    Returns:
+        脱敏后的字符串
+    """
     return str(value) if value is not None else ""
 
 
 def _safe_identifier(name):
-    """安全地清理 SQL 标识符（表名/列名），剥离反引号并校验合法字符。
-    返回清理后的标识符，不合法返回 None。"""
+    """
+    安全地清理 SQL 标识符（表名/列名），白名单校验后安全拼接。
+
+    安全：严格正则校验只允许 [a-zA-Z_][a-zA-Z0-9_]* 模式，
+    拒绝所有非法字符，从源头杜绝 SQL 注入。
+    在构造动态 table/column 查询时，务必通过此函数校验后再 f-string/拼接。
+
+    Args:
+        name: 原始标识符字符串
+
+    Returns:
+        安全清理后的标识符，或 None（不合法时）
+    """
     if not name or not isinstance(name, str):
         return None
     name = name.replace('`', '').strip()
@@ -1190,7 +1490,20 @@ def _safe_identifier(name):
 
 
 def _get_valid_columns(conn, table_name):
-    """获取表的合法列名集合（内部先做标识符安全校验）。"""
+    """
+    获取表的合法列名集合（内部先做标识符安全校验）。
+
+    安全：先用 _safe_identifier 校验表名，再执行 SHOW COLUMNS，
+    配合 f-string + 反引号包裹 + 白名单校验，确保列名安全。
+    用于 api_table_insert/update/delete 等动态列名场景。
+
+    Args:
+        conn: 数据库连接
+        table_name: 表名
+
+    Returns:
+        set(str) 合法列名集合，非法输入或异常返回空集
+    """
     table_name = _safe_identifier(table_name)
     if not table_name:
         return set()
@@ -1205,6 +1518,13 @@ def _get_valid_columns(conn, table_name):
         return set()
 
 def write_log(action, detail=""):
+    """
+    写入操作日志到文件。
+
+    Args:
+        action: 操作名称（如 "用户登录"、"删除图片"）
+        detail: 操作详情（如 "用户名: admin"）
+    """
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     entry = f"[{ts}] {action}"
     if detail:
@@ -1226,6 +1546,14 @@ def read_logs():
     return ""
 
 def login_required(f):
+    """
+    登录状态校验装饰器。
+
+    URL: 任意需要登录的路由
+    功能：检查 session 中是否有 "username" 键。
+          API 请求（/api/ 开头）返回 401 JSON，
+          页面请求重定向到登录页。
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         if "username" not in session:
@@ -1239,7 +1567,21 @@ def login_required(f):
 
 
 def csrf_required(f):
-    """验证 CSRF token（用于非 GET 请求的表单提交）"""
+    """
+    验证 CSRF token 的装饰器。
+
+    安全：
+      1. GET/HEAD/OPTIONS/TRACE 安全方法直接放行
+      2. 从 form body 或 X-CSRF-Token 头获取 token
+      3. 使用 hmac.compare_digest 做常量时间比较（防时序攻击）
+      4. token 不匹配时重定向到登录页
+
+    用法：
+        @app.route("/submit", methods=["POST"])
+        @csrf_required
+        def submit():
+            ...
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
@@ -1254,6 +1596,12 @@ def csrf_required(f):
     return decorated
 
 def admin_required(f):
+    """
+    管理员权限校验装饰器。
+
+    功能：检查 session 中的 permission 是否为 "administrator"，
+    非管理员提示权限不足并重定向到仪表盘。
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get("permission") != "administrator":
@@ -1263,6 +1611,13 @@ def admin_required(f):
     return decorated
 
 def non_guest_required(f):
+    """
+    非访客权限校验装饰器（VIP 或管理员可访问）。
+
+    功能：检查 session 中的 permission 是否为 "guest"，
+    访客提示申请 VIP 并重定向到仪表盘。
+    用于数据库查询等敏感功能。
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         perm = session.get("permission", "guest")
@@ -1273,6 +1628,13 @@ def non_guest_required(f):
     return decorated
 
 def vip_required(f):
+    """
+    VIP 或管理员权限校验装饰器。
+
+    功能：检查 session 中的 permission 是否为 "administrator" 或 "vip"，
+    API 请求返回 403 JSON，页面请求重定向到仪表盘。
+    用于网络工具等 VIP 功能。
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         perm = session.get("permission", "guest")
@@ -1287,6 +1649,15 @@ def vip_required(f):
 
 # ---------- 数据库二次验证（验证码） ----------
 def db_captcha_required(f):
+    """
+    数据库二次验证（验证码）装饰器。
+
+    安全：执行数据库写操作前要求验证码二次确认，
+    防止 CSRF + XSS 驱动的自动化数据库请求。
+    验证通过后将 db_captcha_verified 写入 session，
+    同一 session 后续操作不需要重复验证。
+    API 请求返回 403 JSON。
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get("db_captcha_verified"):
@@ -1310,6 +1681,23 @@ def db_captcha_required(f):
 # ---------- 路由：登录 ----------
 @app.route("/", methods=["GET", "POST"])
 def login():
+    """
+    登录页面（URL: /）—— 也是首页。
+
+    权限：未登录可访问（GET 获取表单，POST 提交登录）
+    GET 逻辑：
+      - 首次访问时初始化数据库表
+      - 生成 CSRF token
+      - 未登录时受 login_page 速率限制（默认 30 次/60 秒）
+    POST 逻辑：
+      - 受 login 速率限制（默认 5 次/60 秒）
+      - 验证码校验（5 分钟内过期，一次性使用防重放）
+      - 登录防爆破（5 次错误锁定 5 分钟）
+      - 密码验证兼容 werkzeug hash 和旧版 bcrypt
+      - 旧版明文密码自动升级为 werkzeug hash
+      - 多设备在线管理：检查是否允许多设备登录，不允许时踢出旧会话
+      - 注册数据库会话（session_manager.register_session）
+    """
     _init_db_once()
     # 生成 CSRF token
     if "csrf_token" not in session:
@@ -1452,6 +1840,19 @@ def login():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    """
+    用户注册页面（URL: /register）。
+
+    权限：无需登录
+    GET 逻辑：
+      - 生成 CSRF token
+    POST 逻辑：
+      - 受 register 速率限制（默认 5 次/60 秒）
+      - 验证码校验
+      - 密码复杂度检查（至少 8 位 + 字母 + 数字）
+      - 管理员注册：填写正确 ADMIN_SECRET 可获得管理员权限
+      - 用户名查重（主动检测而非依赖 UNIQUE 约束报错）
+    """
     _init_db_once()
     # 生成 CSRF token
     if "csrf_token" not in session:
@@ -1534,6 +1935,13 @@ def register():
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
+    """
+    退出登录（URL: /logout）。
+
+    权限：任意用户
+    GET 逻辑：显示确认页面
+    POST 逻辑：清除 session + 标记数据库会话为非活跃
+    """
     if request.method == "GET":
         # GET 请求：显示确认页面（可优化为直接重定向带 JS 提交）
         return render_template("logout_confirm.html",
@@ -1556,6 +1964,9 @@ def logout():
 _reset_rate = {}  # {ip: (count, last_time)} 防滥用
 
 @app.route("/forgot_password", methods=["GET", "POST"])
+
+# ========== 忘记密码 / 重置密码 ==========
+
 def forgot_password():
     _init_db_once()
     _generate_captcha()  # 预生成验证码，避免图片加载失败导致 captcha_code 不存在
@@ -1783,6 +2194,13 @@ def forgot_password():
 
 @app.route("/reset_password", methods=["GET", "POST"])
 def reset_password():
+    """
+    重置密码页面（URL: /reset_password）。
+
+    权限：需要有效的重置令牌（从 forgot_password 流程获取）
+    安全：令牌 + 用户名 + 验证码 + 密码复杂度四重校验。
+          不允许新密码与旧密码相同。
+    """
     _init_db_once()
     _generate_captcha()  # 预生成验证码
     # 生成 CSRF token
@@ -1844,7 +2262,17 @@ def reset_password():
 
 # ---------- 活跃度系统 ----------
 def record_activity(username, action, points=1):
-    """记录用户活跃行为"""
+    """
+    记录用户活跃行为到 activity_log 表。
+
+    用于计算活跃度排行榜。不同操作积分不同（如上传图片 5 分、评论 2 分、登录 1 分）。
+    数据库异常时静默忽略，不影响主流程。
+
+    Args:
+        username: 用户名
+        action: 行为描述（如 "登录"、"上传图片"）
+        points: 该行为的活跃积分（默认 1）
+    """
     try:
         conn = get_db()
         if not conn:
@@ -1911,6 +2339,12 @@ def get_user_rank(username):
 # ---------- 路由：活跃度排行榜 API ----------
 @app.route("/api/leaderboard")
 def api_leaderboard():
+    """
+    活跃度排行榜 API（URL: /api/leaderboard, GET）。
+
+    权限：任意用户
+    功能：返回总分降序的排行榜列表，支持 limit 参数。
+    """
     limit = request.args.get("limit", 10, type=int)
     return jsonify({"leaderboard": get_leaderboard(limit)})
 
@@ -1940,6 +2374,9 @@ def api_my_rank():
 # ---------- 路由：申请管理员 ----------
 @app.route("/api/admin-request", methods=["POST"])
 @login_required
+
+# ========== 管理员申请/审核 ==========
+
 def api_admin_request():
     username = session["username"]
     if session.get("permission") == "administrator":
@@ -2178,6 +2615,12 @@ def api_avatar(seed):
 @app.route("/api/notifications")
 @login_required
 def api_notifications():
+    """
+    获取未读通知数量（URL: /api/notifications, GET）。
+
+    权限：需要登录
+    功能：返回聊天未读/管理员待处理申请/被封IP/论坛未读通知的数量。
+    """
     """获取未读通知数量"""
     username = session["username"]
     is_admin = session.get("permission") == "administrator"
@@ -2246,6 +2689,12 @@ def api_notifications():
 @app.route("/api/notifications/read", methods=["POST"])
 @login_required
 def api_notifications_read():
+    """
+    标记通知已读（URL: /api/notifications/read, POST）。
+
+    权限：需要登录
+    功能：记录当前 UTC 时间到 session 的 last_notification_read。
+    """
     """标记通知已读"""
     from datetime import datetime
     session["last_notification_read"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -2255,6 +2704,12 @@ def api_notifications_read():
 @app.route("/dashboard")
 @login_required
 def dashboard():
+    """
+    仪表盘主页（URL: /dashboard）。
+
+    权限：需要登录
+    功能：显示活跃度排行榜、我的排名、待审核请求状态。
+    """
     leaderboard = get_leaderboard(10)
     my_rank = get_user_rank(session["username"])
     # check pending request
@@ -2299,6 +2754,13 @@ def dashboard():
 @app.route("/profile", methods=["GET", "POST"])
 @login_required
 def profile():
+    """
+    个人资料页面（URL: /profile）。
+
+    权限：需要登录
+    GET 逻辑：显示当前用户资料和安全问题信息
+    POST 逻辑：更新昵称/简介/手机/邮箱/生日
+    """
     conn = get_db()
     if not conn:
         flash("数据库连接失败", "danger")
@@ -2404,6 +2866,11 @@ def api_set_security():
 # ---------- 路由：关于作者 ----------
 @app.route("/author")
 def author():
+    """
+    关于作者页面（URL: /author）。
+
+    权限：任意用户（无需登录）
+    """
     return render_template("author.html",
                            username=session.get("username", ""),
                            permission=session.get("permission", ""))
@@ -2421,6 +2888,12 @@ def donate():
 @app.route("/chat")
 @login_required
 def chat_standalone():
+    """
+    即时聊天页面（URL: /chat）。
+
+    权限：需要登录
+    功能：世界频道 + 私聊 + 好友系统，前端通过 Web 聊天界面交互。
+    """
     return render_template("chat_standalone.html",
                            username=session["username"],
                            permission=session["permission"])
@@ -2430,6 +2903,13 @@ def chat_standalone():
 @app.route("/ai_writing")
 @login_required
 def ai_writing_page():
+    """
+    AI 写作助手页面（URL: /ai_writing）。
+
+    权限：需要登录
+    功能：提供演讲稿/通知/社交媒体/工作报告/邮件等多种写作模式，
+          调用用户配置的 AI API 生成文本。
+    """
     return render_template("ai_writing.html",
                            username=session.get("username", ""),
                            permission=session.get("permission", "guest"))
@@ -2448,6 +2928,12 @@ def ai_config_page():
 @app.route("/translator")
 @login_required
 def translator_page():
+    """
+    智能翻译页面（URL: /translator）。
+
+    权限：需要登录
+    功能：调用用户配置的 AI API 进行翻译，支持中/英/日/韩互译。
+    """
     return render_template("translator.html",
                            username=session.get("username", ""),
                            permission=session.get("permission", "guest"))
@@ -2458,6 +2944,12 @@ def translator_page():
 @login_required
 @admin_required
 def system_monitor():
+    """
+    系统监控页面（URL: /system_monitor）。
+
+    权限：需要管理员权限
+    功能：通过 /api/system_info 和 /api/system_users 展示服务器状态。
+    """
     return render_template("system_monitor.html",
                            username=session["username"],
                            permission=session["permission"])
@@ -2604,6 +3096,9 @@ def api_system_users():
 
 @app.route("/api/heartbeat", methods=["POST"])
 @login_required
+
+# ========== 多用户会话管理 ==========
+
 def api_heartbeat():
     """前端心跳：保持会话活跃"""
     ok = session_manager.heartbeat(
@@ -3101,6 +3596,9 @@ def api_network_subnet():
 @login_required
 @non_guest_required
 @db_captcha_required
+
+# ========== 数据库管理 ==========
+
 def db_query():
     tables = []
     data = None
@@ -3359,6 +3857,13 @@ os.makedirs(ALBUM_DIR, exist_ok=True)
 @app.route("/album")
 @login_required
 def album():
+    """
+    毕业相册首页（URL: /album）。
+
+    权限：需要登录
+    功能：优先返回 Vue3 构建后的 dist/index.html，
+          开发模式下回退到 Vite dev server 代理页面。
+    """
     """Vue3 前端 - 开发时返回 Vite dev 代理，生产时返回构建文件"""
     # 尝试返回构建后的文件
     dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
@@ -3763,6 +4268,13 @@ def api_album_share(img_id):
 
 @app.route("/share/<token>")
 def share_view(token):
+    """
+    分享链接查看页（URL: /share/<token>）。
+
+    权限：任意访问者（无需登录）
+    功能：通过分享 token 查询对应图片并以纯 HTML 展示。
+          安全：token 为 uuid4 hex，不可猜测；不暴露原始图片路径。
+    """
     conn = get_album_db()
     if not conn:
         return "<h2>页面不存在</h2>", 404
@@ -4600,7 +5112,12 @@ def api_chat_recall(mid):
 # ---------- AI 机器人 ----------
 
 def _ai_encrypt(text):
-    """简单加密 API Key（与 SECRET_KEY 异或 + Base64）"""
+    """
+    简单加密 API Key：与 app.secret_key 异或后 Base64 编码。
+
+    安全：不是真正的对称加密，仅做混淆存储，防御数据库泄露后的明文 API Key 暴露。
+    真正的安全方案应使用环境变量注入。
+    """
     import base64
     key = app.secret_key or "default_key"
     key_bytes = (key * ((len(text.encode()) // len(key)) + 2)).encode()
@@ -4608,7 +5125,11 @@ def _ai_encrypt(text):
     return base64.urlsafe_b64encode(xored).decode()
 
 def _ai_decrypt(encrypted):
-    """解密"""
+    """
+    解密 API Key（_ai_encrypt 的逆操作）。
+
+    从 Base64 解码后与 secret_key 异或还原原始 API Key。
+    """
     import base64
     key = app.secret_key or "default_key"
     data = base64.urlsafe_b64decode(encrypted.encode())
@@ -5036,6 +5557,13 @@ NOTES_FILE = os.path.join(os.path.dirname(__file__), "..", "notes.txt")
 @app.route("/change_password", methods=["GET", "POST"])
 @login_required
 def change_password():
+    """
+    修改密码页面（URL: /change_password）。
+
+    权限：需要登录
+    管理员：可修改任意用户密码（无需原密码）
+    普通用户：需要原密码验证 + 验证码 + 新密码复杂度校验
+    """
     users = []
     is_admin = (session["permission"] == "administrator")
 
@@ -5128,6 +5656,12 @@ def change_password():
 @app.route("/notes", methods=["GET", "POST"])
 @login_required
 def notes():
+    """
+    备忘录页面（URL: /notes）。
+
+    权限：需要登录
+    功能：简单的文本备忘录，内容存储到本地 notes.txt 文件（上限 50KB）。
+    """
     content = ""
     if os.path.exists(NOTES_FILE):
         with open(NOTES_FILE, "r", encoding="utf-8") as f:
@@ -5173,6 +5707,12 @@ def calculator_net():
 @login_required
 @admin_required
 def admin_dashboard():
+    """
+    管理后台首页（URL: /admin）。
+
+    权限：仅管理员
+    功能：显示待处理的权限申请、密码重置申请数量，以及活跃度排行榜。
+    """
     pending_admin_reqs = 0
     pending_reset_reqs = 0
     try:
@@ -5210,6 +5750,12 @@ def admin_reset_requests():
 @login_required
 @admin_required
 def api_admin_ip_stats():
+    """
+    获取所有 IP 的请求统计（URL: /api/admin/ip_stats, GET）。
+
+    权限：仅管理员
+    功能：返回每个 IP 的请求数/速率/封禁状态/白名单/手动封禁等信息。
+    """
     """返回所有IP的请求统计"""
     now = time.time()
     result = []
@@ -5275,6 +5821,12 @@ def api_admin_ip_stats():
 @login_required
 @admin_required
 def api_admin_clear_ip_stats():
+    """
+    清除 IP 统计数据（URL: /api/admin/ip_stats, DELETE）。
+
+    权限：仅管理员
+    功能：清空指定 IP 或所有 IP 的请求记录/封禁状态/白名单。
+    """
     """清除IP统计"""
     ip = request.args.get("ip")
     with rate_lock:
@@ -5429,6 +5981,12 @@ def api_admin_batch():
 @login_required
 @admin_required
 def api_admin_rate_config_get():
+    """
+    获取速率限制配置（URL: /api/admin/rate_config, GET）。
+
+    权限：仅管理员
+    功能：返回当前的 RATE_LIMIT/RATE_WINDOW/BLOCK_DURATION 等配置值。
+    """
     """获取速率限制配置"""
     return jsonify(dict(rate_config))
 
@@ -5436,6 +5994,13 @@ def api_admin_rate_config_get():
 @login_required
 @admin_required
 def api_admin_rate_config_set():
+    """
+    修改速率限制配置（URL: /api/admin/rate_config, POST）。
+
+    权限：仅管理员
+    功能：更新 RATE_LIMIT/RATE_WINDOW/BLOCK_DURATION/BLOCK_PROBE_LIMIT/BLOCK_EXTEND。
+          所有值必须为正数。修改后持久化到文件。
+    """
     """修改速率限制配置"""
     data = request.get_json()
     if not data:
@@ -5457,6 +6022,12 @@ def api_admin_rate_config_set():
 @login_required
 @admin_required
 def logs():
+    """
+    操作日志查看页面（URL: /logs）。
+
+    权限：仅管理员
+    功能：读取 app.log 文件并渲染到模板。
+    """
     log_content = read_logs()
     return render_template("logs.html",
                            log_content=log_content,
@@ -5630,6 +6201,12 @@ def api_admin_ip_locations():
 @app.route("/calendar")
 @login_required
 def calendar_view():
+    """
+    日历页面（URL: /calendar）。
+
+    权限：需要登录
+    功能：前端渲染日历，通过 /api/calendar/events 获取事件数据。
+    """
     """日历页面"""
     return render_template("calendar.html",
                            username=session["username"],
@@ -5844,6 +6421,12 @@ BACKUP_EXCLUDES = [
 @login_required
 @admin_required
 def backup_page():
+    """
+    备份管理页面（URL: /backup）。
+
+    权限：仅管理员
+    功能：提供 tar.gz 打包/恢复/删除/对比等备份操作的前端页面。
+    """
     """备份管理页面"""
     return render_template("backup.html",
                            username=session["username"],
@@ -6139,6 +6722,15 @@ def api_backup_diff(filename):
 
 
 def _fmt_size(bytes):
+    """
+    格式化文件大小为人类可读样式。
+
+    Args:
+        bytes: 文件字节数
+
+    Returns:
+        str: 如 "1.5KB"、"3.2MB"
+    """
     if bytes < 1024:
         return f"{bytes}B"
     elif bytes < 1024 * 1024:
@@ -6151,6 +6743,12 @@ def _fmt_size(bytes):
 @app.route("/utils")
 @login_required
 def utils_page():
+    """
+    实用工具页面（URL: /utils）。
+
+    权限：需要登录
+    功能：密码生成器/哈希计算/Base64/URL 编解码/JSON 格式化/UUID/时间戳/字数统计。
+    """
     """实用工具页面（密码生成/哈希/Base64/URL/JSON/UUID/时间戳/字数统计）"""
     return render_template("utils.html",
                            username=session["username"],
@@ -6333,6 +6931,12 @@ def api_utils_count():
 @app.route("/study")
 @login_required
 def study_page():
+    """
+    学习工具页面（URL: /study）。
+
+    权限：需要登录
+    功能：待办清单 + 抽认卡（间隔重复复习）。
+    """
     """学习工具页面"""
     return render_template("study.html",
                            username=session["username"],
@@ -6745,7 +7349,17 @@ def api_admin_plugin_marketplace_upload():
 
 
 def _create_vue_wrapper(plugin_dir, plugin_name, version="3"):
-    """为 Vue 插件创建沙箱 wrapper HTML"""
+    """
+    为 Vue 插件创建沙箱 wrapper HTML 文件。
+
+    通过 CDN 引入 Vue 3 运行时，加载 .vue 文件后解析 template/script/style，
+    在沙箱模式下渲染。
+
+    Args:
+        plugin_dir: 插件目录路径
+        plugin_name: 插件名称（用于标题）
+        version: Vue 版本（仅用于兼容，默认 "3"）
+    """
     wrapper_html = '''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -7384,7 +7998,12 @@ def api_marketplace_public():
 
 
 def _init_plugins():
-    """启动时自动加载所有插件"""
+    """
+    启动时自动加载所有已发现的插件。
+
+    遍历 plugins 目录下的所有插件 manifest，依次调用 load_plugin。
+    单个插件加载失败不阻塞整体启动。
+    """
     discovered = plugins.discover_plugins()
     for p in discovered:
         try:
@@ -7422,6 +8041,12 @@ STATUS_LABELS = {
 @app.route("/src")
 @login_required
 def src_submit():
+    """
+    安全响应中心 - 漏洞提交页面（URL: /src）。
+
+    权限：任何登录用户
+    功能：提交漏洞报告（标题/类型/严重等级/影响URL/描述等）。
+    """
     """安全响应中心 - 漏洞提交页面（任何登录用户可访问）"""
     return render_template("src_submit.html",
                            username=session["username"],
@@ -7434,6 +8059,12 @@ def src_submit():
 @app.route("/src/my")
 @login_required
 def src_my_reports():
+    """
+    我的漏洞报告列表（URL: /src/my）。
+
+    权限：任何登录用户
+    功能：显示当前用户提交的所有漏洞报告及当前审核状态。
+    """
     """我的漏洞报告列表"""
     return render_template("src_my.html",
                            username=session["username"],
@@ -7446,6 +8077,12 @@ def src_my_reports():
 @login_required
 @admin_required
 def src_admin():
+    """
+    安全响应中心管理后台（URL: /src/admin）。
+
+    权限：仅管理员
+    功能：审核/处理漏洞报告，更新状态和添加备注。
+    """
     """安全响应中心管理后台（仅管理员）"""
     return render_template("src_admin.html",
                            username=session["username"],
@@ -7459,6 +8096,12 @@ def src_admin():
 @app.route("/src/rules")
 @login_required
 def src_rules():
+    """
+    安全响应中心 - 规则页面（URL: /src/rules）。
+
+    权限：任何登录用户
+    功能：展示漏洞报告规则、评分标准等信息。
+    """
     """安全响应中心 - 规则页面（任何登录用户可访问）"""
     return render_template("src_rules.html",
                            username=session["username"],
@@ -7468,6 +8111,12 @@ def src_rules():
 @app.route("/api/src/submit", methods=["POST"])
 @login_required
 def api_src_submit():
+    """
+    提交漏洞报告 API（URL: /api/src/submit, POST）。
+
+    权限：任何登录用户
+    功能：校验必填字段/漏洞类型/严重等级/附件 URL 白名单，写入 src_reports 表。
+    """
     """提交漏洞报告"""
     _init_db_once()
     data = request.get_json(silent=True) or {}
@@ -7519,6 +8168,12 @@ def api_src_submit():
 @app.route("/api/src/reports")
 @login_required
 def api_src_reports():
+    """
+    获取漏洞报告列表（URL: /api/src/reports, GET）。
+
+    权限：管理员可看全部，普通用户只看自己的。
+    功能：支持按 status 过滤。
+    """
     """获取漏洞报告列表（管理员看全部，普通用户看自己的）"""
     conn = get_db()
     if not conn:
@@ -7767,7 +8422,13 @@ def api_admin_reset_reject(req_id):
 
 # ---------- 数据库初始化：生活实用模块 ----------
 def _init_life_tables():
-    """创建记账/习惯/书签表"""
+    """
+    创建生活实用模块的数据库表。
+
+    包含：记账(expenses)、习惯(habits/habit_logs)、书签(bookmarks)、
+    RSS(rss_feeds)、番茄钟(pomodoro_sessions)、签到(checkins)。
+    所有 CREATE TABLE IF NOT EXISTS 保证幂等。
+    """
     conn = get_db()
     if not conn:
         return
@@ -7868,7 +8529,14 @@ def _init_life_tables():
 
 
 def _init_forum_tables():
-    """确保论坛表存在 + 预设版块"""
+    """
+    创建论坛模块的数据库表并插入预设版块。
+
+    包含：版块(forum_categories)、帖子(forum_posts)、回复(forum_replies)、
+    点赞(forum_likes)、通知(forum_notifications)。
+    预设 5 个默认版块：校友动态、活动通知、互助问答、职业发展、随便聊聊。
+    重试机制：死锁（1213）时自动重试最多 2 次。
+    """
     global _forum_tables_done
     if _forum_tables_done:
         return
@@ -7976,7 +8644,12 @@ def _init_forum_tables():
 
 
 def _init_session_tables():
-    """多用户同时在线 — 会话追踪表"""
+    """
+    创建多用户在线会话追踪表。
+
+    包含：active_sessions（活跃会话）、session_events（会话事件日志）。
+    兼容旧表：尝试添加 allow_multi_login 列到 user_profiles。
+    """
     conn = get_db()
     if not conn:
         return
@@ -8024,7 +8697,13 @@ def _init_session_tables():
 
 
 def _init_confession_tables():
-    """匿名树洞表"""
+    """
+    创建匿名树洞模块的数据库表。
+
+    包含：anonymous_posts（匿名帖子）、anonymous_replies（回复）、
+    anonymous_likes（点赞）。支持死锁重试。
+    兼容旧表：尝试添加 username 列。
+    """
     global _confession_tables_done
     if _confession_tables_done:
         return
@@ -8086,7 +8765,13 @@ def _init_confession_tables():
 
 
 def _init_alumni_stories_tables():
-    """校友故事表"""
+    """
+    创建校友故事/回忆录模块的数据库表。
+
+    包含：alumni_stories（故事）、alumni_story_comments（评论）、
+    alumni_story_likes（点赞）。支持死锁重试。
+    状态流转：pending -> approved/rejected。
+    """
     global _alumni_stories_tables_done
     if _alumni_stories_tables_done:
         return
@@ -8149,7 +8834,14 @@ def _init_alumni_stories_tables():
 
 
 def _init_pet_tables():
-    """虚拟宠物表"""
+    """
+    创建虚拟宠物模块的所有数据库表。
+
+    包含：pets（宠物属性）、pet_logs（行为日志）、pet_achievements（成就）、
+    pet_inventory（物品库存）、pet_visits（串门记录）、
+    pet_gifts（赠礼记录）、pet_diary（宠物日记）。
+    宠物 2.0 字段（性格/进化/硬币/装扮等）通过 _ensure_column 增量添加。
+    """
     conn = get_db()
     if not conn:
         return
@@ -8262,7 +8954,18 @@ def _init_pet_tables():
 
 
 def _ensure_column(cursor, table, column, definition):
-    """安全添加列：如果列不存在则 ALTER TABLE ADD COLUMN"""
+    """
+    安全添加数据库列：如果列不存在则 ALTER TABLE ADD COLUMN。
+
+    不存在的列执行 ALTER TABLE，已存在的列静默忽略。
+    用于渐进式 schema 迁移，兼容新旧版本的代码。
+
+    Args:
+        cursor: 数据库游标
+        table: 表名
+        column: 列名
+        definition: SQL 列定义（如 "VARCHAR(20) DEFAULT NULL"）
+    """
     try:
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     except pymysql.MySQLError:
@@ -8312,11 +9015,21 @@ QWEATHER_CITY_MAP = {
 
 @app.route("/weather")
 def weather_page():
+    """
+    天气预报页面（URL: /weather）。
+
+    权限：任意用户
+    功能：调用和风天气 API 显示实时天气和 3 天预报。
+    """
     _init_life_tables()
     return render_template("weather.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
 def _qweather_get(endpoint, params):
-    """封装和风天气 API 请求"""
+    """
+    封装和风天气 API 请求。
+
+    自动附加 QWEATHER_KEY，超时 8 秒，返回 code=200 时返回 data，否则返回 None。
+    """
     params["key"] = QWEATHER_KEY
     try:
         resp = requests.get(f"{QWEATHER_HOST}{endpoint}", params=params, timeout=8)
@@ -8328,7 +9041,12 @@ def _qweather_get(endpoint, params):
         return None
 
 def _qweather_lookup(city_name):
-    """城市搜索 -> 返回 (location_id, city_name, adm2)"""
+    """
+    城市搜索：先查本地映射表 QWEATHER_CITY_MAP，失败则调用和风城市搜索 API。
+
+    Returns:
+        tuple (location_id, city_name, adm2) 或 (None, original_name, "")
+    """
     # 1. 先从本地映射表查找
     stripped = city_name.strip()
     if stripped in QWEATHER_CITY_MAP:
@@ -9458,6 +10176,12 @@ def code_formatter_page():
 @app.route("/portal")
 @login_required
 def portal_page():
+    """
+    信息门户页面（URL: /portal）。
+
+    权限：需要登录
+    功能：聚合展示最新公告、热门帖子、近期活动、校友统计等。
+    """
     _init_forum_tables()
     return render_template("portal.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
@@ -9505,6 +10229,12 @@ def api_portal_summary():
 @app.route("/alumni")
 @login_required
 def alumni_page():
+    """
+    校友录页面（URL: /alumni）。
+
+    权限：需要登录
+    功能：按毕业年份搜索校友，查看公开资料。
+    """
     _init_reset_table()
     return render_template("alumni.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
@@ -9631,6 +10361,12 @@ def api_portal_announce():
 @app.route("/alumni_stories")
 @login_required
 def alumni_stories_page():
+    """
+    校友故事/回忆录页面（URL: /alumni_stories）。
+
+    权限：需要登录
+    功能：发布/浏览校友故事，支持评论和点赞。新故事需管理员审核。
+    """
     _init_alumni_stories_tables()
     return render_template("alumni_stories.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
@@ -9835,6 +10571,12 @@ def api_admin_review_story(sid):
 @app.route("/pet")
 @login_required
 def pet_page():
+    """
+    虚拟宠物页面（URL: /pet）。
+
+    权限：需要登录
+    功能：领养/喂养/玩耍/睡觉/进化/串门，包含完整的宠物养成系统。
+    """
     _init_pet_tables()
     return render_template("pet.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
@@ -9940,7 +10682,19 @@ EVOLUTION_CONFIG = {
 }
 
 def _get_evolution(pet_type, level):
-    """根据等级返回当前进化阶段信息"""
+    """
+    根据宠物类型和等级返回当前进化阶段信息。
+
+    进化阶段配置在 EVOLUTION_CONFIG 中，每种宠物 3 个阶段：
+    幼年 -> 成年 -> 终极形态（对应 level 1/10/25）。
+
+    Args:
+        pet_type: 宠物类型（cat/dog/rabbit/panda）
+        level: 当前等级
+
+    Returns:
+        dict: {stage: int, emoji: str, name: str, min_level: int}
+    """
     stages = EVOLUTION_CONFIG.get(pet_type, EVOLUTION_CONFIG["cat"])
     current = stages[0]
     for s in stages:
@@ -9979,7 +10733,20 @@ ACHIEVEMENTS = {
 }
 
 def _check_achievements(username, conn=None):
-    """检查并解锁成就，返回新解锁的列表"""
+    """
+    检查并解锁宠物成就，返回新解锁的成就列表。
+
+    根据宠物当前的 level/xp/进化阶段/喂食/玩耍/睡眠次数/串门/硬币等数据，
+    检查 ACHIEVEMENTS 字典中的所有成就是否满足条件。
+    新解锁的成就写入 pet_achievements 表和 pet_diary。
+
+    Args:
+        username: 用户名
+        conn: 可选的数据库连接（复用已有连接避免重复创建）
+
+    Returns:
+        list[str]: 新解锁的成就 key 列表
+    """
     close_conn = False
     if not conn:
         conn = get_db()
@@ -10047,7 +10814,20 @@ def _check_achievements(username, conn=None):
 # ==============================================================
 
 def _calc_personality(feed_n, play_n, sleep_n):
-    """根据行动比例计算性格，需要至少20次行动"""
+    """
+    根据行动比例计算宠物性格。
+
+    需要至少 20 次行动才能确定性格。
+    喂食最多 -> 贪吃，玩耍最多 -> 活泼，睡觉最多 -> 慵懒。
+
+    Args:
+        feed_n: 喂食次数
+        play_n: 玩耍次数
+        sleep_n: 睡觉次数
+
+    Returns:
+        str 或 None: "贪吃" / "活泼" / "慵懒" / None（不足 20 次）
+    """
     total = feed_n + play_n + sleep_n
     if total < 20:
         return None
@@ -10104,7 +10884,21 @@ PERSONALITY_DIALOGUE = {
 import random as _random
 
 def _get_dialogue(hunger, happiness, energy, personality):
-    """根据状态返回对话"""
+    """
+    根据宠物当前状态返回一句随机对话。
+
+    根据饥饿/快乐/精力值和性格，从 DIALOGUE_POOL 或 PERSONALITY_DIALOGUE 中随机选取。
+    状态越差（hunger < 30/energy < 30/happiness < 30），触发对应主题的对话。
+
+    Args:
+        hunger: 饥饿值 (0-100)
+        happiness: 快乐值 (0-100)
+        energy: 精力值 (0-100)
+        personality: 性格（"贪吃"/"活泼"/"慵懒" 等或 None）
+
+    Returns:
+        str: 对话文本
+    """
     lines = []
     if hunger < 30:
         lines += DIALOGUE_POOL["hungry"]
@@ -10377,6 +11171,12 @@ def api_pet_action_v2():
 @app.route("/api/pet/shop")
 @login_required
 def api_pet_shop():
+    """
+    获取宠物装扮商店列表（URL: /api/pet/shop, GET）。
+
+    权限：需要登录
+    功能：返回所有可购买的装扮、用户当前硬币数、已拥有和已装备的物品。
+    """
     """装扮商店列表"""
     username = session["username"]
     _init_pet_tables()
@@ -10491,6 +11291,12 @@ def api_pet_accessory_equip():
 @app.route("/api/pet/community")
 @login_required
 def api_pet_community():
+    """
+    获取宠物社区列表（URL: /api/pet/community, GET）。
+
+    权限：需要登录
+    功能：返回所有用户的宠物列表，按等级和硬币数排序。
+    """
     """宠物社区：所有用户的宠物列表 + 排行榜"""
     _init_pet_tables()
     conn = get_db()
@@ -10697,6 +11503,12 @@ def api_pet_game_score():
 @app.route("/api/pet/diary")
 @login_required
 def api_pet_diary():
+    """
+    获取宠物日记（URL: /api/pet/diary, GET）。
+
+    权限：需要登录
+    功能：返回最近 30 条宠物日记条目（升级/进化/串门/成就等事件）。
+    """
     """宠物日记"""
     username = session["username"]
     _init_pet_tables()
@@ -10990,6 +11802,12 @@ def api_complaint_reply(cid):
 @app.route("/confession")
 @login_required
 def confession_page():
+    """
+    匿名树洞页面（URL: /confession）。
+
+    权限：需要登录
+    功能：匿名发帖/回复/点赞，使用随机昵称保护隐私。
+    """
     _init_confession_tables()
     return render_template("confession_wall.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
@@ -11147,6 +11965,14 @@ def api_confession_delete(pid):
 
 # ---- 随机昵称生成 ----
 def generate_nickname():
+    """
+    生成随机匿名昵称（形容词 + 名词）。
+
+    用于匿名树洞帖子，每次生成不同组合。
+
+    Returns:
+        str: 如 "快乐的小树"
+    """
     adjectives = ["快乐的","安静的","勇敢的","温柔的","调皮的","可爱的","酷酷的","暖暖的","潇洒的","憨憨的"]
     nouns = ["小树","星星","月亮","微风","小雨","阳光","猫咪","兔子","熊猫","海豚"]
     return random.choice(adjectives) + random.choice(nouns)
@@ -11159,6 +11985,12 @@ def generate_nickname():
 @app.route("/forum")
 @login_required
 def forum_page():
+    """
+    校友社区论坛首页（URL: /forum）。
+
+    权限：需要登录
+    功能：展示各版块最新帖子，支持发帖/回复/点赞/通知。
+    """
     _init_forum_tables()
     return render_template("forum.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
@@ -11547,6 +12379,12 @@ def api_forum_notifications_read():
 # ---------- Vue3 SPA 入口 ----------
 @app.route("/api/auth/logout", methods=["POST"])
 def api_logout():
+    """
+    JSON API 登出（URL: /api/auth/logout, POST）。
+
+    权限：已登录用户
+    功能：清除 session + 标记数据库会话为非活跃，返回 JSON。
+    """
     """JSON API 登出"""
     ip = request.remote_addr or "0.0.0.0"
     # 标记数据库会话为非活跃
@@ -11559,6 +12397,9 @@ def api_logout():
     session.clear()
     return jsonify({"ok": True, "message": "已退出登录"})
 @app.route("/vue3")
+
+# ========== Vue3 SPA 端点 ==========
+
 def vue3_spa():
     """Vue3 + Element Plus 单页应用入口"""
     _init_db_once()
@@ -11573,6 +12414,12 @@ def vue3_spa():
 
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
+    """
+    JSON API 登录（URL: /api/auth/login, POST）— 供 Vue3 SPA 使用。
+
+    权限：未登录用户
+    功能：与表单登录相同逻辑，返回 JSON 响应。受速率限制和防爆破保护。
+    """
     """JSON API 登录 — 供 Vue3 SPA 使用"""
     _init_db_once()
     if "csrf_token" not in session:
@@ -11669,6 +12516,12 @@ def api_login():
 
 @app.route("/api/auth/register", methods=["POST"])
 def api_register():
+    """
+    JSON API 注册（URL: /api/auth/register, POST）— 供 Vue3 SPA 使用。
+
+    权限：未登录用户
+    功能：与表单注册相同逻辑，返回 JSON 响应。受速率限制和密码复杂度校验。
+    """
     """JSON API 注册 — 供 Vue3 SPA 使用"""
     _init_db_once()
     if "csrf_token" not in session:
@@ -11731,6 +12584,12 @@ def api_register():
 
 @app.route("/api/auth/status")
 def api_auth_status():
+    """
+    返回当前登录状态（URL: /api/auth/status, GET）— 供 Vue3 SPA 初始化时检查。
+
+    权限：任意用户
+    功能：检查 session 中是否有 username，返回 logged_in/username/permission/avatar。
+    """
     """返回当前登录状态 — 供 Vue3 SPA 初始化时检查"""
     if "username" in session:
         return jsonify({
@@ -11744,6 +12603,13 @@ def api_auth_status():
 
 @app.route("/api/auth/forgot_password", methods=["POST"])
 def api_forgot_password():
+    """
+    JSON API 忘记密码（URL: /api/auth/forgot_password, POST）— 供 Vue3 SPA 使用。
+
+    权限：未登录用户
+    功能：验证用户名存在后，插入重置申请到 reset_requests 表（待管理员审核）。
+          受速率限制（3 次/5 分钟）。
+    """
     """JSON API 忘记密码 — 供 Vue3 SPA 使用"""
     _init_db_once()
     if "csrf_token" not in session:
@@ -11790,7 +12656,15 @@ def api_forgot_password():
 
 # ---------- 启动 ----------
 def _kill_orphan_port(port: int):
-    """杀掉占用指定端口的本用户残留进程，防止启动时端口冲突。"""
+    """
+    杀掉占用指定端口的本用户残留进程，防止启动时端口冲突。
+
+    通过 lsof 查找占用端口的 PID，过滤掉自身后发送 SIGKILL。
+    不阻塞启动（清理失败不影响主流程）。
+
+    Args:
+        port: 要清理的端口号
+    """
     import subprocess
     import signal
     try:
