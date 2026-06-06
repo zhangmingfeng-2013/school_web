@@ -274,7 +274,7 @@ _BLOCKED_UAS = [
     "dirbuster", "openvas", "hydra", "amass", "gobuster", "wpscan",
     "zgrab", "masscan", "whatweb", "httprint", "jaeles", "zaproxy",
     "davtest", "wfuzz", "sqlint", "sqlworm", "sqlquery", "sqlmapper",
-    "wapiti", "skipfish", "nmap", "zenmap", "w3af", "dirb", "nuclei"
+    "wapiti", "skipfish", "nmap""w3af", "dirb", "nuclei"
 ]
 
 
@@ -2164,7 +2164,7 @@ def forgot_password():
                 (username,)
             )
             cursor.execute("DELETE FROM password_reset_tokens WHERE expires_at < NOW()")
-            # 创建新的待审核申请（token 为 NULL，等待管理员审核）
+            # 创建新地待审核申请（token 为 NULL，等待管理员审核）
             cursor.execute(
                 "INSERT INTO password_reset_tokens (username, token, used, request_reason, request_status, expires_at) VALUES (%s, NULL, 0, %s, 'pending', DATE_ADD(NOW(), INTERVAL 7 DAY))",
                 (username, f"联系方式: {contact or '未提供'}\n申请理由: {reason}")
@@ -6217,6 +6217,7 @@ def calendar_view():
 @login_required
 def api_calendar_events():
     """获取日历事件（支持按月查询）"""
+    global cursor
     year = request.args.get("year", "", type=int)
     month = request.args.get("month", "", type=int)
     username = session["username"]
@@ -6323,6 +6324,7 @@ def api_calendar_add_event():
 @login_required
 def api_calendar_update_event(eid):
     """更新日历事件"""
+    global cursor
     data = request.get_json() or {}
     conn = get_db()
     if not conn:
@@ -6362,6 +6364,7 @@ def api_calendar_update_event(eid):
 @login_required
 def api_calendar_delete_event(eid):
     """删除日历事件"""
+    global cursor
     conn = get_db()
     if not conn:
         return jsonify({"ok": False, "error": "Database unavailable"}), 500
@@ -6969,6 +6972,7 @@ def api_study_todos():
 @login_required
 def api_study_todos_add():
     """添加待办"""
+    global cursor
     data = request.get_json() or {}
     title = sanitize_input(data.get("title",""),200)
     if not title: return jsonify({"error":"标题不能为空"}),400
@@ -7027,6 +7031,7 @@ def api_study_todos_toggle(tid):
 @login_required
 def api_study_flashcards():
     """获取抽认卡列表"""
+    global cursor
     conn = get_db()
     if not conn: return jsonify([]),500
     try:
@@ -12257,6 +12262,7 @@ def api_forum_reply():
     cursor.close(); conn.close()
 
     # 记活跃分
+    # noinspection PyBroadException
     try:
         ac = get_db()
         if ac:
@@ -12707,7 +12713,7 @@ if __name__ == "__main__":
         s.close()
         print(f"  局域网访问: http://{lan_ip}:4444")
     except Exception:
-        print(f"  局域网访问: http://192.168.3.160:5800")
+        print(f"  局域网访问: http://192.168.3.204:5800")
     print(f"  调试模式: {'开启' if os.environ.get('FLASK_DEBUG') else '关闭'}")
     print("=" * 50)
     

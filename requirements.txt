@@ -10,3 +10,5 @@ DateTime~=6.0
 bcrypt~=5.0.0
 Werkzeug~=3.1.8
 waitress~=3.0.2
+pypdf2
+feedparser
