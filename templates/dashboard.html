@@ -6,6 +6,14 @@
     <span class="badge fs-6 {% if permission == 'administrator' %}bg-danger{% elif permission == 'vip' %}bg-warning text-dark{% elif permission == 'guest' %}bg-secondary{% else %}bg-info{% endif %}">
         {{ '🔑 ' + _('dashboard_perm_admin') if permission == 'administrator' else ('⭐ ' + _('dashboard_perm_vip') if permission == 'vip' else ('👤 ' + _('dashboard_perm_guest') if permission == 'guest' else '👤 ' + _('dashboard_perm_user'))) }}
     </span>
+
+    {% if warn_no_security %}
+    <div class="alert alert-warning mt-3 mx-auto" style="max-width:600px;text-align:left;">
+        <strong>⚠️ 安全提醒：</strong>您还未设置<strong>安全问题</strong>。<br>
+        设置后可通过安全问题自助找回密码。未设置则忘记密码时只能联系管理员。<br>
+        <a href="/profile" class="btn btn-sm btn-warning mt-2">👉 立即前往设置安全问题</a>
+    </div>
+    {% endif %}
     <div class="mt-2" style="font-size:.85rem;color:#666;">
         {{ _('dashboard_online_count') }}：<strong id="online-count">--</strong> 人
         <span id="online-users-toggle" style="cursor:pointer;margin-left:8px;color:#3b82f6;font-size:.8rem;" data-csp-click="toggleOnlineUsers">{{ _('device_manager_expand') }}</span>

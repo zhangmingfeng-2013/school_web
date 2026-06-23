@@ -218,6 +218,78 @@ class RateLimiter:
         except Exception:
             pass
 
+    def is_blocked(self, ip, window=240):
+        """
+        只读检查：IP 是否在封禁期内（不记录任何请求）。
+
+        Args:
+            ip: IP 地址字符串
+            window: 封禁窗口（秒）
+
+        Returns:
+            bool: True 表示在封禁期内
+        """
+        now = time.time()
+        with self._lock:
+            hits = self._buckets.get((ip, "blocked"), [])
+            if hits:
+                latest = max(hits)
+                return now - latest < window
+            return False
+
+    def get_active_ips(self):
+        """
+        获取当前活跃跟踪的 IP 及其请求计数（供管理后台显示）。
+
+        Returns:
+            dict: {ip: request_count} 最近 1 小时内有活动的 IP。
+        """
+        now = time.time()
+        result = {}
+        with self._lock:
+            for (ip, route), hits in list(self._buckets.items()):
+                if route == "global":
+                    fresh = [t for t in hits if now - t < 3600]
+                    if fresh:
+                        result[ip] = len(fresh)
+        return result
+
+    def get_blocked_ips(self):
+        """
+        获取当前被封禁的 IP 及其封禁剩余时间（供管理后台显示）。
+
+        Returns:
+            dict: {ip: remaining_seconds} 当前被封禁的 IP。
+        """
+        now = time.time()
+        result = {}
+        with self._lock:
+            for (ip, route), hits in list(self._buckets.items()):
+                if route == "blocked":
+                    # 取最新时间戳，计算剩余封禁时间
+                    if hits:
+                        latest = max(hits)
+                        remaining = latest - now
+                        if remaining > 0:
+                            result[ip] = int(remaining)
+        return result
+
+    def clear_ip(self, ip):
+        """
+        清除指定 IP 的所有速率限制记录（用于管理员手动解封）。
+
+        Args:
+            ip: IP 地址字符串。
+        """
+        with self._lock:
+            for route in ("global", "blocked", "rate"):
+                self._buckets.pop((ip, route), None)
+
+    def clear_all(self):
+        """清除所有速率限制记录（用于管理员重置）。"""
+        with self._lock:
+            self._buckets.clear()
+
     def shutdown(self):
         """
         优雅关闭：取消待执行的定时器并强制保存一次。
@@ -521,6 +593,14 @@ def _init_reset_table():
                 INDEX idx_cal_date (event_date)
             )
         """)
+        # 用户备忘录（多用户隔离，每个用户一条记录）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_notes (
+                username VARCHAR(50) PRIMARY KEY,
+                content LONGTEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
         cursor.close()
         conn.close()
@@ -702,9 +782,6 @@ def _save_rate_config():
         pass
 
 rate_config = _load_rate_config()
-ip_requests = {}        # {ip: deque(timestamps)}
-ip_blocked = {}         # {ip: blocked_until_timestamp}
-ip_blocked_probes = {}  # {ip: probe_count}
 ip_whitelist = set()    # 白名单 IP，不受速率限制
 ip_manual_blocked = {}  # {ip: blocked_until_timestamp} 手动封禁
 recent_blocks = []  # [(ip, timestamp, reason)] — 最近封禁记录，供通知功能使用
@@ -893,10 +970,7 @@ def api_captcha():
     resp.headers["Expires"] = "0"
     return resp
 
-# ---------- 登录防爆破 ----------
-login_lockout = {}  # {username: (attempts, lockout_until)}
-
-rate_lock = threading.Lock()
+# ---------- 登录防爆破（使用文件持久化 rate_limiter，多 worker 共享状态） ----------
 
 # ---------- 多用户在线会话超时 ----------
 SESSION_IDLE_TIMEOUT = 1800  # 秒（30 分钟空闲超时）
@@ -907,10 +981,9 @@ def check_rate_limit():
     全局 IP 速率限制与封禁（before_request 执行顺序: 第 4 个）。
 
     URL: 全局（跳过 /static/ /assets/ /favicon.ico /share/）
-    功能：滑动窗口统计每个 IP 的请求数，超过 RATE_LIMIT 则封禁 BLOCK_DURATION 秒。
-          封禁期间继续试探次数达到 BLOCK_PROBE_LIMIT 会延长封禁（BLOCK_EXTEND 秒）。
+    功能：使用文件持久化 RateLimiter（多 worker 共享状态），
+          滑动窗口统计每个 IP 的请求数，超过 RATE_LIMIT 则封禁 BLOCK_DURATION 秒。
           支持白名单（ip_whitelist）和手动封禁（ip_manual_blocked）。
-    安全：使用 threading.Lock 保证并发安全。
     """
     # 静态文件和分享链接跳过速率限制
     path = request.path
@@ -918,47 +991,29 @@ def check_rate_limit():
         return None
     ip = request.remote_addr or "0.0.0.0"
     now = time.time()
-    with rate_lock:
-        # 白名单：跳过检查
-        if ip in ip_whitelist:
-            return None
-        # 手动封禁检查
-        if ip in ip_manual_blocked and now < ip_manual_blocked[ip]:
-            remaining = int(ip_manual_blocked[ip] - now)
-            return jsonify({"error": f"IP已被管理员手动封禁，剩余 {remaining} 秒"}), 403
-        # 检查是否在封禁期
-        if ip in ip_blocked:
-            if now < ip_blocked[ip]:
-                # 累加封禁期间的试探次数
-                ip_blocked_probes[ip] = ip_blocked_probes.get(ip, 0) + 1
-                if ip_blocked_probes[ip] >= rate_config["BLOCK_PROBE_LIMIT"]:
-                    ip_blocked[ip] += rate_config["BLOCK_EXTEND"]
-                    ip_blocked_probes[ip] = 0  # 重置计数
-                    remaining = int(ip_blocked[ip] - now)
-                    return jsonify({"error": f"封禁期间持续试探，封禁延长 {rate_config['BLOCK_EXTEND']} 秒，剩余 {remaining} 秒"}), 403
-                remaining = int(ip_blocked[ip] - now)
-                return jsonify({"error": f"请求过于频繁，IP已被封禁，剩余 {remaining} 秒"}), 403
-            else:
-                del ip_blocked[ip]
-                ip_blocked_probes.pop(ip, None)
-        # 记录本次请求
-        if ip not in ip_requests:
-            ip_requests[ip] = deque()
-        q = ip_requests[ip]
-        # 清理过期记录
-        while q and now - q[0] > rate_config["RATE_WINDOW"]:
-            q.popleft()
-        q.append(now)
-        # 超限则封禁
-        if len(q) > rate_config["RATE_LIMIT"]:
-            ip_blocked[ip] = now + rate_config["BLOCK_DURATION"]
-            ip_blocked_probes[ip] = 0
-            with recent_blocks_lock:
-                recent_blocks.append((ip, now, "请求超限"))
-                if len(recent_blocks) > 100:
-                    recent_blocks.pop(0)
-            del ip_requests[ip]
-            return jsonify({"error": f"请求过于频繁，IP已被封禁 {rate_config['BLOCK_DURATION']} 秒"}), 403
+
+    # 白名单：跳过检查
+    if ip in ip_whitelist:
+        return None
+
+    # 手动封禁检查
+    if ip in ip_manual_blocked and now < ip_manual_blocked[ip]:
+        remaining = int(ip_manual_blocked[ip] - now)
+        return jsonify({"error": f"IP已被管理员手动封禁，剩余 {remaining} 秒"}), 403
+
+    # 检查是否在封禁期内（只读，不记录）
+    if rate_limiter.is_blocked(ip, window=rate_config["BLOCK_DURATION"]):
+        return jsonify({"error": f"请求过于频繁，IP已被封禁，剩余约 {rate_config['BLOCK_DURATION']} 秒"}), 403
+
+    # 检查短时速率限制（记录请求时间戳）
+    if not rate_limiter.check((ip, "global"), max_requests=rate_config["RATE_LIMIT"], window=rate_config["RATE_WINDOW"]):
+        # 超限：触发封禁并返回错误
+        rate_limiter.check((ip, "blocked"), max_requests=1, window=rate_config["BLOCK_DURATION"])
+        with recent_blocks_lock:
+            recent_blocks.append((ip, now, "请求超限"))
+            if len(recent_blocks) > 100:
+                recent_blocks.pop(0)
+        return jsonify({"error": f"请求过于频繁，IP已被封禁 {rate_config['BLOCK_DURATION']} 秒"}), 403
 
 
 @app.before_request
@@ -1322,15 +1377,21 @@ def _init_album_tables(conn):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    # 分享链接
+    # 分享链接（username 用于多用户隔离，追踪分享创建者）
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS album_share_links (
             id INT AUTO_INCREMENT PRIMARY KEY,
             image_id INT NOT NULL,
             token VARCHAR(64) NOT NULL UNIQUE,
+            username VARCHAR(50) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # 兼容旧表：添加 username 列
+    try:
+        cursor.execute("ALTER TABLE album_share_links ADD COLUMN username VARCHAR(50) DEFAULT NULL")
+    except Exception:
+        pass
     # 聊天消息
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS chat_messages (
@@ -1710,6 +1771,11 @@ def login():
         if not rate_limiter.check((client_ip, "login_page"), max_requests=_limit, window=_window):
             return Response("请求过于频繁", status=429)
 
+    # GET 请求：已登录用户访问登录页，提示可切换账户
+    if request.method == "GET" and "username" in session:
+        current_user = session["username"]
+        flash(f"您已登录为「{sanitize_input(current_user)}」。如需切换到其他账户，请先退出当前账户再登录。", "info")
+
     if request.method == "POST":
         # 登录速率限制
         client_ip = request.remote_addr or "unknown"
@@ -1747,14 +1813,10 @@ def login():
             flash(err_msg, "danger")
             return render_template("login.html", csrf_token=session.get("csrf_token", ""))
 
-        # 登录防爆破检查
-        now = time.time()
-        if username in login_lockout:
-            attempts, lockout_until = login_lockout[username]
-            if lockout_until and now < lockout_until:
-                remaining = int(lockout_until - now)
-                flash(f"账户已被锁定，请 {remaining // 60} 分 {remaining % 60} 秒后重试", "danger")
-                return render_template("login.html", csrf_token=session.get("csrf_token", ""))
+        # 登录防爆破检查（文件持久化，多 worker 共享）
+        if not rate_limiter.check((username, "login_fail"), max_requests=5, window=300):
+            flash("账户已被锁定，请 5 分钟后重试", "danger")
+            return render_template("login.html", csrf_token=session.get("csrf_token", ""))
 
         conn = get_db()
         if not conn:
@@ -1778,8 +1840,6 @@ def login():
                     pwd_valid = (result[0] == password)
                 _login_logger.info(f"LOGIN_DB_CHECK | user={username} | pwd_valid={pwd_valid} | perm={result[1]}")
                 if pwd_valid:
-                    # 登录成功：清除失败记录
-                    login_lockout.pop(username, None)
                     # 生成新的 session_key
                     new_session_key = uuid.uuid4().hex
                     # 多用户同时在线：检查是否允许
@@ -1815,22 +1875,35 @@ def login():
                         write_log("用户登录", f"用户名: {username}, 权限: {result[1]}")
                         flash(f"欢迎回来，{sanitize_input(username)}！", "success")
                     record_activity(username, "登录", 1)
+                    # 检查是否设置了安全问题，未设置则在 dashboard 提醒
+                    has_security = False
+                    try:
+                        conn_check = get_db()
+                        if conn_check:
+                            cur_check = conn_check.cursor()
+                            cur_check.execute(
+                                "SELECT security_question FROM users WHERE User_Name=%s",
+                                (username,)
+                            )
+                            sec = cur_check.fetchone()
+                            has_security = sec and sec[0] and sec[0].strip()
+                            cur_check.close()
+                            conn_check.close()
+                    except Exception:
+                        pass
+                    session["_warn_no_security"] = not has_security
                     _login_logger.info(f"LOGIN_SUCCESS | user={username} | perm={result[1]} | redirect_to=/dashboard")
                     return redirect(url_for("dashboard"))
-            else:
-                # 登录失败：记录尝试次数
-                _login_logger.info(f"LOGIN_FAIL | reason=user_not_found | user={username}")
-                attempts, _ = login_lockout.get(username, (0, 0))
-                attempts += 1
-                if attempts >= 5:
-                    login_lockout[username] = (attempts, time.time() + 5 * 60)
-                    write_log("账户锁定", f"用户名: {username}, 失败 {attempts} 次，锁定 5 分钟")
-                    flash(f"密码错误次数过多，账户已锁定 5 分钟", "danger")
                 else:
-                    login_lockout[username] = (attempts, 0)
-                    remaining = 5 - attempts
-                    write_log("登录失败", f"用户名: {username}, 剩余 {remaining} 次尝试")
-                    flash(f"用户名或密码错误，还剩 {remaining} 次尝试机会", "danger")
+                    # 密码错误
+                    _login_logger.info(f"LOGIN_FAIL | reason=wrong_password | user={username}")
+                    write_log("登录失败", f"用户名: {username}, 密码错误")
+                    flash("用户名或密码错误", "danger")
+            else:
+                # 登录失败（用户名不存在）
+                _login_logger.info(f"LOGIN_FAIL | reason=user_not_found | user={username}")
+                write_log("登录失败", f"用户名: {username}")
+                flash("用户名或密码错误", "danger")
         except pymysql.MySQLError as e:
             _login_logger.info(f"LOGIN_FAIL | reason=db_error | error={e}")
             flash(f"数据库错误: {str(e)}", "danger")
@@ -1961,7 +2034,6 @@ def logout():
 
 
 # ---------- 路由：忘记密码 ----------
-_reset_rate = {}  # {ip: (count, last_time)} 防滥用
 
 @app.route("/forgot_password", methods=["GET", "POST"])
 
@@ -1979,13 +2051,10 @@ def forgot_password():
 
     if request.method == "POST":
         ip = request.remote_addr or "0.0.0.0"
-        now = time.time()
 
-        # 速率限制：每 IP 3分钟内最多3次尝试
-        cnt, last = _reset_rate.get(ip, (0, 0))
-        if cnt >= 3 and now - last < 180:
-            remaining = int(180 - (now - last))
-            flash(f"操作过于频繁，请 {remaining} 秒后重试", "danger")
+        # 速率限制：每 IP 3分钟内最多3次尝试（文件持久化，多 worker 共享）
+        if not rate_limiter.check((ip, "forgot_password"), max_requests=3, window=180):
+            flash("操作过于频繁，请 3 分钟后重试", "danger")
             return render_template("forgot_password.html",
                                    csrf_token=session.get("csrf_token", ""),
                                    security_question=None, reset_token=None)
@@ -2011,9 +2080,10 @@ def forgot_password():
                                        csrf_token=session.get("csrf_token", ""),
                                        security_question=None, reset_token=None)
 
+            # 安全：防止用户名枚举——统一返回消息
             conn = get_db()
             if not conn:
-                flash("数据库连接失败", "danger")
+                flash("数据库连接失败，请稍后重试", "danger")
                 return render_template("forgot_password.html",
                                        csrf_token=session.get("csrf_token", ""),
                                        security_question=None, reset_token=None)
@@ -2027,15 +2097,14 @@ def forgot_password():
             conn.close()
 
             if not row:
-                flash("用户名不存在", "danger")
+                # 用户名不存在——不直接告知，统一提示
+                flash("如果该用户存在且设置了安全问题，将进入下一步验证", "info")
             elif not row[0] or not row[0].strip():
                 # 无安全问题 → 设置 session 并显示管理员申请表单
-                _reset_rate[ip] = (cnt + 1, now)
                 session["reset_username"] = username
                 session["reset_attempts"] = 0
                 flash("该用户未设置安全问题，请通过管理员申请重置密码", "warning")
             else:
-                _reset_rate[ip] = (cnt + 1, now)
                 session["reset_username"] = username
                 session["reset_attempts"] = 0  # 重置错误尝试次数
                 security_question = row[0]
@@ -2046,6 +2115,15 @@ def forgot_password():
             username = session.get("reset_username", "")
             if not username:
                 flash("会话已过期，请重新操作", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None)
+
+            # 安全：按用户名限制安全答案尝试次数（文件持久化，不可通过清 Cookie 绕过）
+            if not rate_limiter.check((username, "forgot_pwd_answer"), max_requests=5, window=1800):
+                session.pop("reset_username", None)
+                session.pop("reset_attempts", None)
+                flash("安全答案错误次数过多，请 30 分钟后重试", "danger")
                 return render_template("forgot_password.html",
                                        csrf_token=session.get("csrf_token", ""),
                                        security_question=None, reset_token=None)
@@ -2092,7 +2170,7 @@ def forgot_password():
                     security_answer.lower().strip(),
                     stored_answer.lower()
                 ):
-                    # 错误次数限制：最多 5 次
+                    # 错误次数记录（双重保障：session 内计数 + 文件持久化限制）
                     attempts = session.get("reset_attempts", 0) + 1
                     session["reset_attempts"] = attempts
                     remaining = 5 - attempts
@@ -2105,7 +2183,6 @@ def forgot_password():
                         security_question = row[0]
                 else:
                     # 验证通过！生成重置令牌
-                    _reset_rate[ip] = (cnt + 1, now)
                     session.pop("reset_attempts", None)
                     session.pop("reset_username", None)
 
@@ -2139,6 +2216,14 @@ def forgot_password():
                                        security_question=None, reset_token=None,
                                        admin_reset_needed=False)
 
+            # 安全：按用户名限制管理员重置申请频率（防止骚扰）
+            if not rate_limiter.check((username, "forgot_pwd_admin_req"), max_requests=1, window=86400):
+                flash("该用户 24 小时内已提交过管理员重置申请，请耐心等待审核", "danger")
+                return render_template("forgot_password.html",
+                                       csrf_token=session.get("csrf_token", ""),
+                                       security_question=None, reset_token=None,
+                                       admin_reset_needed=True)
+
             reason = sanitize_input(request.form.get("reason", ""), 500)
             contact = sanitize_input(request.form.get("contact", ""), 100)
             if not reason:
@@ -2148,7 +2233,6 @@ def forgot_password():
                                        security_question=None, reset_token=None,
                                        admin_reset_needed=True)
 
-            _reset_rate[ip] = (cnt + 1, now)
             conn = get_db()
             if not conn:
                 flash("数据库连接失败", "danger")
@@ -2227,6 +2311,11 @@ def reset_password():
         elif not re.search(r"[0-9]", new_pwd):
             flash("密码需包含数字", "danger")
         else:
+            # 安全：按用户名限制令牌验证尝试（防止暴力枚举令牌）
+            if not rate_limiter.check((username, "reset_pwd_token"), max_requests=5, window=600):
+                flash("重置密码尝试次数过多，请 10 分钟后重试", "danger")
+                return render_template("reset_password.html",
+                                       csrf_token=session.get("csrf_token", ""))
             conn = get_db()
             if conn:
                 cursor = conn.cursor()
@@ -2741,13 +2830,34 @@ def dashboard():
                 conn.close()
         except Exception:
             pass
+    # 检查安全问题是否设置（用于提醒）
+    warn_no_security = session.pop("_warn_no_security", False)
+    if not warn_no_security and session.get("permission") != "administrator":
+        # 非首次登录也检查一次（管理员不用提醒）
+        try:
+            conn = get_db()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT security_question FROM users WHERE User_Name=%s",
+                    (session["username"],)
+                )
+                sec = cursor.fetchone()
+                if not sec or not sec[0] or not sec[0].strip():
+                    warn_no_security = True
+                cursor.close()
+                conn.close()
+        except Exception:
+            pass
+
     return render_template("dashboard.html",
                            username=session["username"],
                            permission=session["permission"],
                            leaderboard=leaderboard,
                            my_rank=my_rank,
                            pending_request=pending_request,
-                           pending_admin_reqs=pending_admin_reqs)
+                           pending_admin_reqs=pending_admin_reqs,
+                           warn_no_security=warn_no_security)
 
 
 # ---------- 路由：个人资料 ----------
@@ -3033,18 +3143,18 @@ def api_system_users():
         if u not in user_map or s["idle_seconds"] < user_map[u]["idle_seconds"]:
             user_map[u] = s
 
+    blocked_ips = rate_limiter.get_blocked_ips()
+    active_ips = rate_limiter.get_active_ips()
+
     users = []
     for username, s in user_map.items():
         ip = s["ip"]
-        blocked = ip in ip_blocked and now < ip_blocked[ip]
+        blocked = ip in blocked_ips
         whitelisted = ip in ip_whitelist
         manual_blocked = ip in ip_manual_blocked and now < ip_manual_blocked[ip]
 
         # 速率统计
-        reqs = 0
-        with rate_lock:
-            if ip in ip_requests:
-                reqs = len(ip_requests[ip])
+        reqs = active_ips.get(ip, 0)
 
         users.append({
             "username": username,
@@ -4242,7 +4352,7 @@ def api_album_share(img_id):
         token = uuid.uuid4().hex
         try:
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO album_share_links (image_id, token) VALUES (%s, %s)", [img_id, token])
+            cursor.execute("INSERT INTO album_share_links (image_id, token, username) VALUES (%s, %s, %s)", [img_id, token, session["username"]])
             conn.commit()
             cursor.close()
             conn.close()
@@ -5551,7 +5661,47 @@ def api_translator():
 
 
 # ---------- 路由：备忘录 ----------
-NOTES_FILE = os.path.join(os.path.dirname(__file__), "..", "notes.txt")
+@app.route("/notes", methods=["GET", "POST"])
+@login_required
+def notes():
+    """
+    备忘录页面（URL: /notes）。
+
+    权限：需要登录
+    功能：每个用户独立的备忘录，内容存储到数据库 user_notes 表（上限 50KB）。
+          多用户同时在线互不影响，各自拥有独立的备忘录空间。
+    """
+    username = session["username"]
+    conn = get_db()
+    content = ""
+
+    if conn:
+        try:
+            cursor = conn.cursor()
+            if request.method == "POST":
+                content = request.form.get("content", "")[:50000]  # 限制 50KB
+                cursor.execute(
+                    "INSERT INTO user_notes (username, content) VALUES (%s, %s) ON DUPLICATE KEY UPDATE content=%s",
+                    (username, content, content)
+                )
+                conn.commit()
+                flash("备忘录已保存", "success")
+            else:
+                cursor.execute("SELECT content FROM user_notes WHERE username=%s", (username,))
+                row = cursor.fetchone()
+                if row:
+                    content = row[0] or ""
+            cursor.close()
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
+    return render_template("notes.html",
+                           content=content,
+                           username=session["username"],
+                           permission=session["permission"])
+
 
 # ---------- 路由：修改密码 ----------
 @app.route("/change_password", methods=["GET", "POST"])
@@ -5611,18 +5761,47 @@ def change_password():
                 try:
                     cursor = conn.cursor()
                     hashed_new = generate_password_hash(new_pwd)
+
+                    # 安全：验证操作者（当前登录用户）的身份
+                    cursor.execute(
+                        "SELECT User_Password FROM users WHERE User_Name = %s",
+                        (current_user,)
+                    )
+                    operator = cursor.fetchone()
+                    if not operator:
+                        flash("当前用户不存在", "danger")
+                        cursor.close()
+                        conn.close()
+                        return render_template("change_password.html",
+                                               is_admin=is_admin, users=users,
+                                               username=session["username"],
+                                               permission=session["permission"])
+
                     if is_admin:
+                        # 管理员修改他人密码：必须验证管理员自己的密码
+                        if target_user != current_user and not safe_check_password_hash(operator[0], old_pwd):
+                            flash("管理员密码错误，无法修改他人密码", "danger")
+                            cursor.close()
+                            conn.close()
+                            return render_template("change_password.html",
+                                                   is_admin=is_admin, users=users,
+                                                   username=session["username"],
+                                                   permission=session["permission"])
                         cursor.execute(
                             "UPDATE users SET User_Password = %s WHERE User_Name = %s",
                             (hashed_new, target_user)
                         )
                     else:
-                        cursor.execute(
-                            "SELECT User_Password FROM users WHERE User_Name = %s",
-                            (current_user,)
-                        )
-                        result = cursor.fetchone()
-                        if not result or not safe_check_password_hash(result[0], old_pwd):
+                        # 普通用户：只能修改自己的密码，必须验证原密码
+                        if target_user != current_user:
+                            flash("您只能修改自己的密码", "danger")
+                            cursor.close()
+                            conn.close()
+                            return render_template("change_password.html",
+                                                   is_admin=is_admin, users=users,
+                                                   username=session["username"],
+                                                   permission=session["permission"])
+                        if not safe_check_password_hash(operator[0], old_pwd):
                             flash("原密码错误", "danger")
                             cursor.close()
                             conn.close()
@@ -5652,31 +5831,6 @@ def change_password():
                            permission=session["permission"])
 
 
-# ---------- 路由：备忘录 ----------
-@app.route("/notes", methods=["GET", "POST"])
-@login_required
-def notes():
-    """
-    备忘录页面（URL: /notes）。
-
-    权限：需要登录
-    功能：简单的文本备忘录，内容存储到本地 notes.txt 文件（上限 50KB）。
-    """
-    content = ""
-    if os.path.exists(NOTES_FILE):
-        with open(NOTES_FILE, "r", encoding="utf-8") as f:
-            content = f.read()
-
-    if request.method == "POST":
-        content = request.form.get("content", "")[:50000]  # 限制 50KB
-        with open(NOTES_FILE, "w", encoding="utf-8") as f:
-            f.write(content)
-        flash("备忘录已保存", "success")
-
-    return render_template("notes.html",
-                           content=content,
-                           username=session["username"],
-                           permission=session["permission"])
 
 
 # ---------- 路由：计算器 ----------
@@ -5756,41 +5910,52 @@ def api_admin_ip_stats():
     权限：仅管理员
     功能：返回每个 IP 的请求数/速率/封禁状态/白名单/手动封禁等信息。
     """
-    """返回所有IP的请求统计"""
+    """返回所有IP的请求统计（使用文件持久化 RateLimiter，多 worker 共享）"""
     now = time.time()
+    blocked_ips = rate_limiter.get_blocked_ips()
+    active_req_ips = rate_limiter.get_active_ips()
+
     result = []
-    with rate_lock:
-        for ip, q in list(ip_requests.items()):
-            count = len(q)
-            first_req = q[0] if q else now
-            last_req = q[-1] if q else now
+    seen_ips = set()
+    # 活跃 IP
+    for ip, count in active_req_ips.items():
+        seen_ips.add(ip)
+        result.append({
+            "ip": ip,
+            "requests": count,
+            "first_request": "-",
+            "last_request": "-",
+            "rate_per_sec": round(count / max(rate_config["RATE_WINDOW"], 1), 2),
+            "blocked": False,
+            "block_remaining": 0,
+            "block_probes": 0
+        })
+    # 被封禁 IP
+    for ip, remaining in blocked_ips.items():
+        if ip not in seen_ips:
             result.append({
                 "ip": ip,
-                "requests": count,
-                "first_request": datetime.fromtimestamp(first_req).strftime("%H:%M:%S"),
-                "last_request": datetime.fromtimestamp(last_req).strftime("%H:%M:%S"),
-                "rate_per_sec": round(count / max(now - first_req, 1), 2) if count > 1 else count,
-                "blocked": False,
-                "block_remaining": 0
+                "requests": 0,
+                "first_request": "-",
+                "last_request": "-",
+                "rate_per_sec": 0,
+                "blocked": True,
+                "block_remaining": remaining,
+                "block_probes": 0
             })
-        for ip, blocked_until in list(ip_blocked.items()):
-            if now < blocked_until:
-                result.append({
-                    "ip": ip,
-                    "requests": 0,
-                    "first_request": "-",
-                    "last_request": "-",
-                    "rate_per_sec": 0,
-                    "blocked": True,
-                    "block_remaining": int(blocked_until - now),
-                    "block_probes": ip_blocked_probes.get(ip, 0)
-                })
+        else:
+            for r in result:
+                if r["ip"] == ip:
+                    r["blocked"] = True
+                    r["block_remaining"] = remaining
+                    break
+
     # 从数据库获取活跃会话的 IP 信息（替代内存 ip_last_active）
-    active_ips = session_manager.get_active_ips()
+    active_sessions = session_manager.get_active_ips()
     for r in result:
         ip = r["ip"]
-        if ip in active_ips:
-            last_active = active_ips[ip]
+        if ip in active_sessions:
+            last_active = active_sessions[ip]
             try:
                 r["last_active"] = datetime.fromtimestamp(float(last_active)).strftime("%H:%M:%S")
                 r["idle_sec"] = int(now - float(last_active))
@@ -5812,8 +5977,8 @@ def api_admin_ip_stats():
         "rate_limit": rate_config["RATE_LIMIT"],
         "rate_window": rate_config["RATE_WINDOW"],
         "block_duration": rate_config["BLOCK_DURATION"],
-        "block_probe_limit": rate_config["BLOCK_PROBE_LIMIT"],
-        "block_extend": rate_config["BLOCK_EXTEND"]
+        "block_probe_limit": rate_config.get("BLOCK_PROBE_LIMIT", 200),
+        "block_extend": rate_config.get("BLOCK_EXTEND", 300)
     })
 
 
@@ -5829,19 +5994,14 @@ def api_admin_clear_ip_stats():
     """
     """清除IP统计"""
     ip = request.args.get("ip")
-    with rate_lock:
-        if ip:
-            ip_requests.pop(ip, None)
-            ip_blocked.pop(ip, None)
-            ip_blocked_probes.pop(ip, None)
-            ip_manual_blocked.pop(ip, None)
-            ip_whitelist.discard(ip)
-        else:
-            ip_requests.clear()
-            ip_blocked.clear()
-            ip_blocked_probes.clear()
-            ip_manual_blocked.clear()
-            ip_whitelist.clear()
+    if ip:
+        rate_limiter.clear_ip(ip)
+        ip_manual_blocked.pop(ip, None)
+        ip_whitelist.discard(ip)
+    else:
+        rate_limiter.clear_all()
+        ip_manual_blocked.clear()
+        ip_whitelist.clear()
     _save_whitelist()
     return jsonify({"success": True})
 
@@ -5855,10 +6015,8 @@ def api_admin_unblock():
     ip = (data or {}).get("ip", "").strip()
     if not ip:
         return jsonify({"error": "未提供IP"}), 400
-    with rate_lock:
-        ip_blocked.pop(ip, None)
-        ip_blocked_probes.pop(ip, None)
-        ip_manual_blocked.pop(ip, None)
+    rate_limiter.clear_ip(ip)
+    ip_manual_blocked.pop(ip, None)
     write_log("管理后台解封IP", f"IP: {ip}, 操作者: {session['username']}")
     return jsonify({"success": True})
 
@@ -5868,8 +6026,7 @@ def api_admin_unblock():
 @admin_required
 def api_admin_whitelist_list():
     """获取白名单列表"""
-    with rate_lock:
-        return jsonify({"whitelist": sorted(ip_whitelist), "count": len(ip_whitelist)})
+    return jsonify({"whitelist": sorted(ip_whitelist), "count": len(ip_whitelist)})
 
 
 @app.route("/api/admin/whitelist", methods=["POST"])
@@ -5881,13 +6038,10 @@ def api_admin_whitelist_add():
     ip = (data or {}).get("ip", "").strip()
     if not ip:
         return jsonify({"error": "未提供IP"}), 400
-    with rate_lock:
-        ip_whitelist.add(ip)
-        # 同时清除该IP的封禁状态
-        ip_blocked.pop(ip, None)
-        ip_blocked_probes.pop(ip, None)
-        ip_manual_blocked.pop(ip, None)
-        ip_requests.pop(ip, None)
+    ip_whitelist.add(ip)
+    # 同时清除该IP的封禁状态
+    rate_limiter.clear_ip(ip)
+    ip_manual_blocked.pop(ip, None)
     _save_whitelist()
     write_log("管理后台添加白名单", f"IP: {ip}, 操作者: {session['username']}")
     return jsonify({"success": True, "count": len(ip_whitelist)})
@@ -5901,8 +6055,7 @@ def api_admin_whitelist_remove():
     ip = request.args.get("ip", "").strip()
     if not ip:
         return jsonify({"error": "未提供IP"}), 400
-    with rate_lock:
-        ip_whitelist.discard(ip)
+    ip_whitelist.discard(ip)
     _save_whitelist()
     write_log("管理后台移除白名单", f"IP: {ip}, 操作者: {session['username']}")
     return jsonify({"success": True, "count": len(ip_whitelist)})
@@ -5918,12 +6071,11 @@ def api_admin_manual_block():
     duration = int((data or {}).get("duration", 3600))  # 默认1小时
     if not ip:
         return jsonify({"error": "未提供IP"}), 400
-    with rate_lock:
-        # 不能封禁白名单IP
-        if ip in ip_whitelist:
-            return jsonify({"error": "该IP在白名单中，无法封禁"}), 400
-        ip_manual_blocked[ip] = time.time() + duration
-        ip_requests.pop(ip, None)
+    # 不能封禁白名单IP
+    if ip in ip_whitelist:
+        return jsonify({"error": "该IP在白名单中，无法封禁"}), 400
+    ip_manual_blocked[ip] = time.time() + duration
+    rate_limiter.clear_ip(ip)
     write_log("管理后台手动封禁", f"IP: {ip}, 时长: {duration}s, 操作者: {session['username']}")
     return jsonify({"success": True, "until": int(time.time() + duration)})
 
@@ -5948,27 +6100,24 @@ def api_admin_batch():
         return jsonify({"error": "未提供有效IP"}), 400
 
     success, skipped, failed = [], [], []
-    with rate_lock:
-        for ip in ips:
-            if ip in ip_whitelist and action == "whitelist":
+    for ip in ips:
+        if ip in ip_whitelist and action == "whitelist":
+            skipped.append(ip)
+            continue
+        if action == "whitelist":
+            ip_whitelist.add(ip)
+            rate_limiter.clear_ip(ip)
+            ip_manual_blocked.pop(ip, None)
+            success.append(ip)
+        elif action == "block":
+            if ip in ip_whitelist:
                 skipped.append(ip)
                 continue
-            if action == "whitelist":
-                ip_whitelist.add(ip)
-                ip_blocked.pop(ip, None)
-                ip_blocked_probes.pop(ip, None)
-                ip_manual_blocked.pop(ip, None)
-                ip_requests.pop(ip, None)
-                success.append(ip)
-            elif action == "block":
-                if ip in ip_whitelist:
-                    skipped.append(ip)
-                    continue
-                ip_manual_blocked[ip] = time.time() + duration
-                ip_requests.pop(ip, None)
-                success.append(ip)
-            else:
-                failed.append(ip)
+            ip_manual_blocked[ip] = time.time() + duration
+            rate_limiter.clear_ip(ip)
+            success.append(ip)
+        else:
+            failed.append(ip)
 
     if action == "whitelist":
         _save_whitelist()
@@ -6081,28 +6230,25 @@ ip_geo_cache = {}  # ip -> {lat, lon, country, city, expire_time}
 def api_admin_ip_locations():
     """返回活跃 IP 的地理位置（深色地图用）"""
     now = time.time()
-    # 获取活跃 IP 列表
-    with rate_lock:
-        active_ips = set()
-        for ip in ip_requests:
+    # 获取活跃 IP 列表（从文件持久化 RateLimiter）
+    active_req_ips = rate_limiter.get_active_ips()
+    blocked_ips = rate_limiter.get_blocked_ips()
+    active_ips = set()
+    ip_stats = {}
+    for ip, count in active_req_ips.items():
+        active_ips.add(ip)
+        ip_stats[ip] = {"requests": count, "blocked": ip in blocked_ips, "manual_blocked": False}
+    for ip in blocked_ips:
+        active_ips.add(ip)
+        if ip not in ip_stats:
+            ip_stats[ip] = {"requests": 0, "blocked": True, "manual_blocked": False}
+    for ip, blocked_until in list(ip_manual_blocked.items()):
+        if now < blocked_until:
             active_ips.add(ip)
-        for ip, blocked_until in list(ip_blocked.items()):
-            if now < blocked_until:
-                active_ips.add(ip)
-        for ip, blocked_until in list(ip_manual_blocked.items()):
-            if now < blocked_until:
-                active_ips.add(ip)
-        ip_stats = {}
-        for ip, q in ip_requests.items():
-            ip_stats[ip] = {"requests": len(q), "blocked": False, "manual_blocked": False}
-        for ip, blocked_until in list(ip_blocked.items()):
-            if now < blocked_until:
-                ip_stats.setdefault(ip, {})["blocked"] = True
-                ip_stats.setdefault(ip, {})["requests"] = ip_stats.get(ip, {}).get("requests", 0)
-        for ip, blocked_until in list(ip_manual_blocked.items()):
-            if now < blocked_until:
-                ip_stats.setdefault(ip, {})["manual_blocked"] = True
-                ip_stats.setdefault(ip, {})["requests"] = ip_stats.get(ip, {}).get("requests", 0)
+            if ip in ip_stats:
+                ip_stats[ip]["manual_blocked"] = True
+            else:
+                ip_stats[ip] = {"requests": 0, "blocked": False, "manual_blocked": True}
 
     # 使用缓存，5分钟过期
     result = []
@@ -6217,7 +6363,6 @@ def calendar_view():
 @login_required
 def api_calendar_events():
     """获取日历事件（支持按月查询）"""
-    global cursor
     year = request.args.get("year", "", type=int)
     month = request.args.get("month", "", type=int)
     username = session["username"]
@@ -6324,7 +6469,6 @@ def api_calendar_add_event():
 @login_required
 def api_calendar_update_event(eid):
     """更新日历事件"""
-    global cursor
     data = request.get_json() or {}
     conn = get_db()
     if not conn:
@@ -6364,7 +6508,6 @@ def api_calendar_update_event(eid):
 @login_required
 def api_calendar_delete_event(eid):
     """删除日历事件"""
-    global cursor
     conn = get_db()
     if not conn:
         return jsonify({"ok": False, "error": "Database unavailable"}), 500
@@ -6972,7 +7115,6 @@ def api_study_todos():
 @login_required
 def api_study_todos_add():
     """添加待办"""
-    global cursor
     data = request.get_json() or {}
     title = sanitize_input(data.get("title",""),200)
     if not title: return jsonify({"error":"标题不能为空"}),400
@@ -7031,7 +7173,6 @@ def api_study_todos_toggle(tid):
 @login_required
 def api_study_flashcards():
     """获取抽认卡列表"""
-    global cursor
     conn = get_db()
     if not conn: return jsonify([]),500
     try:
@@ -12448,12 +12589,9 @@ def api_login():
     if not ok:
         return jsonify({"ok": False, "error": err_msg}), 400
 
-    now = time.time()
-    if username in login_lockout:
-        attempts, lockout_until = login_lockout[username]
-        if lockout_until and now < lockout_until:
-            remaining = int(lockout_until - now)
-            return jsonify({"ok": False, "error": f"账户已被锁定，请 {remaining // 60} 分 {remaining % 60} 秒后重试"}), 429
+    # 登录防爆破检查（文件持久化，多 worker 共享）
+    if not rate_limiter.check((username, "login_fail"), max_requests=5, window=300):
+        return jsonify({"ok": False, "error": "账户已被锁定，请 5 分钟后重试"}), 429
 
     conn = get_db()
     if not conn:
@@ -12474,7 +12612,6 @@ def api_login():
             if not pwd_valid:
                 pwd_valid = (result[0] == password)
             if pwd_valid:
-                login_lockout.pop(username, None)
                 session["username"] = username
                 session["permission"] = result[1]
                 session["csrf_token"] = os.urandom(32).hex()
@@ -12506,16 +12643,11 @@ def api_login():
                     "permission": result[1],
                     "avatar": avatar_url,
                 })
-        # 登录失败
-        attempts, _ = login_lockout.get(username, (0, 0))
-        attempts += 1
-        if attempts >= 5:
-            login_lockout[username] = (attempts, time.time() + 5 * 60)
-            return jsonify({"ok": False, "error": "密码错误次数过多，账户已锁定 5 分钟"}), 429
-        else:
-            login_lockout[username] = (attempts, 0)
-            remaining = 5 - attempts
-            return jsonify({"ok": False, "error": f"用户名或密码错误，还剩 {remaining} 次尝试"}), 401
+            else:
+                # 密码错误
+                return jsonify({"ok": False, "error": "用户名或密码错误"}), 401
+        # 登录失败（用户名不存在）
+        return jsonify({"ok": False, "error": "用户名或密码错误"}), 401
     except pymysql.MySQLError as e:
         return jsonify({"ok": False, "error": f"数据库错误: {str(e)}"}), 500
 
