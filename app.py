@@ -507,6 +507,27 @@ def _init_reset_table():
         return
     try:
         cursor = conn.cursor()
+        # 用户主表（核心表，新部署必须创建）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                User_Name VARCHAR(50) NOT NULL UNIQUE,
+                User_Password VARCHAR(255) NOT NULL,
+                Access_Permission VARCHAR(20) DEFAULT 'guest',
+                security_question VARCHAR(200) DEFAULT NULL,
+                security_answer VARCHAR(200) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 兼容旧表：添加可能缺失的列
+        for col, col_def in [
+            ("security_question", "VARCHAR(200) DEFAULT NULL"),
+            ("security_answer", "VARCHAR(200) DEFAULT NULL"),
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {col_def}")
+            except Exception:
+                pass
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1282,6 +1303,66 @@ def _init_album_tables(conn):
     兼容旧表：对 album_classmates 尝试添加 class_name 和 graduation_year 列。
     """
     cursor = conn.cursor()
+    # 相册图片主表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_images (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            category VARCHAR(50) DEFAULT NULL,
+            name VARCHAR(100) DEFAULT NULL,
+            filename VARCHAR(255) NOT NULL COMMENT '存储的文件名',
+            uploader VARCHAR(50) NOT NULL,
+            uploader_name VARCHAR(50) DEFAULT '',
+            upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'approved'
+        )
+    """)
+    # 相册点赞表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_likes (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            image_id INT NOT NULL,
+            user VARCHAR(50) NOT NULL,
+            time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_img_user (image_id, user)
+        )
+    """)
+    # 相册图片评论表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_image_comments (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            image_id INT NOT NULL,
+            reply_to INT DEFAULT NULL,
+            reply_user VARCHAR(50) DEFAULT NULL,
+            author VARCHAR(50) NOT NULL,
+            author_name VARCHAR(50) DEFAULT '',
+            text TEXT NOT NULL,
+            time DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 相册通用评论表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS album_general_comments (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            author VARCHAR(50) NOT NULL,
+            author_name VARCHAR(50) DEFAULT '',
+            text TEXT NOT NULL,
+            time DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # 兼容旧表：添加可能缺失的列
+    for tbl, col, col_def in [
+        ("album_images", "status", "VARCHAR(20) DEFAULT 'approved'"),
+        ("album_images", "uploader_name", "VARCHAR(50) DEFAULT ''"),
+        ("album_likes", "time", "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+        ("album_image_comments", "reply_to", "INT DEFAULT NULL"),
+        ("album_image_comments", "reply_user", "VARCHAR(50) DEFAULT NULL"),
+        ("album_image_comments", "author_name", "VARCHAR(50) DEFAULT ''"),
+        ("album_general_comments", "author_name", "VARCHAR(50) DEFAULT ''"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {col_def}")
+        except Exception:
+            pass
     # 大事记时间轴
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS album_events (
