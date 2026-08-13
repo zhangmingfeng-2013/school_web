@@ -2,9 +2,9 @@
 ip_whitelist.json
 rate_config.json
 .env
-.idea
-.hermes
-.qoder
-.workflow
-build
-dist
+.idea/
+.hermes/
+.qoder/
+.workflow/
+build/
+dist/
