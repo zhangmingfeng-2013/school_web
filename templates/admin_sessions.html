@@ -24,7 +24,7 @@
         </table>
     </div>
     
-    <button class="btn btn-outline-primary btn-sm mt-2" onclick="refreshSessions()">🔄 刷新</button>
+    <button class="btn btn-outline-primary btn-sm mt-2" id="refreshSessionsBtn">🔄 刷新</button>
     <small class="text-muted ms-2">共 <strong id="sessionCount">0</strong> 个会话</small>
     <a href="/dashboard" class="btn btn-outline-secondary btn-sm mt-2 ms-2">← 返回</a>
 </div>
@@ -59,7 +59,7 @@ function refreshSessions() {
                 var isSelf = s.username === currentUser;
                 var kickBtn = isSelf 
                     ? '<button class="btn btn-sm btn-outline-secondary" disabled>自己</button>'
-                    : '<button class="btn btn-sm btn-outline-danger" onclick="kickSession(\'' + s.session_key + '\', \'' + s.username + '\')">踢出</button>';
+                    : '<button class="btn btn-sm btn-outline-danger" data-session-key="' + s.session_key + '" data-username="' + s.username + '">踢出</button>';
                 return '<tr>' +
                     '<td><strong>' + s.username + '</strong> ' + badge + '</td>' +
                     '<td><code>' + s.ip + '</code></td>' +
@@ -95,6 +95,15 @@ function kickSession(sessionKey, username) {
 
 refreshSessions();
 autoRefresh = setInterval(refreshSessions, 30000);
+
+document.getElementById('refreshSessionsBtn').addEventListener('click', refreshSessions);
+
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-session-key]');
+    if (btn) {
+        kickSession(btn.getAttribute('data-session-key'), btn.getAttribute('data-username'));
+    }
+});
 
 window.addEventListener('beforeunload', function() {
     clearInterval(autoRefresh);

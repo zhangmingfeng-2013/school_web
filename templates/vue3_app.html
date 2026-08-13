@@ -259,7 +259,7 @@ body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei
 <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
 <script src="https://unpkg.com/@element-plus/icons-vue"></script>
 <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
 
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, h } = Vue;
@@ -267,6 +267,21 @@ const { createRouter, createWebHashHistory } = VueRouter;
 
 // ===================== CSRF & API Helper =====================
 const api = axios.create({ withCredentials: true });
+
+async function loadCaptcha(target) {
+  const response = await fetch('/api/captcha?t=' + Date.now(), {
+    credentials: 'same-origin',
+    cache: 'no-store'
+  });
+  const key = response.headers.get('X-Captcha-Key');
+  if (!response.ok || !key) throw new Error('验证码加载失败');
+  const oldUrl = target.captchaObjectUrl;
+  const newUrl = URL.createObjectURL(await response.blob());
+  target.captchaUrl = newUrl;
+  target.captchaObjectUrl = newUrl;
+  target.form.captcha_key = key;
+  if (oldUrl) URL.revokeObjectURL(oldUrl);
+}
 api.interceptors.request.use(config => {
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
   if (csrf) config.headers['X-CSRF-Token'] = csrf;
@@ -311,9 +326,11 @@ const LoginPage = {
         <a href="javascript:void(0)" @click="$router.push('/forgot')" style="color:var(--el-color-primary);">忘记密码</a>
       </div>
     </div>`,
-  data() { return { form:{username:'',password:'',captcha:''}, loading:false, captchaUrl:'/api/captcha?'+Date.now() }; },
+  data() { return { form:{username:'',password:'',captcha:'',captcha_key:''}, loading:false, captchaUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=', captchaObjectUrl:'' }; },
+  mounted() { this.refreshCaptcha(); },
+  beforeUnmount() { if(this.captchaObjectUrl) URL.revokeObjectURL(this.captchaObjectUrl); },
   methods: {
-    refreshCaptcha() { this.captchaUrl='/api/captcha?'+Date.now(); },
+    refreshCaptcha() { loadCaptcha(this).catch(function(){ ElMessage.error('验证码加载失败'); }); },
     async login() {
       if(!this.form.username||!this.form.password){ ElMessage.warning('请填写用户名和密码');return; }
       this.loading=true;
@@ -349,9 +366,11 @@ const RegisterPage = {
         <a href="javascript:void(0)" @click="$router.push('/')" style="color:var(--el-color-primary);">已有账号？去登录</a>
       </div>
     </div>`,
-  data() { return { form:{username:'',password:'',confirm:'',admin_pwd:'',captcha:''}, loading:false, captchaUrl:'/api/captcha?'+Date.now() }; },
+  data() { return { form:{username:'',password:'',confirm:'',admin_pwd:'',captcha:'',captcha_key:''}, loading:false, captchaUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=', captchaObjectUrl:'' }; },
+  mounted() { this.refreshCaptcha(); },
+  beforeUnmount() { if(this.captchaObjectUrl) URL.revokeObjectURL(this.captchaObjectUrl); },
   methods: {
-    refreshCaptcha() { this.captchaUrl='/api/captcha?'+Date.now(); },
+    refreshCaptcha() { loadCaptcha(this).catch(function(){ ElMessage.error('验证码加载失败'); }); },
     async register() {
       const f=this.form;
       if(!f.username||!f.password||!f.confirm){ ElMessage.warning('请填写所有必填字段');return; }
@@ -390,14 +409,16 @@ const ForgotPage = {
         <a href="javascript:void(0)" @click="$router.push('/')" style="color:var(--el-color-primary);">返回登录</a>
       </div>
     </div>`,
-  data() { return { form:{username:'',email:'',captcha:''}, loading:false, captchaUrl:'/api/captcha?'+Date.now() }; },
+  data() { return { form:{username:'',email:'',captcha:'',captcha_key:''}, loading:false, captchaUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=', captchaObjectUrl:'' }; },
+  mounted() { this.refreshCaptcha(); },
+  beforeUnmount() { if(this.captchaObjectUrl) URL.revokeObjectURL(this.captchaObjectUrl); },
   methods: {
-    refreshCaptcha() { this.captchaUrl='/api/captcha?'+Date.now(); },
+    refreshCaptcha() { loadCaptcha(this).catch(function(){ ElMessage.error('验证码加载失败'); }); },
     async submit() {
       if(!this.form.username){ ElMessage.warning('请输入用户名');return; }
       this.loading=true;
       try {
-        await api.post('/api/auth/forgot_password', {username:this.form.username, email:this.form.email, captcha:this.form.captcha});
+        await api.post('/api/auth/forgot_password', this.form);
         ElMessage.success('申请已提交，请等待管理员审核');
         this.$router.push('/');
       } catch(e){ ElMessage.error(e.response?.data?.error||'提交失败');this.refreshCaptcha(); }

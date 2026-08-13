@@ -10,10 +10,10 @@
         <form method="POST">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
             <div class="mb-3">
-                <img src="/api/captcha?t={{ cache_buster }}" class="captcha-img" class="captcha-img" title="点击刷新" alt="验证码" style="border:1px solid #d9d9d9;border-radius:4px;cursor:pointer">
+                <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" class="captcha-img" class="captcha-img" title="点击刷新" alt="验证码" style="border:1px solid #d9d9d9;border-radius:4px;cursor:pointer">
             </div>
             <div class="mb-3">
-                <input type="text" name="db_captcha" class="form-control text-center" placeholder="输入验证码" maxlength="4" autofocus style="font-size:20px;letter-spacing:4px">
+                <input type="text" name="db_captcha" class="form-control text-center" placeholder="输入验证码" maxlength="6" autofocus style="font-size:20px;letter-spacing:4px">
             </div>
             <button type="submit" class="btn btn-primary w-100">✅ 验证</button>
         </form>

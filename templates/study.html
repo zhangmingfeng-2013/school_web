@@ -206,7 +206,7 @@
     <div class="row">
         <div class="col-md-5">
             <div class="input-group mb-3">
-                <input class="form-control" id="dictWord" placeholder="{{ _('study_dict_ph') }}" onkeydown="if(event.key==='Enter')lookupWord()">
+                <input class="form-control" id="dictWord" placeholder="{{ _('study_dict_ph') }}">
                 <button class="btn btn-primary" data-csp-click="lookupWord">🔍 {{ _('study_dict_search') }}</button>
             </div>
             <div class="card p-3" id="dictResult" style="display:none;">
@@ -251,7 +251,7 @@
             <div class="card p-3">
                 <div class="mb-2">
                     <label class="form-label small">{{ _('study_conv_from') }}</label>
-                    <input type="number" class="form-control" id="convInput" value="1" oninput="doConvert()" step="any">
+                    <input type="number" class="form-control" id="convInput" value="1" step="any">
                 </div>
                 <div class="mb-2">
                     <label class="form-label small">{{ _('study_conv_to') }}</label>
@@ -671,5 +671,11 @@ document.addEventListener('click', function(e) {
     btn = e.target.closest('.study-del-fc'); if (btn) { deleteFlashcard(parseInt(btn.dataset.id)); return; }
     var flip = e.target.closest('.study-fc-flip'); if (flip) { var a = flip.querySelector('.fc-answer'); if (a) a.style.display = a.style.display === 'none' ? 'block' : 'none'; return; }
 });
+
+var dictEl = document.getElementById('dictWord');
+if (dictEl) dictEl.addEventListener('keydown', function(e) { if (e.key === 'Enter') lookupWord(); });
+
+var convEl = document.getElementById('convInput');
+if (convEl) convEl.addEventListener('input', doConvert);
 </script>
 {% endblock %}

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}多合一工具箱{% endblock %}</title>
-    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <style nonce="{{ csp_nonce }}">
         /* ========== 主题变量 ========== */
         :root,
@@ -197,8 +197,8 @@
 
     <!-- Bootstrap JS (CSP compliant: nonce added so CSP script-src doesn't block it) -->
     <script nonce="{{ csp_nonce }}"
-        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
         crossorigin="anonymous">
     </script>
 
@@ -222,10 +222,51 @@
     applyTheme(getTheme());
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
-    // 验证码图片点击刷新（事件委托）
+    function bindCaptchaKey(img, key) {
+        var form = img.closest('form');
+        if (!form) return;
+        var input = form.querySelector('input[name="captcha_key"]');
+        if (!input) {
+            input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'captcha_key';
+            form.appendChild(input);
+        }
+        input.value = key;
+    }
+
+    function refreshCaptcha(img) {
+        img.setAttribute('aria-busy', 'true');
+        fetch('/api/captcha?t=' + Date.now(), {
+            credentials: 'same-origin',
+            cache: 'no-store'
+        }).then(function(response) {
+            var key = response.headers.get('X-Captcha-Key');
+            if (!response.ok || !key) throw new Error('captcha unavailable');
+            return response.blob().then(function(blob) {
+                return { blob: blob, key: key };
+            });
+        }).then(function(result) {
+            var oldUrl = img.dataset.captchaObjectUrl;
+            var newUrl = URL.createObjectURL(result.blob);
+            img.src = newUrl;
+            img.dataset.captchaObjectUrl = newUrl;
+            bindCaptchaKey(img, result.key);
+            if (oldUrl) URL.revokeObjectURL(oldUrl);
+        }).catch(function() {
+            img.alt = '验证码加载失败，点击重试';
+        }).finally(function() {
+            img.removeAttribute('aria-busy');
+        });
+    }
+
+    document.querySelectorAll('.captcha-img').forEach(refreshCaptcha);
     document.addEventListener('click', function(e) {
         var img = e.target.closest('.captcha-img');
-        if (img) { img.src = '/api/captcha?' + Date.now(); }
+        if (img) {
+            e.preventDefault();
+            refreshCaptcha(img);
+        }
     });
 
     // ====== 全局 CSP 安全事件委托（替代所有被 nonce 屏蔽的 onclick/onchange） ======
@@ -378,7 +419,7 @@
     })();
     </script>
     {% endif %}
-    <script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
     {% if session.username %}
     <!-- 多用户同时在线：心跳保持会话活跃 -->
     <script nonce="{{ csp_nonce }}">

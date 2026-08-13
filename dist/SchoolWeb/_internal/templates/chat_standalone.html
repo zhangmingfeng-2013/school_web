@@ -77,7 +77,7 @@ async function loadMsgs() {
     var html = msgs.length===0 ? '<div style="text-align:center;color:#999;padding:60px">暂无消息</div>' :
         msgs.map(function(m){
             var cls = 'msg' + (m.sender===myUsername?' mine':'') + (m.content==='[消息已撤回]'?' recalled':'');
-            return '<div class="'+cls+'" data-id="'+m.id+'" oncontextmenu="showMenu(event,'+m.id+',\''+m.sender+'\',\''+encodeURIComponent(m.content)+'\')">'
+            return '<div class="'+cls+'" data-msg-id="'+m.id+'" data-msg-sender="'+m.sender+'" data-msg-content="'+encodeURIComponent(m.content)+'">'
                 + '<div class="sender">'+m.sender+'</div>'
                 + '<div class="bubble">'+m.content+'</div>'
                 + '<div class="time">'+(m.created_at||'').slice(5,16)+'</div></div>';
@@ -168,6 +168,15 @@ loadMsgs(); loadFriends();
 document.addEventListener('click', function(e){
     if(!document.getElementById('ctxMenu').contains(e.target))
         document.getElementById('ctxMenu').style.display = 'none';
+});
+
+document.getElementById('messages').addEventListener('contextmenu', function(e) {
+    var el = e.target.closest('[data-msg-id]');
+    if (!el) return;
+    var id = parseInt(el.getAttribute('data-msg-id'));
+    var sender = el.getAttribute('data-msg-sender');
+    var content = el.getAttribute('data-msg-content');
+    showMenu(e, id, sender, content);
 });
 </script>
 {% endblock %}

@@ -465,6 +465,5 @@ Node.js 版本是否 ≥ 16？尝试删除 `node_modules` 和 `package-lock.json
 
 ## License
 
-GNU General Public License v2.0 — 详见 [LICENSE](LICENSE)。
+[LICENSE](LICENSE)。
 
-*最后更新：2026-05-28*

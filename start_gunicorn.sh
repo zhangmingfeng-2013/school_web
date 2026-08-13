@@ -56,7 +56,7 @@ do_start() {
     mkdir -p /opt/homebrew/var/log
 
     echo "🚀 启动 Gunicorn..."
-    cd /Users/zhangmingfeng/School_Web
+    cd /Users/zhangmingfeng/Projects/School_Web
 
     exec "$GUNICORN" \
         --config gunicorn_config.py \

@@ -40,10 +40,12 @@ import json
 import time
 import random
 import hmac
+import fcntl
 import threading
 import psutil
 import platform
 import socket
+import ipaddress
 import requests
 import datetime
 import fnmatch
@@ -75,7 +77,21 @@ from flask import (
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
+from urllib.parse import urlparse, quote, unquote
 import session_manager
+import captcha_manager
+
+# ---------- 加载 .env（必须在任何 os.environ.get 读取配置之前执行） ----------
+# 未安装 python-dotenv 时不崩溃，仅提示；此时仍可用 shell 导出的环境变量。
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # 读取项目根目录同级的 .env（不覆盖已存在的真实环境变量）
+except ImportError:
+    print(
+        "[提示] 未安装 python-dotenv，跳过 .env 文件加载。"
+        "如需通过 .env 管理配置，请先执行: pip install python-dotenv",
+        flush=True,
+    )
 
 
 def safe_check_password_hash(pwhash: str, password: str) -> bool:
@@ -311,26 +327,48 @@ RATE_LIMITS = {
     "login_page": (int(os.environ.get("RATE_LOGINPAGE_MAX", "30")), int(os.environ.get("RATE_LOGINPAGE_WINDOW", "60"))),
     "login":      (int(os.environ.get("RATE_LOGIN_MAX", "5")),    int(os.environ.get("RATE_LOGIN_WINDOW", "60"))),
     "register":   (int(os.environ.get("RATE_REGISTER_MAX", "5")),  int(os.environ.get("RATE_REGISTER_WINDOW", "60"))),
+    "backup":     (int(os.environ.get("RATE_BACKUP_MAX", "3")),    int(os.environ.get("RATE_BACKUP_WINDOW", "60"))),
 }
+
+# 备份保留上限：超过此数量时创建备份被拒绝，防止磁盘耗尽（0 或负数表示不限制）
+BACKUP_MAX_COUNT = int(os.environ.get("BACKUP_MAX_COUNT", "20"))
 
 
 app = Flask(__name__)
 
+def _load_or_create_secret_key(path):
+    with open(path, "a+") as secret_file:
+        os.fchmod(secret_file.fileno(), 0o600)
+        fcntl.flock(secret_file.fileno(), fcntl.LOCK_EX)
+        secret_file.seek(0)
+        secret_key = secret_file.read().strip()
+        if not secret_key:
+            secret_key = os.urandom(64).hex()
+            secret_file.seek(0)
+            secret_file.truncate()
+            secret_file.write(secret_key)
+            secret_file.flush()
+            os.fsync(secret_file.fileno())
+        fcntl.flock(secret_file.fileno(), fcntl.LOCK_UN)
+        return secret_key
+
+
 # ---------- 持久化 Secret Key ----------
 SECRET_KEY_FILE = os.path.join(os.path.dirname(__file__), ".secret_key")
-if os.path.exists(SECRET_KEY_FILE):
-    with open(SECRET_KEY_FILE, "r") as f:
-        app.secret_key = f.read().strip()
-else:
-    app.secret_key = os.urandom(64).hex()
-    with open(SECRET_KEY_FILE, "w") as f:
-        f.write(app.secret_key)
+app.secret_key = _load_or_create_secret_key(SECRET_KEY_FILE)
 
 # ---------- ProxyFix：部署在 Nginx 后正确获取客户端真实 IP ----------
 # 信任第一个反向代理（Nginx）的 X-Forwarded-* 头
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
-CORS(app, supports_credentials=True, origins=['http://localhost:3000', 'http://192.168.3.204:3000'])
+# CORS：仅在开发/调试模式下开启，允许前端 dev server 跨域调用后端 API。
+# 生产环境前端静态资源由 Flask 同源托管，无需 CORS。
+# 可通过 ALLOWED_CORS_ORIGINS 环境变量覆盖允许的源列表（逗号分隔）。
+_debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+if _debug:
+    _origins = os.environ.get("ALLOWED_CORS_ORIGINS", "http://localhost:3000").split(",")
+    _origins = [o.strip() for o in _origins if o.strip()]
+    CORS(app, supports_credentials=True, origins=_origins)
 
 # ---------- Session 安全设置 ----------
 app.config.update(
@@ -840,152 +878,232 @@ def _save_whitelist():
 
 ip_whitelist = _load_whitelist()
 
-def _verify_captcha(user_input):
+def _verify_captcha(user_input, captcha_key=""):
     """
     验证图形验证码。统一入口，返回 (success: bool, error_msg: str)。
-    
-    图片显示大写字母（23456789ABCDEFGHJKLMNPQRSTUVWXYZ），
-    session 存储小写码，比较时忽略大小写。
-    有效期 5 分钟，防止重放。
+
+    验证码摘要存储在 MySQL 中，key 由对应图片绑定到表单或 JSON 请求。
+    有效期 5 分钟，一次性消费防止重放。
     """
     if not user_input or not user_input.strip():
         return False, "验证码不能为空"
-    
-    stored = session.get("captcha_code", "")
-    
-    if not stored:
+
+    submitted_key = request.form.get("captcha_key", "")
+    if not submitted_key and request.is_json:
+        payload = request.get_json(silent=True) or {}
+        submitted_key = payload.get("captcha_key", "")
+
+    key = captcha_key or submitted_key
+    if not key:
         return False, "验证码已失效，请刷新"
-    
-    # 5 分钟过期
-    captcha_time = session.get("captcha_time", 0)
-    if time.time() - captcha_time > 300:
-        session.pop("captcha_code", None)
-        session.pop("captcha_time", None)
-        return False, "验证码已过期，请刷新"
-    
-    # 不区分大小写比较（图片显示大写，session 存小写）
-    if user_input.strip().lower() != stored:
-        session.pop("captcha_code", None)
-        session.pop("captcha_time", None)
-        return False, "验证码错误"
-    
-    # 验证通过，消费验证码（防止重放攻击）
-    session.pop("captcha_code", None)
-    session.pop("captcha_time", None)
-    return True, "验证通过"
+
+    if captcha_manager.verify(key, user_input):
+        return True, "验证通过"
+
+    return False, "验证码错误或已过期"
 
 
 def _generate_captcha():
     """
-    预生成验证码存入 session，供表单使用。
-
-    已有未过期（5分钟内）的验证码则复用，防止重复生成导致 session 膨胀。
-    生成的验证码是小写字母数字串（从 _captcha_chars 随机取 4 个字符）。
-    供 api_captcha 生成图片时和表单渲染时调用，确保图片与 session code 一致。
+    生成新验证码并写入 MySQL。
 
     Returns:
-        str: 小写验证码字符串
+        tuple[str, str] | None: ``(captcha_key, code)``；数据库不可用时返回 None
     """
-    stored = session.get("captcha_code")
-    captcha_time = session.get("captcha_time", 0)
-    if stored and (time.time() - captcha_time < 300):
-        return stored  # 复用已有未过期码
-    code = ''.join(_captcha_random.choice(_captcha_chars) for _ in range(4)).lower()
-    session["captcha_code"] = code
-    session["captcha_time"] = time.time()
-    return code
+    return captcha_manager.generate()
 
 
 # ---------- 图形验证码 ----------
 # 验证码字符集（模块级，供 _generate_captcha 和 api_captcha 共用）
 
-_captcha_chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+_captcha_chars = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
 @app.route("/api/captcha")
 def api_captcha():
     """
-    生成图形验证码图片（URL: /api/captcha, GET）。
+    生成高强度图形验证码图片（URL: /api/captcha, GET）。
 
-    权限：任意用户
-    功能：生成 200x70 的 PNG 验证码图片，包含 4 个字符的干扰线/噪点/旋转。
-          安全：使用 no-store 缓存头防止缓存；验证码一次性使用防重放。
-          速率限制：captcha 速率（默认 10 次/60 秒）。
+    验证码摘要存储在 MySQL 中，key 通过图片响应头绑定到对应表单。
+    调用 _generate_captcha() 为当前图片创建全新的挑战。
     """
-    """生成图形验证码。优先复用 session 中未过期的 code，保证图片与 session 一致。"""
-    # 验证码接口速率限制
     client_ip = request.remote_addr or "unknown"
     _limit, _window = RATE_LIMITS["captcha"]
     if not rate_limiter.check((client_ip, "captcha"), max_requests=_limit, window=_window):
         return jsonify({"error": "请求过于频繁"}), 429
 
+    challenge = _generate_captcha()
+    if challenge is None:
+        return jsonify({"error": "验证码服务暂时不可用"}), 503
+    key, code = challenge
 
-    code = _generate_captcha()  # 统一使用预生成函数，与表单 code 一致
-
-    # 创建验证码图片（加大尺寸，字体更大更清晰）
-    width, height = 200, 70
-    img = Image.new("RGB", (width, height), (248, 248, 248))
+    # width must leave a full slot for all 6 distorted characters.
+    # width must leave a full slot for all 6 distorted characters.
+    width, height = 300, 80
+    # 随机背景色调（浅灰到浅蓝/浅绿之间变化）
+    base_r = _random.randint(235, 252)
+    base_g = _random.randint(235, 252)
+    base_b = _random.randint(235, 252)
+    img = Image.new("RGB", (width, height), (base_r, base_g, base_b))
     draw = ImageDraw.Draw(img)
 
-    # 轻量背景噪点
+    # ---- 背景网格纹理 ----
+    grid_step = _random.randint(10, 16)
+    grid_color = (
+        _random.randint(200, 235),
+        _random.randint(200, 235),
+        _random.randint(200, 235),
+    )
+    for x in range(0, width, grid_step):
+        draw.line([(x, 0), (x, height)], fill=grid_color, width=1)
+    for y in range(0, height, grid_step):
+        draw.line([(0, y), (width, y)], fill=grid_color, width=1)
+
+    # ---- 密集背景噪点（25% 覆盖率） ----
     for x in range(width):
         for y in range(height):
-            if _random.random() < 0.12:
-                draw.point((x, y), fill=(_random.randint(220, 255), _random.randint(220, 255), _random.randint(220, 255)))
+            if _random.random() < 0.25:
+                c = _random.randint(100, 255)
+                draw.point((x, y), fill=(c, c, c))
 
-    # 1 条曲线干扰
-    points = [(_random.randint(0, width), _random.randint(0, height)) for _ in range(4)]
-    for j in range(len(points) - 1):
-        draw.line([points[j], points[j+1]], fill=(_random.randint(180, 230), _random.randint(180, 230), _random.randint(180, 230)), width=2)
+    # ---- 4 条贝塞尔风格曲线干扰（跨全图） ----
+    for _ in range(4):
+        pts = [
+            (_random.randint(0, width // 3), _random.randint(0, height)),
+            (_random.randint(width // 4, width * 3 // 4), _random.randint(0, height)),
+            (_random.randint(width // 4, width * 3 // 4), _random.randint(0, height)),
+            (_random.randint(width * 2 // 3, width), _random.randint(0, height)),
+        ]
+        line_color = (
+            _random.randint(140, 210),
+            _random.randint(140, 210),
+            _random.randint(140, 210),
+        )
+        for j in range(len(pts) - 1):
+            draw.line([pts[j], pts[j + 1]], fill=line_color, width=_random.randint(1, 3))
 
-    # 3 条短直线
-    for _ in range(3):
-        x1, y1 = _random.randint(10, width - 10), _random.randint(5, height - 5)
-        x2, y2 = x1 + _random.randint(-40, 40), y1 + _random.randint(-20, 20)
-        draw.line([(x1, y1), (x2, y2)], fill=(_random.randint(180, 230), _random.randint(180, 230), _random.randint(180, 230)), width=1)
+    # ---- 6 条短弧线/斜线 ----
+    for _ in range(6):
+        x1 = _random.randint(5, width - 5)
+        y1 = _random.randint(5, height - 5)
+        x2 = x1 + _random.randint(-50, 50)
+        y2 = y1 + _random.randint(-30, 30)
+        arc_color = (
+            _random.randint(140, 210),
+            _random.randint(140, 210),
+            _random.randint(140, 210),
+        )
+        draw.line([(x1, y1), (x2, y2)], fill=arc_color, width=_random.randint(1, 3))
 
-    # 少量随机点
-    for _ in range(80):
-        x, y = _random.randint(0, width), _random.randint(0, height)
-        draw.point((x, y), fill=(_random.randint(100, 200), _random.randint(100, 200), _random.randint(100, 200)))
+    # ---- 椭圆/弧线干扰 ----
+    for _ in range(2):
+        x0 = _random.randint(0, width - 80)
+        y0 = _random.randint(0, height - 40)
+        rx = _random.randint(30, 80)
+        ry = _random.randint(15, 35)
+        ellipse_color = (
+            _random.randint(150, 210),
+            _random.randint(150, 210),
+            _random.randint(150, 210),
+        )
+        bbox = [x0, y0, x0 + rx, y0 + ry]
+        draw.arc(bbox, 0, 360, fill=ellipse_color, width=_random.randint(1, 2))
 
-    # 绘制文字 — 多个字体 fallback，字号加大到 44
-    font = None
-    font_size = 44
+    # ---- 高密度随机色点（200 个） ----
+    for _ in range(200):
+        x = _random.randint(0, width)
+        y = _random.randint(0, height)
+        dot_color = (
+            _random.randint(40, 220),
+            _random.randint(40, 220),
+            _random.randint(40, 220),
+        )
+        draw.point((x, y), fill=dot_color)
+
+    # ---- 绘制文字（6 个字符，扭曲 + 旋转 + 大小写混合） ----
     font_paths = [
-        "/System/Library/Fonts/Helvetica.ttc",           # macOS
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux/Docker
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",  # Docker 中文字体
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
     ]
-    for fp in font_paths:
-        try:
-            font = ImageFont.truetype(fp, font_size)
-            break
-        except Exception:
-            continue
-    if font is None:
-        font = ImageFont.load_default()
 
     for i, ch in enumerate(code):
-        # 每个字符单独创建并旋转
-        char_img = Image.new("RGBA", (52, 60), (0, 0, 0, 0))
+        # 随机字号（大小不一增加 OCR 难度）
+        font_size_val = _random.randint(34, 48)
+        font = None
+        for fp in font_paths:
+            try:
+                font = ImageFont.truetype(fp, font_size_val)
+                break
+            except Exception:
+                continue
+        if font is None:
+            font = ImageFont.load_default()
+
+        # 暗色调文字颜色，随机化 RGB
+        text_color = (
+            _random.randint(0, 80),
+            _random.randint(0, 100),
+            _random.randint(60, 200),
+        )
+
+        # 创建字符图层
+        char_w, char_h = 56, 68
+        char_img = Image.new("RGBA", (char_w, char_h), (0, 0, 0, 0))
         char_draw = ImageDraw.Draw(char_img)
-        color = (_random.randint(0, 50), _random.randint(0, 70), _random.randint(140, 240))
-        char_draw.text((6, 0), ch, font=font, fill=color)
-        # 轻度旋转
-        angle = _random.randint(-18, 18)
-        char_img = char_img.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
-        x = 14 + i * 42 + _random.randint(-4, 4)
-        y = _random.randint(5, 14)
+        char_draw.text((4, 0), ch, font=font, fill=text_color)
+
+        # 大幅度随机旋转（±40°）
+        angle = _random.randint(-40, 40)
+        char_img = char_img.rotate(
+            angle, expand=True, fillcolor=(0, 0, 0, 0),
+            resample=Image.BICUBIC,
+        )
+
+        # 字符扭曲：水平/垂直错切变换
+        shear_x = _random.uniform(-0.25, 0.25)
+        shear_y = _random.uniform(-0.25, 0.25)
+        new_w, new_h = char_img.size
+        # affine transform: (1, shear_x, 0, shear_y, 1, 0) then translate to fit
+        char_img = char_img.transform(
+            (int(new_w * 1.1), int(new_h * 1.1)),
+            Image.AFFINE,
+            (1, shear_x, -shear_x * char_img.size[1] * 0.1,
+             shear_y, 1, -shear_y * char_img.size[0] * 0.1),
+            Image.BICUBIC,
+        )
+
+        # 将透明边缘裁掉后放入固定槽位，避免最右字符被画布截断。
+        bbox = char_img.getbbox()
+        if bbox:
+            char_img = char_img.crop(bbox)
+        slot_width = width // len(code)
+        x = i * slot_width + (slot_width - char_img.width) // 2
+        x += _random.randint(-3, 3)
+        x = max(0, min(x, width - char_img.width))
+        y = (height - char_img.height) // 2 + _random.randint(-3, 3)
+        y = max(0, min(y, height - char_img.height))
         img.paste(char_img, (x, y), char_img)
 
-    # 轻微模糊
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.4))
+    # ---- 文字上叠加额外噪点（覆盖在字符上方的干扰） ----
+    for _ in range(100):
+        x = _random.randint(0, width)
+        y = _random.randint(0, height)
+        over_color = (
+            _random.randint(0, 255),
+            _random.randint(0, 255),
+            _random.randint(0, 255),
+        )
+        draw.point((x, y), fill=over_color)
+
+    # 中等模糊 — 平滑但保留可读性，对 OCR 干扰大
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.8))
 
     buf = io.BytesIO()
     img.save(buf, "PNG")
     buf.seek(0)
 
     resp = make_response(send_file(buf, mimetype="image/png"))
+    resp.headers["X-Captcha-Key"] = key
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
@@ -1035,6 +1153,14 @@ def check_rate_limit():
             if len(recent_blocks) > 100:
                 recent_blocks.pop(0)
         return jsonify({"error": f"请求过于频繁，IP已被封禁 {rate_config['BLOCK_DURATION']} 秒"}), 403
+
+    # 账户级别速率限制（已登录用户，防止同一 IP 下的多账号绕过、防止轮换 IP 攻击）
+    username = session.get("username", "")
+    if username:
+        account_key = (username, "account_global")
+        if not rate_limiter.check(account_key, max_requests=rate_config["RATE_LIMIT"], window=rate_config["RATE_WINDOW"]):
+            rate_limiter.check((username, "account_blocked"), max_requests=1, window=rate_config["BLOCK_DURATION"])
+            return jsonify({"error": "操作过于频繁，请稍后再试"}), 429
 
 
 @app.before_request
@@ -1165,9 +1291,6 @@ def check_global_captcha():
     if session.get("global_captcha_verified"):
         return None
     if request.method == "POST" and request.form.get("captcha"):
-        # 确保验证码存在再验证（防止多标签页竞争消耗导致空码）
-        if not session.get("captcha_code"):
-            _generate_captcha()
         ok, err_msg = _verify_captcha(request.form.get("captcha", ""))
         if ok:
             session["global_captcha_verified"] = True
@@ -1175,9 +1298,6 @@ def check_global_captcha():
         flash(err_msg, "danger")
     if path.startswith("/api/"):
         return jsonify({"error": "需要安全验证"}), 403
-    # 先预生成验证码再渲染表单，确保 session 中已有 captcha_code
-    # 即使浏览器未能加载验证码图片，code 也存在
-    _generate_captcha()
     return render_template("global_captcha.html",
                            username=session["username"],
                            permission=session["permission"],
@@ -1192,6 +1312,7 @@ DB_CONFIG = {
     "password": os.environ.get("DB_PASSWORD", "root@123456"),
     "database": os.environ.get("DB_NAME", "sample"),
     "init_command": "SET time_zone='+00:00'",
+    "autocommit": False,
 }
 ALBUM_DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
@@ -1201,7 +1322,17 @@ ALBUM_DB_CONFIG = {
     "database": os.environ.get("DB_NAME", "sample"),
     "init_command": "SET time_zone='+00:00'",
 }
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "asdfghjkl;'")
+# 管理员注册密钥：必须由环境变量 ADMIN_SECRET 提供。
+# 未设置时不再回退到硬编码常量（否则任何人都能凭仓库里的固定值注册管理员），
+# 而是生成一个进程内随机值——等效于关闭"凭密钥注册管理员"功能，直到运维显式设置。
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET")
+if not ADMIN_SECRET:
+    ADMIN_SECRET = os.urandom(32).hex()
+    print(
+        "[安全警告] 未设置环境变量 ADMIN_SECRET，已生成一次性随机密钥，"
+        "本次运行无法通过注册页获得管理员权限。如需启用，请显式设置 ADMIN_SECRET。",
+        flush=True,
+    )
 LOG_FILE = os.path.join(os.path.dirname(__file__), "..", "app.log")
 
 
@@ -1233,8 +1364,8 @@ def add_security_headers(response):
     if "Content-Security-Policy" not in response.headers:
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            # script-src：nonce 已覆盖所有 <script> 标签，unsafe-inline 暂保留以兼容 100+ 内联事件 handler（onclick 等），逐步迁移后可移除
-            f"script-src 'self' 'unsafe-inline' 'unsafe-eval'{nonce_directive} https://cdn.bootcdn.net https://unpkg.com https://cdn.jsdelivr.net; "
+             # script-src：nonce 已验证内联 <script> 标签；内联事件 handler（onclick 等）已全部迁移为 addEventListener，移除了 unsafe-inline；无 eval() 调用，移除了 unsafe-eval
+            f"script-src 'self'{nonce_directive} https://cdn.bootcdn.net https://unpkg.com https://cdn.jsdelivr.net; "
             # style-src：所有内联 <style> 已加 nonce，移除了 unsafe-inline
             f"style-src 'self'{nonce_directive} https://cdn.bootcdn.net https://cdn.jsdelivr.net; "
             "font-src 'self' https://cdn.bootcdn.net; "
@@ -1271,8 +1402,12 @@ def get_db():
     """
     try:
         return pymysql.connect(**DB_CONFIG)
-    except pymysql.MySQLError as e:
+    except pymysql.MySQLError:
         return None
+
+
+captcha_manager.configure(get_db, app.secret_key)
+
 
 def get_album_db():
     """
@@ -1878,7 +2013,7 @@ def login():
             _login_logger.addHandler(_h)
         _login_logger.info(
             f"LOGIN_ATTEMPT | user={username} | pwd_len={len(password)} | "
-            f"captcha_input='{captcha_input}' | captcha_session='{session.get('captcha_code','')}' | "
+            f"captcha_input='{captcha_input}' | "
             f"ip={client_ip} | ua={request.headers.get('User-Agent','?')[:80]}"
         )
 
@@ -2122,7 +2257,6 @@ def logout():
 
 def forgot_password():
     _init_db_once()
-    _generate_captcha()  # 预生成验证码，避免图片加载失败导致 captcha_code 不存在
     # 生成 CSRF token
     if "csrf_token" not in session:
         session["csrf_token"] = os.urandom(32).hex()
@@ -2367,7 +2501,6 @@ def reset_password():
           不允许新密码与旧密码相同。
     """
     _init_db_once()
-    _generate_captcha()  # 预生成验证码
     # 生成 CSRF token
     if "csrf_token" not in session:
         session["csrf_token"] = os.urandom(32).hex()
@@ -3686,9 +3819,14 @@ def api_network_http_headers():
         return jsonify({"ok": False, "error": "Target required"}), 400
     if not target.startswith(("http://", "https://")):
         target = "https://" + target
+    # SSRF 防护：复用与 /api/api_tester/proxy 相同的 URL 校验逻辑
+    ok, err = _validate_url_for_proxy(target)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
     try:
-        resp = requests.get(target, timeout=10, allow_redirects=True, headers={
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) SchoolWeb/1.0"
+        # allow_redirects=False：防止 30x 跳转到 _validate_url_for_proxy 禁止的内网地址
+        resp = requests.get(target, timeout=10, allow_redirects=False, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) SchoolWeb/1.0 (SSRF-Protected)"
         })
         headers = dict(resp.headers)
         return jsonify({
@@ -5834,9 +5972,6 @@ def change_password():
         elif not re.search(r"[0-9]", new_pwd):
             flash("新密码必须包含至少一个数字", "danger")
         else:
-            # 验证通过，清除验证码
-            session.pop("captcha_code", None)
-            session.pop("captcha_time", None)
             conn = get_db()
             if conn:
                 try:
@@ -6706,6 +6841,20 @@ def api_backup_create():
     import subprocess
     import tarfile
 
+    # 限流：备份是高开销操作（整站打包落盘），按操作者限速，防止爆量创建
+    _bmax, _bwin = RATE_LIMITS["backup"]
+    if not rate_limiter.check((session["username"], "backup_create"), max_requests=_bmax, window=_bwin):
+        return jsonify({"ok": False, "error": "备份操作过于频繁，请稍后再试"}), 429
+
+    # 保留上限：备份数量达到上限时拒绝创建，防止磁盘耗尽
+    if BACKUP_MAX_COUNT > 0:
+        existing = [f for f in os.listdir(BACKUP_DIR) if f.endswith(".tar.gz")]
+        if len(existing) >= BACKUP_MAX_COUNT:
+            return jsonify({
+                "ok": False,
+                "error": f"备份数量已达上限（{BACKUP_MAX_COUNT} 个），请先删除旧备份或调用清理接口",
+            }), 409
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"backup_{timestamp}.tar.gz"
     filepath = os.path.join(BACKUP_DIR, filename)
@@ -6847,25 +6996,42 @@ def api_backup_restore():
         return jsonify({"ok": False, "error": "备份文件超过 2GB，请手动恢复"}), 400
 
     project_root = os.path.dirname(os.path.abspath(__file__))
+    # 用 project_root + os.sep 做前缀匹配，防止 "/app" 误匹配到 "/app-other" 这类目录
+    safe_prefix = project_root + os.sep
     restored_files = []
+    skipped_unsafe = 0
 
     try:
         with tarfile.open(filepath, "r:gz") as tar:
+            safe_members = []
             for member in tar.getmembers():
-                # 安全检查：防止路径穿越
+                # 1. 防止路径穿越 (Zip Slip / Tar Slip)
                 dest = os.path.normpath(os.path.join(project_root, member.name))
-                if not dest.startswith(project_root):
-                    continue  # 跳过路径穿越
+                if dest != project_root and not dest.startswith(safe_prefix):
+                    skipped_unsafe += 1
+                    continue
+                # 2. 拒绝符号链接与硬链接
                 if member.issym() or member.islnk():
-                    continue  # 跳过符号链接
+                    skipped_unsafe += 1
+                    continue
+                # 3. 清除 setuid / setgid 位，防止植入高权限可执行文件
+                if member.mode and (member.mode & 0o4000 or member.mode & 0o2000):
+                    member.mode &= ~0o6000
+                # 4. 设备文件 / FIFO / socket 也一并拒绝，仅保留普通文件与目录
+                if not (member.isfile() or member.isdir()):
+                    skipped_unsafe += 1
+                    continue
+                safe_members.append(member)
                 restored_files.append(member.name)
-            tar.extractall(path=project_root)
+            # 关键：只提取通过了以上所有安全检查的成员
+            tar.extractall(path=project_root, members=safe_members)
 
         write_log("恢复文件备份",
-                  f"文件名: {safe_name}, 大小: {fsize/1024:.1f}KB, 文件数: {len(restored_files)}, 操作者: {session['username']}" )
+                  f"文件名: {safe_name}, 大小: {fsize/1024:.1f}KB, 文件数: {len(restored_files)}, 跳过不安全成员: {skipped_unsafe}, 操作者: {session['username']}" )
         return jsonify({
             "ok": True,
             "files_restored": len(restored_files),
+            "files_skipped_unsafe": skipped_unsafe,
             "files_list": restored_files[:100]  # 只返回前 100 个
         })
     except Exception as e:
@@ -7059,7 +7225,6 @@ def api_utils_url():
     action = data.get("action", "encode")
     if not text:
         return jsonify({"ok": False, "error": "请输入文本"})
-    from urllib.parse import quote, unquote
     try:
         result = quote(text, safe="") if action == "encode" else unquote(text)
         return jsonify({"ok": True, "result": result})
@@ -7955,12 +8120,12 @@ def plugin_market_raw_direct(dirname):
     resp = make_response(send_file(entry_path))
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.bootcdn.net; "
+        "script-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
         "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
         "img-src 'self' data: blob: https:; "
         "connect-src 'self' https:; "
         "frame-ancestors 'self'; "
-        "sandbox allow-scripts allow-same-origin allow-forms allow-modals allow-popups; "
+        "sandbox allow-scripts allow-forms allow-modals allow-popups; "
     )
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -8040,12 +8205,12 @@ def plugin_market_direct(plugin_id):
                     # 强 CSP：限制插件能力
                     resp.headers["Content-Security-Policy"] = (
                         "default-src 'self'; "
-                        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.bootcdn.net; "
+                        "script-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
                         "style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; "
                         "img-src 'self' data: blob: https:; "
                         "connect-src 'self' https:; "
                         "frame-ancestors 'self'; "
-                        "sandbox allow-scripts allow-same-origin allow-forms allow-modals allow-popups; "
+                        "sandbox allow-scripts allow-forms allow-modals allow-popups; "
                     )
                     resp.headers["X-Content-Type-Options"] = "nosniff"
                     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -8137,7 +8302,7 @@ SANDBOX_TEMPLATE = '''<!DOCTYPE html>
 <div class="sandbox-container">
   <iframe
     src="{{ iframe_src }}"
-    sandbox="allow-scripts allow-same-origin"
+    sandbox="allow-scripts"
     referrerpolicy="no-referrer"
     loading="lazy"
   ></iframe>
@@ -9448,6 +9613,11 @@ def api_habit_item(hid):
     conn = get_db()
     if request.method == "DELETE":
         cursor = conn.cursor()
+        # 先验证所有权，再级联删除打卡记录，防止清除他人 habit_logs
+        cursor.execute("SELECT id FROM habits WHERE id=%s AND username=%s", (hid, username))
+        if not cursor.fetchone():
+            cursor.close(); conn.close()
+            return jsonify({"ok": False, "error": "无权操作该习惯"}), 403
         cursor.execute("DELETE FROM habit_logs WHERE habit_id=%s", (hid,))
         cursor.execute("DELETE FROM habits WHERE id=%s AND username=%s", (hid, username))
         conn.commit(); cursor.close(); conn.close()
@@ -9470,6 +9640,11 @@ def api_habit_logs():
         return jsonify({"ok": False, "error": "缺少 habit_id"}), 400
     conn = get_db()
     cursor = conn.cursor()
+    # 所有权校验：确认该习惯属于当前用户，防止越权篡改他人打卡记录
+    cursor.execute("SELECT id FROM habits WHERE id=%s AND username=%s", (habit_id, session["username"]))
+    if not cursor.fetchone():
+        cursor.close(); conn.close()
+        return jsonify({"ok": False, "error": "无权操作该习惯"}), 403
     cursor.execute("INSERT INTO habit_logs (habit_id, log_date, completed) VALUES (%s,%s,%s) ON DUPLICATE KEY UPDATE completed=VALUES(completed)", (habit_id, date, 1 if completed else 0))
     conn.commit(); cursor.close(); conn.close()
     return jsonify({"ok": True})
@@ -10267,33 +10442,163 @@ def api_image_compress():
 def api_tester_page():
     return render_template("api_tester.html", username=session.get("username", ""), permission=session.get("permission", "guest"))
 
+def _validate_url_for_proxy(url):
+    """
+    SSRF 防护：校验 URL 是否安全可代理。
+
+    检查项：
+      1. 仅允许 http/https 协议
+      2. 解析主机名到 IP
+      3. 拒绝私有/回环/链路本地/保留/多播/未指定地址
+      4. 拒绝 0.0.0.0/8 网段
+      5. 拒绝 URL 中包含用户名/密码（防 bypass）
+
+    Returns:
+        (True, "") 通过 / (False, "错误原因") 拒绝
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "无法解析 URL"
+
+    if parsed.scheme != "https":
+        return False, "仅支持 HTTPS 外网地址"
+
+    if parsed.username or parsed.password:
+        return False, "URL 不能包含认证信息"
+
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        return False, "URL 缺少主机名"
+
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"):
+        return False, "禁止访问本地地址"
+
+    for ch in (b"\x00\x0a\x0d"):
+        if hostname.encode().count(ch):
+            return False, "主机名包含非法字符"
+
+    try:
+        info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        resolved_ips = set()
+        for _, _, _, _, sockaddr in info:
+            ip_str = sockaddr[0]
+            resolved_ips.add(ip_str)
+    except socket.gaierror:
+        return False, "无法解析域名"
+    except Exception:
+        return False, "DNS 解析失败"
+
+    if not resolved_ips:
+        return False, "DNS 解析无结果"
+
+    for ip_str in resolved_ips:
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False, f"无效 IP 地址: {ip_str}"
+
+        if ip_obj.is_loopback:
+            return False, "禁止访问回环地址"
+        if ip_obj.is_private:
+            return False, "禁止访问内网地址"
+        if ip_obj.is_link_local:
+            return False, "禁止访问链路本地地址"
+        if ip_obj.is_reserved:
+            return False, "禁止访问保留地址"
+        if ip_obj.is_multicast:
+            return False, "禁止访问多播地址"
+        if ip_obj.is_unspecified:
+            return False, "禁止访问未指定地址"
+
+        if isinstance(ip_obj, ipaddress.IPv4Address):
+            if ip_obj in ipaddress.IPv4Network("0.0.0.0/8"):
+                return False, "禁止访问 0.0.0.0/8 网络"
+
+            if ip_obj in ipaddress.IPv4Network("100.64.0.0/10"):
+                return False, "禁止访问共享地址空间 (CG-NAT)"
+
+    port = parsed.port
+    if port is not None:
+        if not (1 <= port <= 65535):
+            return False, "端口号无效"
+
+    return True, ""
+
+_DANGEROUS_PROXY_HEADERS = frozenset([
+    "host", "cookie", "authorization", "proxy-authorization",
+    "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto",
+    "x-real-ip", "x-request-id", "x-csrf-token",
+])
+
 @app.route("/api/api_tester/proxy", methods=["POST"])
-@login_required
+@admin_required
 def api_api_tester_proxy():
+    """
+    HTTP 代理端点（管理员专用，含 SSRF 防护）。
+
+    安全措施：
+      - 仅管理员可用
+      - 仅允许 http/https 协议
+      - DNS 解析后校验 IP，拒绝内网/回环/保留地址
+      - 禁用自动重定向（防 30x 跳转到内网）
+      - 过滤危险请求头
+      - 响应体截断至 5000 字符
+      - 连接/读取超时 10 秒
+    """
     data = request.get_json() or {}
     url = data.get("url", "").strip()
     method = data.get("method", "GET").upper()
     headers = data.get("headers", {})
     body = data.get("body", "")
+
     if not url:
-        return jsonify({"ok": False, "error": "URL不能为空"}), 400
-    if not url.startswith("http"):
-        url = "https://" + url
+        return jsonify({"ok": False, "error": "URL 不能为空"}), 400
+
+    if method not in ("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"):
+        return jsonify({"ok": False, "error": "不支持的 HTTP 方法"}), 400
+
+    ok, err = _validate_url_for_proxy(url)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+
     try:
         req_headers = {"User-Agent": "Mozilla/5.0"}
         if isinstance(headers, dict):
-            req_headers.update(headers)
-        kwargs = {"timeout": 15, "headers": req_headers, "allow_redirects": True}
+            for k, v in headers.items():
+                if k.lower() not in _DANGEROUS_PROXY_HEADERS:
+                    req_headers[k] = str(v)[:1024]
+
+        kwargs = {"timeout": 10, "headers": req_headers, "allow_redirects": False, "stream": True}
         if method in ("POST", "PUT", "PATCH"):
-            if body:
-                kwargs["data"] = body
+            kwargs["data"] = body.encode("utf-8") if isinstance(body, str) else body
+
         resp = requests.request(method, url, **kwargs)
+
+        body_text = ""
+        with resp:
+            for chunk in resp.iter_content(chunk_size=8192, decode_unicode=True):
+                if chunk:
+                    body_text += chunk if isinstance(chunk, str) else ""
+                    if len(body_text) > 5000:
+                        body_text = body_text[:5000] + "..."
+                        break
+
+        safe_headers = {}
+        for k, v in resp.headers.items():
+            if k.lower() not in ("set-cookie",):
+                safe_headers[k] = str(v)[:512]
+
         return jsonify({
             "ok": True,
             "status": resp.status_code,
-            "headers": dict(resp.headers),
-            "body": resp.text[:5000]
+            "headers": safe_headers,
+            "body": body_text[:5000],
         })
+    except requests.exceptions.Timeout:
+        return jsonify({"ok": False, "error": "请求超时"}), 504
+    except requests.exceptions.ConnectionError:
+        return jsonify({"ok": False, "error": "无法连接到目标服务器"}), 502
     except Exception as e:
         return jsonify({"ok": False, "error": f"请求失败: {str(e)}"}), 500
 
@@ -10660,6 +10965,7 @@ def api_alumni_stories():
 @login_required
 def api_alumni_story_detail(sid):
     username = session["username"]
+    permission = session.get("permission", "guest")
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, title, content, cover_image, status, view_count, like_count, comment_count, created_at, reviewer, review_note FROM alumni_stories WHERE id=%s", (sid,))
@@ -10668,12 +10974,22 @@ def api_alumni_story_detail(sid):
         cursor.close(); conn.close()
         return jsonify({"error": "故事不存在"}), 404
 
+    # 权限校验：非管理员只能查看已审核通过的故事，或自己创建的故事
+    story_status = row[5]
+    story_owner = row[1]
+    if permission != "administrator" and story_status != "approved" and story_owner != username:
+        cursor.close(); conn.close()
+        return jsonify({"error": "该故事尚未审核通过"}), 403
+
     story = {
         "id": row[0], "username": row[1], "title": row[2], "content": row[3],
         "cover_image": row[4], "status": row[5], "view_count": row[6],
         "like_count": row[7], "comment_count": row[8], "created_at": str(row[9]),
-        "reviewer": row[10], "review_note": row[11]
     }
+    # reviewer 和 review_note 仅对管理员可见，不泄露给普通用户
+    if permission == "administrator":
+        story["reviewer"] = row[10]
+        story["review_note"] = row[11]
 
     # Increment view count (only once per session)
     view_key = f"viewed_story_{sid}"
