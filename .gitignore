@@ -8,3 +8,6 @@ rate_config.json
 .workflow/
 build/
 dist/
+.hermes
+build
+dist
