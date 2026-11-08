@@ -1,13 +1,41 @@
-.secret_key
-ip_whitelist.json
-rate_config.json
-.env
-.env.example
-.idea/
-.hermes/
-.qoder/
-.workflow/
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.hermes
+.qoder
+.workflow
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+env
+*.egg-info
+
+# PyInstaller
 build/
 dist/
-backups/
-qodana.yaml
+
+# Node
+frontend/node_modules
+frontend/.idea
+
+# macOS
+.DS_Store
+
+# Temp/Runtime
+*.log
+.secret_key
+rate_limiter.json
+
+# Docs (keep README)
+安全措施清单.md
