@@ -70,9 +70,9 @@
 
 <div class="src-container">
     <div class="src-header">
-        <div style="position:relative;">
+        <div class="u249">
             <h1>⚙️ SRC 管理后台</h1>
-            <p style="opacity:.7;">漏洞报告审核与管理 · 仅管理员可访问</p>
+            <p class="u395">漏洞报告审核与管理 · 仅管理员可访问</p>
             <div class="nav-links">
                 <a href="/src">📝 提交漏洞</a>
                 <a href="/src/my">📋 我的报告</a>
@@ -186,14 +186,14 @@ function renderReports(reports) {
         const stBadge = getStatusBadge(r.status);
         return `<div class="report-row" data-csp-click="viewReport" data-csp-args='[${r.id}]'>
             <div class="d-flex justify-content-between align-items-start">
-                <div style="flex:1;min-width:0;">
+                <div class="u271">
                     <div class="d-flex align-items-center gap-2 mb-1">
                         <span class="badge bg-light text-dark">#${r.id}</span>
-                        <span class="${sevClass}" style="font-weight:700;font-size:.85rem;">${sevLabel}</span>
+                        <span class="${sevClass} u396">${sevLabel}</span>
                         <span class="${stBadge} badge-status">${stLabel}</span>
-                        <span class="badge bg-light text-dark" style="font-size:.7rem;">${r.vuln_type}</span>
+                        <span class="badge bg-light text-dark u100">${r.vuln_type}</span>
                     </div>
-                    <h6 class="mb-1" style="font-size:.9rem;font-weight:600;">${escapeHtml(r.title)}</h6>
+                    <h6 class="mb-1 u397">${escapeHtml(r.title)}</h6>
                     <div class="d-flex gap-2 time">
                         <span>👤 ${escapeHtml(r.username)}</span>
                         <span>🕐 ${r.created_at.slice(0,16)}</span>
@@ -238,10 +238,10 @@ async function viewReport(id) {
             ${r.steps_to_reproduce ? `<div class="detail-section"><span class="detail-label">复现步骤</span><div class="detail-value"><pre>${escapeHtml(r.steps_to_reproduce)}</pre></div></div>` : ''}
             ${r.impact ? `<div class="detail-section"><span class="detail-label">影响范围</span><div class="detail-value"><pre>${escapeHtml(r.impact)}</pre></div></div>` : ''}
             ${r.attachment ? `<div class="detail-section"><span class="detail-label">附件</span><div class="detail-value"><a href="${escapeHtml(r.attachment)}" target="_blank" rel="noopener">🔗 查看附件</a></div></div>` : ''}
-            ${r.wechat_contact ? `<div class="detail-section"><span class="detail-label">💰 微信联系方式</span><div class="detail-value" style="font-weight:600; color:#07c160;">${escapeHtml(r.wechat_contact)}</div></div>` : '<div class="detail-section"><span class="detail-label">💰 微信联系方式</span><div class="detail-value text-muted">未填写（无奖金联系方式）</div></div>'}
+            ${r.wechat_contact ? `<div class="detail-section"><span class="detail-label">💰 微信联系方式</span><div class="detail-value u398">${escapeHtml(r.wechat_contact)}</div></div>` : '<div class="detail-section"><span class="detail-label">💰 微信联系方式</span><div class="detail-value text-muted">未填写（无奖金联系方式）</div></div>'}
             <div class="detail-section">
                 <span class="detail-label">管理员备注</span>
-                <textarea class="form-control" id="adminNotes" rows="3" style="font-size:.85rem;"
+                <textarea class="form-control u98" id="adminNotes" rows="3" 
                           placeholder="添加审核备注...">${escapeHtml(r.admin_notes || '')}</textarea>
             </div>
             ${r.reviewed_by ? `<div class="text-muted small">审核人: ${escapeHtml(r.reviewed_by)}</div>` : ''}

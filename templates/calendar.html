@@ -23,7 +23,7 @@
 
         <!-- 日历网格 -->
         <div class="table-responsive">
-            <table class="table table-bordered text-center" style="table-layout:fixed;">
+            <table class="table table-bordered text-center u69">
                 <thead>
                     <tr id="weekdayHeader"></tr>
                 </thead>
@@ -72,7 +72,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-danger me-auto" id="btnDelete" style="display:none;" data-csp-click="deleteEvent">{{ _('calendar_delete') }}</button>
+                <button class="btn btn-danger me-auto u30" type="button"  id="btnDelete"  data-csp-click="deleteEvent">{{ _('calendar_delete') }}</button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('common_cancel') }}</button>
                 <button type="button" class="btn btn-primary" data-csp-click="saveEvent">{{ _('calendar_save') }}</button>
             </div>
@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function renderLegend() {
     let html = '';
     for (let [cat, color] of Object.entries(catColors)) {
-        html += `<span style="font-size:12px;"><span class="legend-dot" style="background:${color};"></span>${catNames[cat]}</span>`;
+        html += `<span class="u70"><span class="legend-dot u71"></span>${catNames[cat]}</span>`;
     }
     document.getElementById('legend').innerHTML = html;
 }
@@ -137,7 +137,7 @@ function loadEvents() {
 
 function renderCalendar() {
     const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-    document.getElementById('weekdayHeader').innerHTML = weekdays.map(w => `<th style="background:#f8f9fa;">${w}</th>`).join('');
+    document.getElementById('weekdayHeader').innerHTML = weekdays.map(w => `<th class="u72">${w}</th>`).join('');
     document.getElementById('monthLabel').textContent = `${currentYear}年 ${currentMonth}月`;
 
     const firstDay = new Date(currentYear, currentMonth - 1, 1);
@@ -192,7 +192,7 @@ function renderCalendar() {
             html += `<div class="cal-date${cell.isToday ? ' today-label' : ''}">${cell.day}</div>`;
             const dayEvents = evMap[cell.dateStr] || [];
             dayEvents.slice(0, 3).forEach(ev => {
-                html += `<div class="cal-event" style="background:${ev.color};" data-csp-click="openEvent" data-csp-args='[${ev.id}]'>${ev.event_time ? ev.event_time.substring(0,5)+' ' : ''}${escapeHtml(ev.title)}</div>`;
+                html += `<div class="cal-event u73" data-csp-click="openEvent" data-csp-args='[${ev.id}]'>${ev.event_time ? ev.event_time.substring(0,5)+' ' : ''}${escapeHtml(ev.title)}</div>`;
             });
             if (dayEvents.length > 3) {
                 html += `<div class="cal-more">+${dayEvents.length - 3} 更多</div>`;

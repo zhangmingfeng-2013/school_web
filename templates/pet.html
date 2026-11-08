@@ -107,8 +107,8 @@
         <p class="pet-hatch-desc">选择一个可爱的宠物，开始你的陪伴之旅吧！</p>
         <div class="pet-emoji-display egg pet-my-4"><span class="main-emoji">🥚</span></div>
         <p class="pet-hatch-desc">选择宠物类型：</p>
-        <div style="display:flex;gap:1rem;justify-content:center;margin:1.5rem 0;flex-wrap:wrap">
-            <div v-for="pt in petTypes" :key="pt.key" class="hatch-card" :class="{selected:selectedHatchType===pt.key}" @click="selectedHatchType=pt.key">[[pt.emoji]]<div class="card-type">[[pt.name]]</div></div>
+        <div class="u101">
+            <div class="hatch-card {selected:selectedHatchType===pt.key}" v-for="pt in petTypes" :key="pt.key"  : @click="selectedHatchType=pt.key">[[pt.emoji]]<div class="card-type">[[pt.name]]</div></div>
         </div>
         <el-button type="primary" size="large" round class="pet-hatch-btn" @click="hatchPet" :loading="hatching">✨ 孵化</el-button>
     </el-card>
@@ -137,7 +137,7 @@
                 <el-button size="small" @click="showRename=false">取消</el-button>
             </div></div>
             <div class="evo-timeline"><template v-for="(s,i) in evolutionPath" :key="i">
-                <div class="evo-node" :class="{active:s.stage===currentEvolution.stage}"><span class="evo-icon">[[s.emoji]]</span><span class="evo-title">[[s.name]]<br>Lv.[[s.min_level]]+</span></div>
+                <div class="evo-node {active:s.stage===currentEvolution.stage}" :><span class="evo-icon">[[s.emoji]]</span><span class="evo-title">[[s.name]]<br>Lv.[[s.min_level]]+</span></div>
                 <span v-if="i<evolutionPath.length-1" class="evo-arrow">→</span>
             </template></div>
         </div>
@@ -169,12 +169,12 @@
                 </el-tab-pane>
                 <el-tab-pane name="shop"><template #label><span>🛍️ 装扮</span></template>
                     <div><div class="shop-header"><span class="pet-section-title">🪙 硬币：<strong class="pet-text-gold">[[shopCoins]]</strong></span><el-button size="small" link type="primary" @click="refreshAfterShop">刷新</el-button></div>
-                    <div class="shop-grid"><div v-for="item in shopItems" :key="item.key" class="shop-item-card" :class="{owned:item.owned&&!item.equipped,equipped:item.equipped}" @click="handleShopItem(item)"><span class="shop-item-icon">[[item.emoji]]</span><div class="shop-item-name">[[item.name]]</div><div v-if="item.equipped" class="pet-text-purple">✅ 已装备</div><div v-else-if="item.owned" class="pet-text-green">已拥有</div><div v-else class="shop-item-cost">🪙 [[item.cost]]</div></div></div>
+                    <div class="shop-grid"><div class="shop-item-card {owned:item.owned&&!item.equipped,equipped:item.equipped}" v-for="item in shopItems" :key="item.key"  : @click="handleShopItem(item)"><span class="shop-item-icon">[[item.emoji]]</span><div class="shop-item-name">[[item.name]]</div><div v-if="item.equipped" class="pet-text-purple">✅ 已装备</div><div v-else-if="item.owned" class="pet-text-green">已拥有</div><div v-else class="shop-item-cost">🪙 [[item.cost]]</div></div></div>
                     <el-empty v-if="shopItems.length===0" description="暂无装扮"/></div>
                 </el-tab-pane>
                 <el-tab-pane name="community"><template #label><span>🌐 社区</span></template>
                     <div><div class="shop-header"><span class="pet-section-title">宠物社区 · 排行榜</span><el-button size="small" link type="primary" @click="loadCommunity" :loading="communityLoading">刷新</el-button></div>
-                    <div class="community-grid"><el-card v-for="pet in communityPets" :key="pet.username" class="community-card" shadow="hover" @click="visitPet(pet.username)"><div class="pet-flex-center"><span class="comm-avatar">[[pet.evolution_emoji]]</span><div style="flex:1"><div class="comm-name">[[pet.pet_name]]</div><div class="comm-meta"><span>[[pet.evolution_name]]</span><span v-if="pet.personality">· [[pet.personality]]</span><span>· 👀 [[pet.visit_count]]</span></div></div><span class="comm-level">Lv.[[pet.level]]</span></div></el-card></div>
+                    <div class="community-grid"><el-card v-for="pet in communityPets" :key="pet.username" class="community-card" shadow="hover" @click="visitPet(pet.username)"><div class="pet-flex-center"><span class="comm-avatar">[[pet.evolution_emoji]]</span><div class="u7"><div class="comm-name">[[pet.pet_name]]</div><div class="comm-meta"><span>[[pet.evolution_name]]</span><span v-if="pet.personality">· [[pet.personality]]</span><span>· 👀 [[pet.visit_count]]</span></div></div><span class="comm-level">Lv.[[pet.level]]</span></div></el-card></div>
                     <el-empty v-if="communityPets.length===0" description="暂无其他宠物~"/></div>
                 </el-tab-pane>
                 <el-tab-pane name="diary"><template #label><span>📖 日记</span></template>
@@ -182,13 +182,13 @@
                     <el-empty v-else description="暂无日记~"/></div>
                 </el-tab-pane>
                 <el-tab-pane name="achievements"><template #label><span>🏆 成就</span></template>
-                    <div><div class="achieve-grid"><el-card v-for="ach in achievements" :key="ach.key" class="achieve-card" :class="{unlocked:ach.unlocked,locked:!ach.unlocked}" shadow="hover"><div class="pet-flex-sm"><span style="font-size:1.6rem;flex-shrink:0">[[ach.icon]]</span><div><div style="font-weight:600;font-size:.82rem">[[ach.name]]</div><div style="font-size:.7rem;color:var(--text-muted,#9ca3af)">[[ach.desc]]</div></div></div></el-card></div>
+                    <div><div class="achieve-grid"><el-card v-for="ach in achievements" :key="ach.key" class="achieve-card" :class="{unlocked:ach.unlocked,locked:!ach.unlocked}" shadow="hover"><div class="pet-flex-sm"><span class="u102">[[ach.icon]]</span><div><div class="u103">[[ach.name]]</div><div class="u104">[[ach.desc]]</div></div></div></el-card></div>
                     <el-empty v-if="achievements.length===0" description="暂无成就数据"/></div>
                 </el-tab-pane>
             </el-tabs>
         </el-card>
 
-        <el-card shadow="hover" style="margin-top:1.5rem"><div class="log-header">📋 活动记录</div>
+        <el-card shadow="hover" class="u175"><div class="log-header">📋 活动记录</div>
             <div v-if="petLogs.length===0" class="pet-text-muted-sm">暂无记录</div>
             <div v-for="log in petLogs" :key="log.created_at" class="log-item"><span class="log-time">[[log.created_at]]</span><span>[[logActionIcon(log.action)]] [[log.detail]]</span></div>
         </el-card>
@@ -200,7 +200,7 @@
                 <p class="pet-text-md">❤️ [[visitPetData.pet.hunger]] | 😊 [[visitPetData.pet.happiness]] | ⚡ [[visitPetData.pet.energy]]</p>
                 <p class="pet-text-sm">🪙 [[visitPetData.pet.coins]] · 👀 被访问 [[visitPetData.pet.visit_count]] 次</p>
                 <div v-if="visitPetData.recent_visits&&visitPetData.recent_visits.length>0" class="pet-visit-recent"><el-divider content-position="left"><span class="pet-text-muted-sm">最近来访</span></el-divider>
-                    <div v-for="v in visitPetData.recent_visits" :key="v.time" class="pet-text-muted-sm" style="padding:2px 0">· [[v.visitor]] — [[v.message]] <span class="pet-text-xs">[[v.time]]</span></div></div>
+                    <div v-for="v in visitPetData.recent_visits" :key="v.time" class="pet-text-muted-sm u234">· [[v.visitor]] — [[v.message]] <span class="pet-text-xs">[[v.time]]</span></div></div>
                 <el-divider/><div class="pet-flex-wrap-center">
                     <el-button type="warning" size="small" round @click="sendGift(visitUsername,'coins',5)">🪙 送5硬币</el-button>
                     <el-button type="warning" size="small" round @click="sendGift(visitUsername,'coins',20)">🪙 送20硬币</el-button>

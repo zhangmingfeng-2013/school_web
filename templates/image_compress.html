@@ -32,11 +32,11 @@
                 <p>点击或拖拽图片到此处上传</p>
                 <small class="text-muted">支持 JPG、PNG、WebP 格式</small>
             </div>
-            <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" style="display:none;" data-csp-change="handleFileSelect">
+            <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" class="u30" data-csp-change="handleFileSelect">
         </div>
     </div>
 
-    <div id="compressSettings" style="display:none;">
+    <div id="compressSettings" class="u30">
         <div class="card mb-4">
             <div class="card-body">
                 <h6 class="card-title mb-3">压缩设置</h6>
@@ -56,12 +56,12 @@
         </div>
     </div>
 
-    <div id="compressLoading" style="display:none; text-align:center; padding:2rem;">
+    <div id="compressLoading" class="u267">
         <div class="spinner-border text-primary" role="status"></div>
         <p class="mt-2 text-muted">正在压缩...</p>
     </div>
 
-    <div class="card" id="compressResult" style="display:none;">
+    <div class="card u30" id="compressResult">
         <div class="card-body">
             <h6 class="card-title mb-3">压缩结果</h6>
             <div class="preview-row">
@@ -85,7 +85,7 @@
         </div>
     </div>
 
-    <div id="compressError" style="display:none;" class="alert alert-danger mt-3"></div>
+    <div id="compressError" class="u30 alert alert-danger mt-3"></div>
 </div>
 {% endblock %}
 

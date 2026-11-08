@@ -41,26 +41,26 @@
         <div class="text">点击或拖拽文件到此处</div>
         <div class="hint">支持 PNG, JPG, WebP, CSV, JSON 格式</div>
     </div>
-    <input type="file" id="fileInput" style="display:none;" data-csp-change="onFileSelected">
+    <input type="file" id="fileInput" class="u30" data-csp-change="onFileSelected">
 
     <!-- File info -->
-    <div class="file-info" id="fileInfo" style="display:none;">
-        <span style="font-size:1.5rem;">📄</span>
+    <div class="file-info u30" id="fileInfo">
+        <span class="u253">📄</span>
         <span class="name" id="fileName"></span>
         <span class="size" id="fileSize"></span>
         <button class="btn btn-outline-danger btn-sm" data-csp-click="clearFile">✕</button>
     </div>
 
     <!-- Convert button -->
-    <div class="text-center mt-3" id="convertBtnWrap" style="display:none;">
+    <div class="text-center mt-3 u30" id="convertBtnWrap">
         <button class="btn btn-primary btn-lg" id="convertBtn" data-csp-click="startConvert">
             🔄 开始转换
         </button>
-        <div class="spinner-border text-primary ms-2" id="convertSpinner" style="display:none;width:1.5rem;height:1.5rem;" role="status"></div>
+        <div class="spinner-border text-primary ms-2 u254" id="convertSpinner"  role="status"></div>
     </div>
 
     <!-- Result -->
-    <div class="result-zone" id="resultZone" style="display:none;">
+    <div class="result-zone u30" id="resultZone">
         <div class="success-icon">✅</div>
         <h5 class="mt-2">转换完成！</h5>
         <div id="resultContent"></div>
@@ -68,7 +68,7 @@
     </div>
 
     <!-- Error -->
-    <div class="text-center mt-3" id="errorMsg" style="display:none;">
+    <div class="text-center mt-3 u30" id="errorMsg">
         <div class="alert alert-danger" id="errorText"></div>
     </div>
 </div>

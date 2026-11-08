@@ -57,16 +57,16 @@
         <button class="btn btn-sm btn-outline-success" data-csp-click="checkinAllToday">✅ 一键全部打卡</button>
     </div>
     <div class="overview-stats" id="overviewStats">
-        <div class="overview-stat"><div class="overview-stat-val" style="color:#3b82f6" id="ovTotal">0</div><div class="overview-stat-label">总习惯</div></div>
-        <div class="overview-stat"><div class="overview-stat-val" style="color:#10b981" id="ovDone">0</div><div class="overview-stat-label">今日已完成</div></div>
-        <div class="overview-stat"><div class="overview-stat-val" style="color:#f59e0b" id="ovRemain">0</div><div class="overview-stat-label">待打卡</div></div>
-        <div class="overview-stat"><div class="overview-stat-val" style="color:#ec4899" id="ovBestStreak">0</div><div class="overview-stat-label">🔥 最佳连续</div></div>
-        <div class="overview-stat"><div class="overview-stat-val" style="color:#8b5cf6" id="ovRate">0%</div><div class="overview-stat-label">本月达成率</div></div>
+        <div class="overview-stat"><div class="overview-stat-val u55" id="ovTotal">0</div><div class="overview-stat-label">总习惯</div></div>
+        <div class="overview-stat"><div class="overview-stat-val u56" id="ovDone">0</div><div class="overview-stat-label">今日已完成</div></div>
+        <div class="overview-stat"><div class="overview-stat-val u57" id="ovRemain">0</div><div class="overview-stat-label">待打卡</div></div>
+        <div class="overview-stat"><div class="overview-stat-val u58" id="ovBestStreak">0</div><div class="overview-stat-label">🔥 最佳连续</div></div>
+        <div class="overview-stat"><div class="overview-stat-val u257" id="ovRate">0%</div><div class="overview-stat-label">本月达成率</div></div>
     </div>
 </div>
 
 <!-- Add Habit Form -->
-<div class="card mb-4" id="addHabitCard" style="display:none;">
+<div class="card mb-4 u30" id="addHabitCard">
     <div class="card-body">
         <h5 class="card-title mb-3">新建习惯</h5>
         <form id="habitForm" data-csp-submit="submitHabit">
@@ -91,14 +91,14 @@
             <div class="mb-3">
                 <label class="form-label">颜色</label>
                 <div class="color-picker-wrap" id="colorPicker">
-                    <span class="color-dot selected" data-color="#10b981" style="background:#10b981;"></span>
-                    <span class="color-dot" data-color="#3b82f6" style="background:#3b82f6;"></span>
-                    <span class="color-dot" data-color="#8b5cf6" style="background:#8b5cf6;"></span>
-                    <span class="color-dot" data-color="#ec4899" style="background:#ec4899;"></span>
-                    <span class="color-dot" data-color="#f59e0b" style="background:#f59e0b;"></span>
-                    <span class="color-dot" data-color="#ef4444" style="background:#ef4444;"></span>
-                    <span class="color-dot" data-color="#06b6d4" style="background:#06b6d4;"></span>
-                    <span class="color-dot" data-color="#84cc16" style="background:#84cc16;"></span>
+                    <span class="color-dot selected u60" data-color="#10b981"></span>
+                    <span class="color-dot u61" data-color="#3b82f6"></span>
+                    <span class="color-dot u62" data-color="#8b5cf6"></span>
+                    <span class="color-dot u63" data-color="#ec4899"></span>
+                    <span class="color-dot u64" data-color="#f59e0b"></span>
+                    <span class="color-dot u65" data-color="#ef4444"></span>
+                    <span class="color-dot u66" data-color="#06b6d4"></span>
+                    <span class="color-dot u67" data-color="#84cc16"></span>
                 </div>
                 <input type="hidden" name="color" value="#10b981" id="selectedColor">
             </div>
@@ -110,7 +110,7 @@
 
 <!-- Habits Grid -->
 <div class="habits-grid" id="habitsGrid">
-    <div class="text-center text-muted py-4" style="grid-column:1/-1;">加载中...</div>
+    <div class="text-center text-muted py-4 u142">加载中...</div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -267,7 +267,7 @@ function renderHabits(habits) {
     var today = new Date().toISOString().split('T')[0];
 
     if (!habits || habits.length === 0) {
-        grid.innerHTML = '<div class="text-center text-muted py-4" style="grid-column:1/-1;">还没有习惯，点击上方按钮创建一个吧！</div>';
+        grid.innerHTML = '<div class="text-center text-muted py-4 u142">还没有习惯，点击上方按钮创建一个吧！</div>';
         return;
     }
 
@@ -408,7 +408,7 @@ function loadHabits() {
         renderOverview(habits);
         renderHabits(habits);
     }).catch(function() {
-        document.getElementById('habitsGrid').innerHTML = '<div class="text-center text-muted py-4" style="grid-column:1/-1;">加载失败</div>';
+        document.getElementById('habitsGrid').innerHTML = '<div class="text-center text-muted py-4 u142">加载失败</div>';
     });
 }
 

@@ -30,7 +30,7 @@
         <button class="btn btn-outline-danger btn-sm" data-csp-click="clearJWT">🗑️ 清空</button>
     </div>
 
-    <div id="jwtResult" style="display:none">
+    <div id="jwtResult" class="u30">
         <!-- Header -->
         <div class="jwt-panel">
             <h6>📋 Header <span id="jwtAlg" class="jwt-badge jwt-badge-ok"></span></h6>
@@ -40,7 +40,7 @@
         <div class="jwt-panel">
             <h6>📦 Payload <span id="jwtStatus"></span></h6>
             <div class="jwt-json" id="jwtPayload"></div>
-            <div class="mt-2" id="jwtClaims" style="font-size:.82rem"></div>
+            <div class="mt-2 u298" id="jwtClaims"></div>
         </div>
         <!-- Signature -->
         <div class="jwt-panel">
@@ -48,7 +48,7 @@
             <div class="jwt-sig" id="jwtSig"></div>
         </div>
     </div>
-    <div id="jwtError" class="alert alert-danger mt-3" style="display:none"></div>
+    <div id="jwtError" class="alert alert-danger mt-3 u30"></div>
 </div>
 {% endblock %}
 

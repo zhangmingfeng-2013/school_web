@@ -74,8 +74,8 @@
 </style>
 
 <div class="alumni-header">
-    <h2 style="display:flex;align-items:center;justify-content:center;gap:8px;">📋 校友名录</h2>
-    <p style="opacity:.9;font-size:.95rem;" id="alumniTotal">共 -- 位校友</p>
+    <h2 class="u158">📋 校友名录</h2>
+    <p class="u159" id="alumniTotal">共 -- 位校友</p>
     <div class="alumni-search">
         <input type="text" class="form-control" id="searchInput" placeholder="搜索姓名、班级、城市..." data-csp-enter="searchAlumni">
         <button class="btn btn-light" data-csp-click="searchAlumni">🔍</button>
@@ -87,7 +87,7 @@
     <div class="alumni-filter">
         <div class="card">
             <div class="card-body py-2 px-3">
-                <h6 class="mb-2" style="font-size:.8rem;letter-spacing:.5px;">📅 毕业年份（届）</h6>
+                <h6 class="mb-2 u160">📅 毕业年份（届）</h6>
                 <ul class="year-filter" id="yearFilter">
                     <li class="active" data-year="" data-csp-click="filterByYear" data-csp-args='[0]'>
                         全部 <span class="count" id="yearTotal">--</span>
@@ -99,7 +99,7 @@
             <button class="btn btn-sm btn-outline-primary w-100" data-csp-click="showEditProfile">
                 ✏️ 完善我的资料
             </button>
-            <small class="text-muted d-block mt-1" style="font-size:.7rem;">填写毕业信息后出现在名录中</small>
+            <small class="text-muted d-block mt-1 u100">填写毕业信息后出现在名录中</small>
         </div>
     </div>
 
@@ -235,7 +235,7 @@ function renderGrid(alumni) {
             + '<div class="alumni-avatar">' + a.avatar + '</div>'
             + '<div class="alumni-info">'
             + '<div class="alumni-name">' + escapeHtml(a.nickname)
-            + ' <small class="text-muted" style="font-weight:400;">@' + escapeHtml(a.username) + '</small></div>'
+            + ' <small class="text-muted u161">@' + escapeHtml(a.username) + '</small></div>'
             + '<div class="alumni-detail">' + details.join(' · ') + '</div>'
             + (a.bio ? '<div class="alumni-bio">"' + escapeHtml(a.bio) + '"</div>' : '')
             + '</div></div>';

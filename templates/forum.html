@@ -61,7 +61,7 @@
     <div class="forum-sidebar">
         <div class="card">
             <div class="card-body py-3">
-                <h6 class="mb-3" style="font-size:.85rem;letter-spacing:1px;">📂 版块分类</h6>
+                <h6 class="mb-3 u152">📂 版块分类</h6>
                 <ul class="cat-list" id="catList">
                     <li class="cat-item active" data-cat-id="0" data-csp-click="filterByCategory" data-csp-args='[0]'>
                         📋 全部帖子 <span class="badge bg-secondary" id="catBadge0">0</span>
@@ -75,7 +75,7 @@
     <div class="forum-main">
         <!-- 操作栏 -->
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <div class="forum-search flex-grow-1" style="max-width:400px;">
+            <div class="forum-search flex-grow-1 u153">
                 <input type="text" class="form-control" id="searchInput" placeholder="搜索帖子关键词..." data-csp-enter="searchPosts">
                 <button class="btn-search" data-csp-click="searchPosts">🔍</button>
             </div>
@@ -135,7 +135,7 @@
                 </div>
                 <div class="d-flex gap-2 align-items-center">
                     <span id="detailBadges"></span>
-                    <div class="dropdown" id="adminActions" style="display:none;">
+                    <div class="dropdown u30" id="adminActions">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">⚙️</button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="#" data-csp-click="adminPinPost">📌 置顶/取消</a></li>
@@ -144,7 +144,7 @@
                             <li><a class="dropdown-item text-danger" href="#" data-csp-click="adminDeletePost">🗑️ 删除帖子</a></li>
                         </ul>
                     </div>
-                    <button class="btn btn-sm btn-outline-danger" id="authorDeleteBtn" style="display:none;" data-csp-click="authorDeletePost">🗑️ 删除</button>
+                    <button class="btn btn-sm btn-outline-danger u30" id="authorDeleteBtn"  data-csp-click="authorDeletePost">🗑️ 删除</button>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
             </div>
@@ -378,10 +378,10 @@ function renderPostDetail(post) {
     post.replies.forEach(function(r) {
         replyHtml += '<div class="reply-item">'
             + '<div class="reply-meta"><strong>' + escapeHtml(r.username) + '</strong> · ' + r.created_at.substring(0, 16)
-            + (isAdmin || r.username === '{{ username }}' ? ' <a href="javascript:void(0)" class="text-danger" style="font-size:.75rem;" data-csp-click="deleteReply" data-csp-args=\'[' + r.id + ']\'>删除</a>' : '')
+            + (isAdmin || r.username === '{{ username }}' ? ' <a href="javascript:void(0)" class="text-danger u154" data-csp-click="deleteReply" data-csp-args=\'[' + r.id + ']\'>删除</a>' : '')
             + '</div>'
             + '<div class="reply-content">' + escapeHtml(r.content) + '</div>'
-            + '<button class="btn btn-sm btn-link p-0 mt-1 reply-like-btn" style="font-size:.8rem;" data-csp-click="toggleLikeReply" data-csp-args=\'[' + r.id + ']\'>'
+            + '<button class="btn btn-sm btn-link p-0 mt-1 reply-like-btn u97" data-csp-click="toggleLikeReply" data-csp-args=\'[' + r.id + ']\'>'
             + (r.liked ? '❤️' : '🤍') + ' ' + r.like_count
             + '</button>'
             + '</div>';

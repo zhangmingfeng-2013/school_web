@@ -57,8 +57,8 @@
 <!-- 0: 密码生成器 -->
 <div class="ut-panel active" id="utPanel0">
     <div class="ut-row">
-        <div><label style="font-size:13px;display:block;margin-bottom:4px">长度</label><input type="number" id="pwLen" value="16" min="8" max="128" style="width:80px"></div>
-        <div class="ut-check-row" style="align-self:flex-end;padding-bottom:8px">
+        <div><label class="u114">长度</label><input type="number" id="pwLen" value="16" min="8" max="128" class="u191"></div>
+        <div class="ut-check-row u115">
             <label><input type="checkbox" id="pwUpper" checked> 大写</label>
             <label><input type="checkbox" id="pwLower" checked> 小写</label>
             <label><input type="checkbox" id="pwDigits" checked> 数字</label>
@@ -72,7 +72,7 @@
 <!-- 1: 哈希计算器 -->
 <div class="ut-panel" id="utPanel1">
     <div class="ut-row">
-        <input type="text" id="hashInput" placeholder="输入要哈希的文本..." style="flex:1;min-width:200px">
+        <input type="text" id="hashInput" placeholder="输入要哈希的文本..." class="u116">
         <select id="hashAlgo">
             <option value="md5">MD5</option>
             <option value="sha1">SHA-1</option>
@@ -114,7 +114,7 @@
         <textarea id="jsonInput" placeholder='粘贴 JSON 文本... 如 {"name":"test","num":42}'></textarea>
     </div>
     <div class="ut-row">
-        <label style="font-size:13px">缩进 <input type="number" id="jsonIndent" value="2" min="0" max="8" style="width:50px"></label>
+        <label class="u9">缩进 <input type="number" id="jsonIndent" value="2" min="0" max="8" class="u117"></label>
         <button class="ut-btn-primary" data-csp-click="formatJson">格式化 / 校验</button>
     </div>
     <div class="ut-result" id="jsonResult"></div>
@@ -123,8 +123,8 @@
 <!-- 5: UUID 生成器 -->
 <div class="ut-panel" id="utPanel5">
     <div class="ut-row">
-        <label style="font-size:13px">版本 <select id="uuidVer"><option value="4">v4 (随机)</option><option value="1">v1 (时间)</option></select></label>
-        <label style="font-size:13px">数量 <input type="number" id="uuidCount" value="5" min="1" max="50" style="width:60px"></label>
+        <label class="u9">版本 <select id="uuidVer"><option value="4">v4 (随机)</option><option value="1">v1 (时间)</option></select></label>
+        <label class="u9">数量 <input type="number" id="uuidCount" value="5" min="1" max="50" class="u190"></label>
         <button class="ut-btn-primary" data-csp-click="genUUID">生成 UUID</button>
     </div>
     <div class="ut-result" id="uuidResult"></div>
@@ -133,7 +133,7 @@
 <!-- 6: 时间戳转换 -->
 <div class="ut-panel" id="utPanel6">
     <div class="ut-row">
-        <input type="text" id="tsInput" placeholder="Unix 时间戳 (如 1700000000) 或日期 (如 2024-01-01)" style="flex:1">
+        <input type="text" id="tsInput" placeholder="Unix 时间戳 (如 1700000000) 或日期 (如 2024-01-01)" class="u7">
         <button class="ut-btn-primary" data-csp-click="convertTs">转换</button>
         <button class="ut-btn-success" data-csp-click="getNowTs">现在</button>
     </div>
@@ -148,29 +148,29 @@
     <div class="ut-row">
         <button class="ut-btn-primary" data-csp-click="countText">统计</button>
     </div>
-    <div class="ut-grid" id="countStats" style="display:none;margin-top:12px"></div>
+    <div class="ut-grid u118" id="countStats"></div>
 </div>
 
 <!-- 8: 正则测试器 -->
 <div class="ut-panel" id="utPanel8">
     <div class="ut-row">
-        <input type="text" id="regexPattern" placeholder="正则表达式 (如 \\d{3}-\\d{4})" style="flex:1;min-width:200px">
-        <input type="text" id="regexFlags" placeholder="标志 (如 gi)" style="width:80px">
+        <input type="text" id="regexPattern" placeholder="正则表达式 (如 \\d{3}-\\d{4})" class="u116">
+        <input type="text" id="regexFlags" placeholder="标志 (如 gi)" class="u191">
         <button class="ut-btn-primary" data-csp-click="testRegex">测试</button>
     </div>
     <div class="ut-row">
         <textarea id="regexInput" placeholder="输入要匹配的文本..."></textarea>
     </div>
     <div class="ut-result" id="regexResult"></div>
-    <div id="regexMatches" style="margin-top:8px"></div>
+    <div id="regexMatches" class="u354"></div>
 </div>
 
 <!-- 9: 颜色转换器 -->
 <div class="ut-panel" id="utPanel9">
     <div class="ut-row">
-        <div><label style="font-size:13px;display:block;margin-bottom:2px">HEX</label><input type="text" id="colorHex" placeholder="#3b82f6" style="width:120px;font-family:monospace"></div>
-        <div><label style="font-size:13px;display:block;margin-bottom:2px">RGB</label><input type="text" id="colorRgb" placeholder="59,130,246" style="width:140px;font-family:monospace"></div>
-        <div><label style="font-size:13px;display:block;margin-bottom:2px">HSL</label><input type="text" id="colorHsl" placeholder="217,91%,60%" style="width:140px;font-family:monospace"></div>
+        <div><label class="u120">HEX</label><input type="text" id="colorHex" placeholder="#3b82f6" class="u121"></div>
+        <div><label class="u120">RGB</label><input type="text" id="colorRgb" placeholder="59,130,246" class="u122"></div>
+        <div><label class="u120">HSL</label><input type="text" id="colorHsl" placeholder="217,91%,60%" class="u122"></div>
     </div>
     <div class="ut-row">
         <button class="ut-btn-primary" data-csp-click="convertColor" data-csp-args='["hex"]'>HEX → RGB/HSL</button>
@@ -178,22 +178,22 @@
         <button class="ut-btn-warning" data-csp-click="convertColor" data-csp-args='["hsl"]'>HSL → HEX/RGB</button>
     </div>
     <div class="ut-row">
-        <div id="colorPreview" style="width:80px;height:80px;border-radius:8px;border:2px solid #e5e7eb;background:#3b82f6"></div>
-        <div id="colorInfo" style="font-size:13px;color:#6b7280"></div>
+        <div id="colorPreview" class="u123"></div>
+        <div id="colorInfo" class="u124"></div>
     </div>
 </div>
 
 <!-- 10: 进制转换器 -->
 <div class="ut-panel" id="utPanel10">
     <div class="ut-row">
-        <input type="text" id="baseInput" placeholder="输入数值..." style="width:200px;font-family:monospace">
+        <input type="text" id="baseInput" placeholder="输入数值..." class="u125">
         <select id="baseFrom">
             <option value="10">十进制 (10)</option>
             <option value="2">二进制 (2)</option>
             <option value="8">八进制 (8)</option>
             <option value="16">十六进制 (16)</option>
         </select>
-        <span style="font-size:18px">→</span>
+        <span class="u126">→</span>
         <button class="ut-btn-primary" data-csp-click="convertBase">转换</button>
         <button class="ut-btn-success" data-csp-click="convertBaseAll">全部</button>
     </div>
@@ -211,7 +211,7 @@
         <button class="ut-btn-primary" data-csp-click="htmlCommonEntities">常用实体参考</button>
     </div>
     <div class="ut-result" id="htmlResult"></div>
-    <div id="htmlEntitiesTable" style="margin-top:12px;display:none"></div>
+    <div id="htmlEntitiesTable" class="u127"></div>
 </div>
 
 <!-- 12: 文本处理 -->
@@ -219,7 +219,7 @@
     <div class="ut-row">
         <textarea id="textProcInput" placeholder="输入或粘贴文本...&#10;每行一条"></textarea>
     </div>
-    <div class="ut-row" style="gap:8px">
+    <div class="ut-row u128">
         <button class="ut-btn-primary" data-csp-click="textProcSort">🔤 排序</button>
         <button class="ut-btn-primary" data-csp-click="textProcDedupe">♊ 去重</button>
         <button class="ut-btn-success" data-csp-click="textProcTrim">✂️ 去首尾空格</button>
@@ -229,17 +229,17 @@
         <button class="ut-btn-primary" data-csp-click="textProcShuffle">🔀 随机</button>
     </div>
     <div class="ut-row">
-        <textarea id="textProcOutput" placeholder="处理结果..." style="background:#f9fafb" readonly></textarea>
+        <textarea id="textProcOutput" placeholder="处理结果..." class="u129" readonly></textarea>
     </div>
     <div class="ut-row">
-        <span id="textProcStats" style="font-size:12px;color:#6b7280"></span>
+        <span id="textProcStats" class="u130"></span>
         <button class="ut-btn-success" data-csp-click="textProcCopy">📋 复制结果</button>
     </div>
 </div>
 
 <!-- 13: CSV ↔ JSON -->
 <div class="ut-panel" id="utPanel13">
-    <ul class="nav nav-tabs mb-2" style="border:none;gap:4px">
+    <ul class="nav nav-tabs mb-2 u131">
         <li class="nav-item"><button class="nav-link active" data-csp-click="switchCsvTab" data-csp-args='[0]'>CSV → JSON</button></li>
         <li class="nav-item"><button class="nav-link" data-csp-click="switchCsvTab" data-csp-args='[1]'>JSON → CSV</button></li>
     </ul>
@@ -248,11 +248,11 @@
             <textarea id="csvInput" placeholder="粘贴 CSV 数据...&#10;name,age,city&#10;Alice,30,NYC&#10;Bob,25,LA"></textarea>
         </div>
         <div class="ut-row">
-            <label style="font-size:13px">分隔符 <input type="text" id="csvSep" value="," style="width:50px"></label>
+            <label class="u9">分隔符 <input type="text" id="csvSep" value="," class="u117"></label>
             <button class="ut-btn-primary" data-csp-click="csvToJson">CSV → JSON</button>
         </div>
     </div>
-    <div id="csvPanel1" style="display:none">
+    <div id="csvPanel1" class="u30">
         <div class="ut-row">
             <textarea id="jsonForCsv" placeholder='粘贴 JSON 数组...&#10;[{"name":"Alice","age":30}]'></textarea>
         </div>
@@ -266,31 +266,31 @@
 <!-- 14: HTTP 状态码参考 -->
 <div class="ut-panel" id="utPanel14">
     <div class="ut-row">
-        <input type="text" id="httpSearch" placeholder="搜索状态码或描述..." style="flex:1">
+        <input type="text" id="httpSearch" placeholder="搜索状态码或描述..." class="u7">
     </div>
-    <div style="overflow-x:auto;max-height:500px;overflow-y:auto" id="httpTable"></div>
+    <div class="u132" id="httpTable"></div>
 </div>
 
 <!-- 15: MIME 类型查询 -->
 <div class="ut-panel" id="utPanel15">
     <div class="ut-row">
-        <input type="text" id="mimeInput" placeholder="输入文件扩展名 (如 .pdf) 或 MIME 类型 (如 application/json)..." style="flex:1;font-family:monospace">
+        <input type="text" id="mimeInput" placeholder="输入文件扩展名 (如 .pdf) 或 MIME 类型 (如 application/json)..." class="u133">
         <button class="ut-btn-primary" data-csp-click="lookupMime">查询</button>
     </div>
     <div class="ut-result" id="mimeResult"></div>
-    <div id="mimeSuggestions" style="margin-top:8px;font-size:12px;color:#6b7280"></div>
+    <div id="mimeSuggestions" class="u134"></div>
 </div>
 
 <!-- 16: Unicode 字符查询 -->
 <div class="ut-panel" id="utPanel16">
     <div class="ut-row">
-        <input type="text" id="uniInput" placeholder="输入字符 或 Unicode 码点 (如 U+4E2D 或 0x4E2D 或 20013)..." style="flex:1;font-family:monospace">
+        <input type="text" id="uniInput" placeholder="输入字符 或 Unicode 码点 (如 U+4E2D 或 0x4E2D 或 20013)..." class="u133">
         <button class="ut-btn-primary" data-csp-click="lookupUnicode">查询</button>
     </div>
-    <div id="uniResult" style="display:none;margin-top:12px">
-        <div class="ut-row" style="align-items:center">
-            <div id="uniChar" style="font-size:64px;width:100px;height:100px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:12px"></div>
-            <div id="uniInfo" style="flex:1;font-size:14px"></div>
+    <div id="uniResult" class="u118">
+        <div class="ut-row u135">
+            <div id="uniChar" class="u136"></div>
+            <div id="uniInfo" class="u137"></div>
         </div>
     </div>
 </div>
@@ -298,15 +298,15 @@
 <!-- 17: Lorem Ipsum 生成器 -->
 <div class="ut-panel" id="utPanel17">
     <div class="ut-row">
-        <label style="font-size:13px">类型 <select id="loremType"><option value="paragraphs">段落</option><option value="sentences">句子</option><option value="words">单词</option></select></label>
-        <label style="font-size:13px">数量 <input type="number" id="loremCount" value="3" min="1" max="100" style="width:70px"></label>
+        <label class="u9">类型 <select id="loremType"><option value="paragraphs">段落</option><option value="sentences">句子</option><option value="words">单词</option></select></label>
+        <label class="u9">数量 <input type="number" id="loremCount" value="3" min="1" max="100" class="u77"></label>
         <button class="ut-btn-primary" data-csp-click="genLorem">生成</button>
     </div>
     <div class="ut-row">
-        <textarea id="loremOutput" placeholder="生成结果..." style="background:#f9fafb;min-height:150px" readonly></textarea>
+        <textarea id="loremOutput" placeholder="生成结果..." class="u138" readonly></textarea>
     </div>
     <div class="ut-row">
-        <span id="loremStats" style="font-size:12px;color:#6b7280"></span>
+        <span id="loremStats" class="u130"></span>
         <button class="ut-btn-success" data-csp-click="copyLorem">📋 复制</button>
     </div>
 </div>
@@ -477,11 +477,11 @@ function testRegex() {
             var m;
             while ((m = re2.exec(text)) !== null) {
                 html += escHtml(text.slice(lastIdx, m.index));
-                html += '<mark style="background:#fef08a;padding:0 2px;border-radius:2px">' + escHtml(m[0]) + '</mark>';
+                html += '<mark class="u139">' + escHtml(m[0]) + '</mark>';
                 lastIdx = m.index + m[0].length;
             }
             html += escHtml(text.slice(lastIdx));
-            matchesDiv.innerHTML = '<div style="font-family:monospace;font-size:13px;padding:10px;background:#f9fafb;border-radius:6px;word-break:break-all;line-height:1.8">' + html + '</div>';
+            matchesDiv.innerHTML = '<div class="u140">' + html + '</div>';
         }
     } catch(e) {
         showResult('regexResult', '正则表达式错误: ' + e.message, true);
@@ -540,7 +540,7 @@ function convertColor(from) {
     rgbEl.value = r+','+g+','+b;
     hslEl.value = Math.round(hOut*360)+','+Math.round(sOut*100)+'%,'+Math.round(lOut*100)+'%';
     preview.style.background = hexVal;
-    info.innerHTML = '<span style="color:#333">HEX: <code>' + hexVal + '</code> | RGB: <code>rgb('+r+','+g+','+b+')</code> | HSL: <code>hsl('+Math.round(hOut*360)+','+Math.round(sOut*100)+'%,'+Math.round(lOut*100)+'%)</code></span>';
+    info.innerHTML = '<span class="u141">HEX: <code>' + hexVal + '</code> | RGB: <code>rgb('+r+','+g+','+b+')</code> | HSL: <code>hsl('+Math.round(hOut*360)+','+Math.round(sOut*100)+'%,'+Math.round(lOut*100)+'%)</code></span>';
 }
 
 // ====== 10. 进制转换 ======
@@ -551,7 +551,7 @@ function convertBase() {
     try {
         num = parseInt(val, from);
     } catch(e) { num = NaN; }
-    if (isNaN(num)) { document.getElementById('baseResults').innerHTML = '<div class="ut-stat" style="grid-column:1/-1"><div class="ut-stat-val" style="color:#dc2626">错误</div><div class="ut-stat-label">无效的' + from + '进制数</div></div>'; return; }
+    if (isNaN(num)) { document.getElementById('baseResults').innerHTML = '<div class="ut-stat u142"><div class="ut-stat-val u143">错误</div><div class="ut-stat-label">无效的' + from + '进制数</div></div>'; return; }
     var results = [
         {label:'二进制',val:num.toString(2),base:2},
         {label:'八进制',val:num.toString(8),base:8},
@@ -570,7 +570,7 @@ function convertBaseAll() {
     var from = parseInt(document.getElementById('baseFrom').value);
     var num;
     try { num = parseInt(val, from); } catch(e) { num = NaN; }
-    if (isNaN(num)) { document.getElementById('baseResults').innerHTML = '<div class="ut-stat" style="grid-column:1/-1"><div class="ut-stat-val" style="color:#dc2626">错误</div><div class="ut-stat-label">无效输入</div></div>'; return; }
+    if (isNaN(num)) { document.getElementById('baseResults').innerHTML = '<div class="ut-stat u142"><div class="ut-stat-val u143">错误</div><div class="ut-stat-label">无效输入</div></div>'; return; }
     convertBase();
 }
 
@@ -614,8 +614,8 @@ function htmlCommonEntities() {
         ['&amp;times;', '&times;', '×', '乘号'],
         ['&amp;divide;', '&divide;', '÷', '除号']
     ];
-    table.innerHTML = '<div style="overflow-x:auto"><table class="table table-sm table-bordered" style="font-size:13px;margin:0"><thead><tr><th>实体名</th><th>实体编号</th><th>符号</th><th>说明</th></tr></thead><tbody>' +
-        entities.map(function(e){ return '<tr><td><code>'+e[0]+'</code></td><td><code>'+e[1]+'</code></td><td style="font-size:18px;text-align:center">'+e[2]+'</td><td>'+e[3]+'</td></tr>'; }).join('') +
+    table.innerHTML = '<div class="u259"><table class="table table-sm table-bordered u145"><thead><tr><th>实体名</th><th>实体编号</th><th>符号</th><th>说明</th></tr></thead><tbody>' +
+        entities.map(function(e){ return '<tr><td><code>'+e[0]+'</code></td><td><code>'+e[1]+'</code></td><td class="u146">'+e[2]+'</td><td>'+e[3]+'</td></tr>'; }).join('') +
         '</tbody></table></div>';
 }
 
@@ -765,11 +765,11 @@ function jsonToCsv() {
             var f = filter.toLowerCase();
             codes = HTTP_CODES.filter(function(c){ return c[1].indexOf(f) >= 0 || c[2].toLowerCase().indexOf(f) >= 0 || c[3].indexOf(f) >= 0 || c[0].indexOf(f) >= 0; });
         }
-        var html = '<table class="table table-sm table-hover" style="font-size:13px;margin:0"><thead><tr><th>分类</th><th>状态码</th><th>名称</th><th>说明</th></tr></thead><tbody>';
+        var html = '<table class="table table-sm table-hover u145"><thead><tr><th>分类</th><th>状态码</th><th>名称</th><th>说明</th></tr></thead><tbody>';
         var colors = {'1xx':'#6b7280','2xx':'#10b981','3xx':'#3b82f6','4xx':'#f59e0b','5xx':'#ef4444'};
         for (var i = 0; i < codes.length; i++) {
             var c = codes[i];
-            html += '<tr><td><span class="badge" style="background:'+colors[c[0]]+'">'+c[0]+'</span></td><td><strong>'+c[1]+'</strong></td><td><code>'+c[2]+'</code></td><td>'+c[3]+'</td></tr>';
+            html += '<tr><td><span class="badge u38"+colors[c[0]]+'">'+c[0]+'</span></td><td><strong>'+c[1]+'</strong></td><td><code>'+c[2]+'</code></td><td>'+c[3]+'</td></tr>';
         }
         html += '</tbody></table>';
         document.getElementById('httpTable').innerHTML = html;
@@ -894,11 +894,11 @@ function lookupUnicode() {
     } else if (q.length === 1) {
         code = q.charCodeAt(0);
     } else {
-        infoEl.innerHTML = '<span style="color:#dc2626">无法识别输入格式</span>';
+        infoEl.innerHTML = '<span class="u143">无法识别输入格式</span>';
         return;
     }
     if (code < 0 || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) {
-        infoEl.innerHTML = '<span style="color:#dc2626">无效的 Unicode 码点</span>';
+        infoEl.innerHTML = '<span class="u143">无效的 Unicode 码点</span>';
         return;
     }
     try {
@@ -928,7 +928,7 @@ function lookupUnicode() {
         ].join('<br>');
         result.style.display = 'block';
     } catch(e) {
-        infoEl.innerHTML = '<span style="color:#dc2626">不支持的码点</span>';
+        infoEl.innerHTML = '<span class="u143">不支持的码点</span>';
     }
 }
 

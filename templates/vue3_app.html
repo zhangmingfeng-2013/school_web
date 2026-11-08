@@ -127,7 +127,7 @@ body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei
       <el-button class="mobile-menu-btn" :icon="Menu" circle @click="sidebarOpen=!sidebarOpen" size="small"/>
       <span class="brand">🔧 多合一工具箱</span>
       <div class="header-center">
-        <el-button size="small" type="warning" plain @click="$router.push('/donate')" style="animation:donatePulse 2s ease-in-out infinite;">
+        <el-button size="small" type="warning" plain @click="$router.push('/donate')" class="u341">
           ❤️ 捐赠
         </el-button>
         <el-button size="small" circle @click="toggleTheme">
@@ -148,15 +148,15 @@ body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei
               <el-button size="small" circle>🔔</el-button>
             </el-badge>
           </template>
-          <div v-if="notifications.length===0" style="text-align:center;padding:20px;color:var(--text-secondary);">暂无新通知</div>
-          <div v-for="n in notifications" :key="n.id" style="padding:8px 0;border-bottom:1px solid var(--border-color);font-size:13px;cursor:pointer;" @click="handleNotifClick(n)">
+          <div v-if="notifications.length===0" class="u342">暂无新通知</div>
+          <div v-for="n in notifications" :key="n.id" class="u343" @click="handleNotifClick(n)">
             [[ n.icon ]] [[ n.text ]]
           </div>
         </el-popover>
         <el-dropdown @command="handleUserCommand">
-          <span style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          <span class="u344">
             <el-avatar :size="32" :src="avatarUrl"/> 
-            <span style="font-size:14px;">[[ username ]]</span>
+            <span class="u345">[[ username ]]</span>
             <el-tag size="small" :type="permTagType">[[ permLabel ]]</el-tag>
           </span>
           <template #dropdown><el-dropdown-menu>
@@ -170,7 +170,7 @@ body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei
     <!-- Body -->
     <div class="app-body">
       <!-- Sidebar -->
-      <aside class="app-sidebar" :class="{open: sidebarOpen}">
+      <aside class="app-sidebar {open: sidebarOpen}" :>
         <el-menu :default-active="currentRoute" router class="sidebar-menu" :collapse="false">
           <el-menu-item index="/dashboard"><el-icon><Monitor/></el-icon><span>仪表盘</span></el-menu-item>
           <el-sub-menu index="community">
@@ -311,19 +311,19 @@ const LoginPage = {
           <el-input v-model="form.password" type="password" placeholder="请输入密码" prefix-icon="Lock" show-password size="large" @keyup.enter="login"/>
         </el-form-item>
         <el-form-item label="验证码">
-          <div style="display:flex;gap:12px;align-items:center;">
-            <el-input v-model="form.captcha" placeholder="验证码" size="large" style="flex:1" @keyup.enter="login"/>
-            <img :src="captchaUrl" @click="refreshCaptcha" style="height:40px;cursor:pointer;border-radius:4px;border:1px solid var(--el-border-color);" title="点击刷新"/>
+          <div class="u346">
+            <el-input v-model="form.captcha" placeholder="验证码" size="large" class="u7" @keyup.enter="login"/>
+            <img :src="captchaUrl" @click="refreshCaptcha" class="u347" title="点击刷新"/>
           </div>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" size="large" style="width:100%" @click="login" :loading="loading">登 录</el-button>
+          <el-button type="primary" size="large" class="u348" @click="login" :loading="loading">登 录</el-button>
         </el-form-item>
       </el-form>
-      <div style="text-align:center;font-size:13px;color:var(--text-secondary);">
-        <a href="javascript:void(0)" @click="$router.push('/register')" style="color:var(--el-color-primary);">注册账号</a>
-        <span style="margin:0 8px;">|</span>
-        <a href="javascript:void(0)" @click="$router.push('/forgot')" style="color:var(--el-color-primary);">忘记密码</a>
+      <div class="u349">
+        <a href="javascript:void(0)" @click="$router.push('/register')" class="u350">注册账号</a>
+        <span class="u351">|</span>
+        <a href="javascript:void(0)" @click="$router.push('/forgot')" class="u350">忘记密码</a>
       </div>
     </div>`,
   data() { return { form:{username:'',password:'',captcha:'',captcha_key:''}, loading:false, captchaUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=', captchaObjectUrl:'' }; },
@@ -355,15 +355,15 @@ const RegisterPage = {
         <el-form-item label="确认密码"><el-input v-model="form.confirm" type="password" placeholder="再次输入密码" show-password size="large"/></el-form-item>
         <el-form-item label="管理员密码（选填）"><el-input v-model="form.admin_pwd" type="password" placeholder="如需管理员权限请输入" show-password size="large"/></el-form-item>
         <el-form-item label="验证码">
-          <div style="display:flex;gap:12px;align-items:center;">
-            <el-input v-model="form.captcha" placeholder="验证码" size="large" style="flex:1"/>
-            <img :src="captchaUrl" @click="refreshCaptcha" style="height:40px;cursor:pointer;border-radius:4px;border:1px solid var(--el-border-color);"/>
+          <div class="u346">
+            <el-input v-model="form.captcha" placeholder="验证码" size="large" class="u7"/>
+            <img :src="captchaUrl" @click="refreshCaptcha" class="u347"/>
           </div>
         </el-form-item>
-        <el-button type="primary" size="large" style="width:100%" @click="register" :loading="loading">注 册</el-button>
+        <el-button type="primary" size="large" class="u348" @click="register" :loading="loading">注 册</el-button>
       </el-form>
-      <div style="text-align:center;margin-top:16px;font-size:13px;">
-        <a href="javascript:void(0)" @click="$router.push('/')" style="color:var(--el-color-primary);">已有账号？去登录</a>
+      <div class="u352">
+        <a href="javascript:void(0)" @click="$router.push('/')" class="u350">已有账号？去登录</a>
       </div>
     </div>`,
   data() { return { form:{username:'',password:'',confirm:'',admin_pwd:'',captcha:'',captcha_key:''}, loading:false, captchaUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=', captchaObjectUrl:'' }; },
@@ -398,15 +398,15 @@ const ForgotPage = {
         <el-form-item label="用户名"><el-input v-model="form.username" placeholder="请输入用户名" size="large"/></el-form-item>
         <el-form-item label="邮箱（选填）"><el-input v-model="form.email" placeholder="用于接收重置链接" size="large"/></el-form-item>
         <el-form-item label="验证码">
-          <div style="display:flex;gap:12px;align-items:center;">
-            <el-input v-model="form.captcha" placeholder="验证码" size="large" style="flex:1"/>
-            <img :src="captchaUrl" @click="refreshCaptcha" style="height:40px;cursor:pointer;border-radius:4px;border:1px solid var(--el-border-color);"/>
+          <div class="u346">
+            <el-input v-model="form.captcha" placeholder="验证码" size="large" class="u7"/>
+            <img :src="captchaUrl" @click="refreshCaptcha" class="u347"/>
           </div>
         </el-form-item>
-        <el-button type="primary" size="large" style="width:100%" @click="submit" :loading="loading">提交申请</el-button>
+        <el-button type="primary" size="large" class="u348" @click="submit" :loading="loading">提交申请</el-button>
       </el-form>
-      <div style="text-align:center;margin-top:16px;font-size:13px;">
-        <a href="javascript:void(0)" @click="$router.push('/')" style="color:var(--el-color-primary);">返回登录</a>
+      <div class="u352">
+        <a href="javascript:void(0)" @click="$router.push('/')" class="u350">返回登录</a>
       </div>
     </div>`,
   data() { return { form:{username:'',email:'',captcha:'',captcha_key:''}, loading:false, captchaUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw=', captchaObjectUrl:'' }; },
@@ -431,13 +431,13 @@ const ForgotPage = {
 const DashboardPage = {
   template: `
     <div>
-      <div style="margin-bottom:20px;">
-        <h2 style="margin:0;">👋 欢迎回来，[[ userState.username ]]</h2>
-        <el-tag :type="permTag" size="large" style="margin-top:8px;">[[ permLabel ]]</el-tag>
+      <div class="u353">
+        <h2 class="u313">👋 欢迎回来，[[ userState.username ]]</h2>
+        <el-tag :type="permTag" size="large" class="u354">[[ permLabel ]]</el-tag>
       </div>
       <!-- Stats -->
-      <el-row :gutter="16" style="margin-bottom:20px;">
-        <el-col :xs="12" :sm="6" v-for="s in stats" :key="s.label" style="margin-bottom:16px;">
+      <el-row :gutter="16" class="u353">
+        <el-col :xs="12" :sm="6" v-for="s in stats" :key="s.label" class="u355">
           <div class="stat-card">
             <div class="stat-value">[[ s.value ]]</div>
             <div class="stat-label">[[ s.label ]]</div>
@@ -445,7 +445,7 @@ const DashboardPage = {
         </el-col>
       </el-row>
       <!-- Leaderboard -->
-      <el-card shadow="never" style="margin-bottom:20px;">
+      <el-card shadow="never" class="u353">
         <template #header><span>🏆 活跃排行榜</span></template>
         <el-table :data="leaderboard" stripe size="small">
           <el-table-column type="index" width="60" label="#"/>
@@ -455,7 +455,7 @@ const DashboardPage = {
         </el-table>
       </el-card>
       <!-- Features Grid -->
-      <h3 style="margin-bottom:12px;">🚀 功能入口</h3>
+      <h3 class="u356">🚀 功能入口</h3>
       <div class="feature-grid">
         <div class="feature-card" v-for="f in features" :key="f.path" @click="$router.push(f.path)">
           <span class="icon">[[ f.icon ]]</span>
@@ -528,7 +528,7 @@ const DashboardPage = {
 const ChatPage = {
   template: `
     <div class="chat-container">
-      <div style="padding:12px 16px;border-bottom:1px solid var(--border-color);display:flex;gap:8px;align-items:center;">
+      <div class="u357">
         <el-radio-group v-model="chatMode" size="small">
           <el-radio-button value="chat">💬 群聊</el-radio-button>
           <el-radio-button value="ai">🤖 AI助手</el-radio-button>
@@ -536,13 +536,13 @@ const ChatPage = {
         <el-button v-if="chatMode==='ai'" size="small" @click="showAiSettings=true">⚙️ 设置</el-button>
       </div>
       <div class="chat-messages" ref="msgBox">
-        <div v-if="messages.length===0" style="text-align:center;padding:40px;color:var(--text-secondary);">
+        <div v-if="messages.length===0" class="u358">
           [[ chatMode==='ai' ? '👋 你好！我是AI助手，有什么可以帮助你的？' : '暂无消息，开始聊天吧！' ]]
         </div>
         <div v-for="msg in messages" :key="msg.id" :class="['chat-msg', msg.mine ? 'mine' : (msg.role==='assistant'?'bot':'other')]">
-          <div v-if="!msg.mine&&msg.role!=='assistant'" class="meta" style="text-align:left;">[[ msg.username||msg.sender ]]</div>
+          <div v-if="!msg.mine&&msg.role!=='assistant'" class="meta u359">[[ msg.username||msg.sender ]]</div>
           <div class="bubble">[[ msg.content||msg.message ]]</div>
-          <div class="meta" style="margin-top:2px;">[[ formatTime(msg.created_at||msg.timestamp) ]]</div>
+          <div class="meta u360">[[ formatTime(msg.created_at||msg.timestamp) ]]</div>
         </div>
         <div v-if="aiLoading" class="chat-msg bot"><div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div></div>
       </div>
@@ -618,17 +618,17 @@ const ChatPage = {
 const ForumPage = {
   template: `
     <div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="margin:0;">📋 校友论坛</h2>
+      <div class="u361">
+        <h2 class="u313">📋 校友论坛</h2>
         <el-button type="primary" @click="showNewPost=true">发帖</el-button>
       </div>
       <el-tabs v-model="activeTab" @tab-change="loadPosts">
         <el-tab-pane v-for="c in categories" :key="c.id" :label="c.name" :name="String(c.id)"/>
       </el-tabs>
-      <div v-if="posts.length===0" style="text-align:center;padding:60px;color:var(--text-secondary);">暂无帖子</div>
+      <div v-if="posts.length===0" class="u362">暂无帖子</div>
       <div class="forum-post" v-for="p in posts" :key="p.id" @click="viewPost(p)">
         <div class="title">[[ p.title ]]</div>
-        <div style="font-size:13px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">[[ (p.content||'').substring(0,120) ]][[ (p.content||'').length>120?'...':'' ]]</div>
+        <div class="u363">[[ (p.content||'').substring(0,120) ]][[ (p.content||'').length>120?'...':'' ]]</div>
         <div class="meta">
           <span>👤 [[ p.author||p.username ]]</span>
           <span>👁️ [[ p.views||0 ]]</span>
@@ -639,15 +639,15 @@ const ForumPage = {
       </div>
       <!-- Post Detail Dialog -->
       <el-dialog v-model="showDetail" :title="currentPost?.title" width="700px" top="5vh">
-        <div style="white-space:pre-wrap;line-height:1.6;">[[ currentPost?.content ]]</div>
+        <div class="u364">[[ currentPost?.content ]]</div>
         <el-divider/>
         <h4>回复 ([[ replies.length ]])</h4>
-        <div v-for="r in replies" :key="r.id" style="padding:8px 0;border-bottom:1px solid var(--border-color);">
+        <div v-for="r in replies" :key="r.id" class="u365">
           <strong>[[ r.author||r.username ]]</strong>
-          <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">[[ formatDate(r.created_at) ]]</span>
-          <div style="margin-top:4px;">[[ r.content ]]</div>
+          <span class="u366">[[ formatDate(r.created_at) ]]</span>
+          <div class="u367">[[ r.content ]]</div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:12px;">
+        <div class="u368">
           <el-input v-model="replyText" placeholder="写回复..." size="small" @keyup.enter="submitReply"/>
           <el-button type="primary" size="small" @click="submitReply">回复</el-button>
         </div>
@@ -694,10 +694,10 @@ const ForumPage = {
 const PlaceholderPage = {
   props: { title:{default:'页面'}, icon:{default:'📄'}, desc:{default:''} },
   template: `
-    <div style="text-align:center;padding:60px 20px;">
-      <div style="font-size:64px;">[[ icon ]]</div>
-      <h2 style="margin-top:16px;">[[ title ]]</h2>
-      <p style="color:var(--text-secondary);margin-top:8px;">[[ desc || '功能开发中，敬请期待...' ]]</p>
+    <div class="u369">
+      <div class="u370">[[ icon ]]</div>
+      <h2 class="u371">[[ title ]]</h2>
+      <p class="u372">[[ desc || '功能开发中，敬请期待...' ]]</p>
       <el-empty v-if="!desc" description="功能开发中..."/>
     </div>`
 };
@@ -707,36 +707,36 @@ const PetPage = {
   template: `
     <div>
       <div class="pet-container" v-if="!pet">
-        <div style="font-size:64px;">🥚</div>
+        <div class="u370">🥚</div>
         <h2>你还没有宠物</h2>
-        <el-button type="primary" size="large" @click="hatch" style="margin-top:16px;">🥚 孵化宠物</el-button>
+        <el-button type="primary" size="large" @click="hatch" class="u371">🥚 孵化宠物</el-button>
       </div>
       <div v-else class="pet-container">
         <div class="pet-display" @click="feed">[[ petEmoji ]]</div>
-        <div class="pet-name">[[ pet.name ]] <el-tag size="small" :type="stageType" style="margin-left:4px;">[[ stageName ]]</el-tag></div>
+        <div class="pet-name">[[ pet.name ]] <el-tag size="small" :type="stageType" class="u373">[[ stageName ]]</el-tag></div>
         <div class="pet-stats">
           <div class="pet-stat">
             <span>😊</span><span class="label">心情</span>
-            <div class="bar"><div class="bar-fill" :style="{width:pet.mood+'%',background:moodColor}"></div></div>
-            <span style="font-size:11px;">[[ pet.mood ]]%</span>
+            <div class="bar"><div class="bar-fill u374" :%',background:moodColor}"></div></div>
+            <span class="u333">[[ pet.mood ]]%</span>
           </div>
           <div class="pet-stat">
             <span>🍔</span><span class="label">饱腹</span>
-            <div class="bar"><div class="bar-fill" :style="{width:pet.hunger+'%',background:'#67c23a'}"></div></div>
-            <span style="font-size:11px;">[[ pet.hunger ]]%</span>
+            <div class="bar"><div class="bar-fill u375" :%',background:'#67c23a'}"></div></div>
+            <span class="u333">[[ pet.hunger ]]%</span>
           </div>
           <div class="pet-stat">
             <span>🧹</span><span class="label">清洁</span>
-            <div class="bar"><div class="bar-fill" :style="{width:pet.cleanliness+'%',background:'#409eff'}"></div></div>
-            <span style="font-size:11px;">[[ pet.cleanliness ]]%</span>
+            <div class="bar"><div class="bar-fill u376" :%',background:'#409eff'}"></div></div>
+            <span class="u333">[[ pet.cleanliness ]]%</span>
           </div>
           <div class="pet-stat">
             <span>⚡</span><span class="label">体力</span>
-            <div class="bar"><div class="bar-fill" :style="{width:pet.energy+'%',background:'#e6a23c'}"></div></div>
-            <span style="font-size:11px;">[[ pet.energy ]]%</span>
+            <div class="bar"><div class="bar-fill u377" :%',background:'#e6a23c'}"></div></div>
+            <span class="u333">[[ pet.energy ]]%</span>
           </div>
         </div>
-        <div style="font-size:13px;color:var(--text-secondary);">等级: [[ pet.level ]] | 经验: [[ pet.exp ]]/[[ pet.exp_next ]] | 💰金币: [[ pet.coins ]]</div>
+        <div class="u378">等级: [[ pet.level ]] | 经验: [[ pet.exp ]]/[[ pet.exp_next ]] | 💰金币: [[ pet.coins ]]</div>
         <div class="pet-actions">
           <el-button @click="petAction('feed')">🍔 喂食</el-button>
           <el-button @click="petAction('clean')">🧹 清洁</el-button>
@@ -746,23 +746,23 @@ const PetPage = {
           <el-button @click="showShop=true">🛒 商店</el-button>
           <el-button @click="showCommunity=true">🏘️ 社区</el-button>
         </div>
-        <div v-if="pet.dialogue" style="margin-top:12px;padding:8px 16px;background:var(--el-fill-color);border-radius:8px;display:inline-block;font-size:14px;">
+        <div v-if="pet.dialogue" class="u379">
           💬 [[ pet.dialogue ]]
         </div>
       </div>
       <!-- Tabs -->
-      <el-tabs v-if="pet" v-model="activeTab" style="margin-top:20px;">
+      <el-tabs v-if="pet" v-model="activeTab" class="u380">
         <el-tab-pane label="🏆 成就" name="achievements">
-          <el-row :gutter="12"><el-col :span="8" v-for="a in achievements" :key="a.id" style="margin-bottom:12px;">
-            <el-card shadow="hover"><div style="text-align:center;font-size:24px;">[[ a.unlocked ? a.icon : '🔒' ]]</div>
-            <div style="text-align:center;font-size:12px;margin-top:4px;">[[ a.name ]]</div></el-card>
+          <el-row :gutter="12"><el-col :span="8" v-for="a in achievements" :key="a.id" class="u356">
+            <el-card shadow="hover"><div class="u381">[[ a.unlocked ? a.icon : '🔒' ]]</div>
+            <div class="u382">[[ a.name ]]</div></el-card>
           </el-col></el-row>
         </el-tab-pane>
         <el-tab-pane label="👗 装扮" name="dress">
-          <el-row :gutter="12"><el-col :span="8" v-for="d in inventory" :key="d.id" style="margin-bottom:12px;">
-            <el-card shadow="hover"><div style="text-align:center;font-size:24px;">[[ d.icon||'🎀' ]]</div>
-            <div style="text-align:center;font-size:12px;">[[ d.name ]]</div>
-            <el-button size="small" style="width:100%;margin-top:4px;" @click="equipItem(d)" :type="d.equipped?'success':''">
+          <el-row :gutter="12"><el-col :span="8" v-for="d in inventory" :key="d.id" class="u356">
+            <el-card shadow="hover"><div class="u381">[[ d.icon||'🎀' ]]</div>
+            <div class="u383">[[ d.name ]]</div>
+            <el-button size="small" class="u384" @click="equipItem(d)" :type="d.equipped?'success':''">
               [[ d.equipped ? '已装备' : '装备' ]]</el-button></el-card>
           </el-col></el-row>
         </el-tab-pane>
@@ -810,7 +810,7 @@ const ProfilePage = {
   template: `
     <div>
       <h2>👤 个人资料</h2>
-      <el-card shadow="never" style="max-width:600px;margin-top:16px;">
+      <el-card shadow="never" class="u385">
         <el-form :model="form" label-width="100px">
           <el-form-item label="用户名"><el-input v-model="form.username" disabled/></el-form-item>
           <el-form-item label="权限"><el-tag>[[ permLabel ]]</el-tag></el-form-item>
@@ -819,7 +819,7 @@ const ProfilePage = {
           <el-form-item><el-button type="primary" @click="save">保存</el-button></el-form-item>
         </el-form>
       </el-card>
-      <el-card shadow="never" style="max-width:600px;margin-top:16px;">
+      <el-card shadow="never" class="u385">
         <template #header>🔒 修改密码</template>
         <el-form :model="pwdForm" label-width="100px">
           <el-form-item label="当前密码"><el-input v-model="pwdForm.old" type="password" show-password/></el-form-item>
@@ -846,25 +846,25 @@ const AdminPage = {
   template: `
     <div>
       <h2>🔑 管理后台</h2>
-      <el-row :gutter="16" style="margin-top:16px;">
-        <el-col :span="12" style="margin-bottom:16px;">
+      <el-row :gutter="16" class="u371">
+        <el-col :span="12" class="u355">
           <el-card shadow="hover"><template #header>📋 管理员申请</template>
-            <div v-if="adminReqs.length===0" style="text-align:center;padding:20px;color:var(--text-secondary);">暂无待审核申请</div>
-            <div v-for="r in adminReqs" :key="r.id" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-color);">
+            <div v-if="adminReqs.length===0" class="u342">暂无待审核申请</div>
+            <div v-for="r in adminReqs" :key="r.id" class="u386">
               <span>[[ r.username ]]</span>
               <span><el-button size="small" type="success" @click="review(r.id,'approve')">通过</el-button>
               <el-button size="small" type="danger" @click="review(r.id,'reject')">拒绝</el-button></span>
             </div>
           </el-card>
         </el-col>
-        <el-col :span="12" style="margin-bottom:16px;">
+        <el-col :span="12" class="u355">
           <el-card shadow="hover"><template #header>🖼️ 待审核照片</template>
-            <div v-if="pendingPhotos===0" style="text-align:center;padding:20px;color:var(--text-secondary);">暂无待审核</div>
+            <div v-if="pendingPhotos===0" class="u342">暂无待审核</div>
             <div v-else><el-tag type="warning">[[ pendingPhotos ]] 张待审核</el-tag></div>
           </el-card>
         </el-col>
       </el-row>
-      <el-card shadow="never" style="margin-top:16px;">
+      <el-card shadow="never" class="u371">
         <template #header>🛡️ IP管理</template>
         <el-tabs><el-tab-pane label="封禁IP">
           <el-table :data="blockedIps" size="small"><el-table-column prop="ip" label="IP"/><el-table-column prop="count" label="请求数" width="100"/><el-table-column label="操作" width="120"><template #default="{row}"><el-button size="small" type="success" @click="unblock(row.ip)">解封</el-button></template></el-table-column></el-table>
@@ -887,18 +887,18 @@ const AdminPage = {
 // --- Donate Page ---
 const DonatePage = {
   template: `
-    <div style="text-align:center;padding:40px 20px;max-width:600px;margin:0 auto;">
+    <div class="u387">
       <h2>❤️ 捐赠支持</h2>
-      <p style="color:var(--text-secondary);margin:12px 0 24px;">如果这个工具箱对你有帮助，欢迎捐赠支持开发！</p>
+      <p class="u388">如果这个工具箱对你有帮助，欢迎捐赠支持开发！</p>
       <el-row :gutter="24">
         <el-col :span="12">
-          <el-card shadow="hover"><div style="font-size:48px;">💚</div><p style="margin-top:8px;">微信支付</p>
-            <img src="/static/donate_wx.jpg" style="width:100%;max-width:200px;border-radius:8px;"/>
+          <el-card shadow="hover"><div class="u248">💚</div><p class="u354">微信支付</p>
+            <img src="/static/donate_wx.jpg" class="u389"/>
           </el-card>
         </el-col>
         <el-col :span="12">
-          <el-card shadow="hover"><div style="font-size:48px;">💙</div><p style="margin-top:8px;">支付宝</p>
-            <img src="/static/donate_zfb.jpg" style="width:100%;max-width:200px;border-radius:8px;"/>
+          <el-card shadow="hover"><div class="u248">💙</div><p class="u354">支付宝</p>
+            <img src="/static/donate_zfb.jpg" class="u389"/>
           </el-card>
         </el-col>
       </el-row>
@@ -906,17 +906,17 @@ const DonatePage = {
 };
 
 // --- Utility pages (simple tools) ---
-const TranslatorPage = { template:`<div><h2>🌍 翻译</h2><el-card style="max-width:700px;margin-top:16px;"><el-input v-model="text" type="textarea" :rows="4" placeholder="输入要翻译的文字"/><el-select v-model="target" style="margin:12px 8px 0 0;"><el-option label="英语" value="en"/><el-option label="日语" value="ja"/><el-option label="韩语" value="ko"/><el-option label="中文" value="zh"/></el-select><el-button type="primary" @click="translate" style="margin-top:12px;">翻译</el-button><div v-if="result" style="margin-top:16px;padding:16px;background:var(--el-fill-color);border-radius:8px;white-space:pre-wrap;">[[ result ]]</div></el-card></div>`,
+const TranslatorPage = { template:`<div><h2>🌍 翻译</h2><el-card class="u390"><el-input v-model="text" type="textarea" :rows="4" placeholder="输入要翻译的文字"/><el-select v-model="target" class="u391"><el-option label="英语" value="en"/><el-option label="日语" value="ja"/><el-option label="韩语" value="ko"/><el-option label="中文" value="zh"/></el-select><el-button type="primary" @click="translate" class="u392">翻译</el-button><div v-if="result" class="u393">[[ result ]]</div></el-card></div>`,
   data(){return{text:'',target:'en',result:''};},
   methods:{async translate(){try{const r=await api.post('/api/translator',{text:this.text,target:this.target});this.result=r.data.translated||r.data.result;}catch(e){}} };
 
-const AiWritingPage = { template:`<div><h2>✍️ AI写作</h2><el-card style="max-width:700px;margin-top:16px;"><el-select v-model="type" style="margin-bottom:12px;"><el-option label="文章续写" value="continue"/><el-option label="大纲生成" value="outline"/><el-option label="润色优化" value="polish"/><el-option label="摘要提取" value="summary"/></el-select><el-input v-model="text" type="textarea" :rows="6" placeholder="输入内容..."/><el-button type="primary" @click="generate" style="margin-top:12px;" :loading="loading">生成</el-button><div v-if="result" style="margin-top:16px;padding:16px;background:var(--el-fill-color);border-radius:8px;white-space:pre-wrap;">[[ result ]]</div></el-card></div>`,
+const AiWritingPage = { template:`<div><h2>✍️ AI写作</h2><el-card class="u390"><el-select v-model="type" class="u356"><el-option label="文章续写" value="continue"/><el-option label="大纲生成" value="outline"/><el-option label="润色优化" value="polish"/><el-option label="摘要提取" value="summary"/></el-select><el-input v-model="text" type="textarea" :rows="6" placeholder="输入内容..."/><el-button type="primary" @click="generate" class="u392" :loading="loading">生成</el-button><div v-if="result" class="u393">[[ result ]]</div></el-card></div>`,
   data(){return{text:'',type:'continue',result:'',loading:false};},
   methods:{async generate(){this.loading=true;try{const r=await api.post('/api/ai/writing',{text:this.text,type:this.type});this.result=r.data.result||r.data.content;}catch(e){ElMessage.error('生成失败');}finally{this.loading=false;}} };
 
 // --- System Monitor ---
 const SystemMonitorPage = {
-  template: `<div><h2>📊 系统监控</h2><el-card shadow="never" style="margin-top:16px;" v-loading="loading"><div v-if="info"><el-row :gutter="16"><el-col :span="8" v-for="s in stats" :key="s.label"><div class="stat-card"><div class="stat-value">[[ s.value ]]</div><div class="stat-label">[[ s.label ]]</div></div></el-col></el-row><el-divider/><el-descriptions :column="2" border size="small"><el-descriptions-item v-for="d in details" :key="d.label" :label="d.label">[[ d.value ]]</el-descriptions-item></el-descriptions></div></el-card></div>`,
+  template: `<div><h2>📊 系统监控</h2><el-card shadow="never" class="u371" v-loading="loading"><div v-if="info"><el-row :gutter="16"><el-col :span="8" v-for="s in stats" :key="s.label"><div class="stat-card"><div class="stat-value">[[ s.value ]]</div><div class="stat-label">[[ s.label ]]</div></div></el-col></el-row><el-divider/><el-descriptions :column="2" border size="small"><el-descriptions-item v-for="d in details" :key="d.label" :label="d.label">[[ d.value ]]</el-descriptions-item></el-descriptions></div></el-card></div>`,
   data(){return{loading:true,info:null};},
   computed:{
     stats(){const i=this.info||{};return[{label:'CPU',value:(i.cpu_percent||0)+'%'},{label:'内存',value:(i.memory_percent||0)+'%'},{label:'磁盘',value:(i.disk_percent||0)+'%'}];},
@@ -927,7 +927,7 @@ const SystemMonitorPage = {
 
 // --- Network Tools ---
 const NetworkToolsPage = {
-  template: `<div><h2>🌐 网络工具</h2><el-card style="max-width:700px;margin-top:16px;"><el-form :inline="true"><el-form-item label="目标"><el-input v-model="host" placeholder="example.com"/></el-form-item><el-form-item><el-select v-model="tool"><el-option label="Ping" value="ping"/><el-option label="Traceroute" value="traceroute"/><el-option label="Whois" value="whois"/><el-option label="DNS查询" value="dns"/><el-option label="HTTP头" value="http"/><el-option label="SSL证书" value="ssl"/><el-option label="子网计算" value="subnet"/></el-select></el-form-item><el-form-item><el-button type="primary" @click="run" :loading="loading">执行</el-button></el-form-item></el-form><pre v-if="result" style="background:var(--el-fill-color);padding:16px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;margin-top:12px;">[[ result ]]</pre></el-card></div>`,
+  template: `<div><h2>🌐 网络工具</h2><el-card class="u390"><el-form :inline="true"><el-form-item label="目标"><el-input v-model="host" placeholder="example.com"/></el-form-item><el-form-item><el-select v-model="tool"><el-option label="Ping" value="ping"/><el-option label="Traceroute" value="traceroute"/><el-option label="Whois" value="whois"/><el-option label="DNS查询" value="dns"/><el-option label="HTTP头" value="http"/><el-option label="SSL证书" value="ssl"/><el-option label="子网计算" value="subnet"/></el-select></el-form-item><el-form-item><el-button type="primary" @click="run" :loading="loading">执行</el-button></el-form-item></el-form><pre v-if="result" class="u394">[[ result ]]</pre></el-card></div>`,
   data(){return{host:'',tool:'ping',result:'',loading:false};},
   methods:{async run(){if(!this.host){ElMessage.warning('请输入目标地址');return;}this.loading=true;try{const r=await api.post('/api/network/'+this.tool,{host:this.host});this.result=r.data.result||JSON.stringify(r.data,null,2);}catch(e){}finally{this.loading=false;}}}
 };

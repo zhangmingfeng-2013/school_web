@@ -31,9 +31,9 @@
 <h2 class="mb-3">💰 记账本</h2>
 <div class="d-flex gap-2 mb-4 flex-wrap align-items-center">
     <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">← 返回</a>
-    <input type="month" id="monthSelector" class="form-control form-control-sm" style="max-width:180px;" data-csp-change="loadExpenses">
+    <input type="month" id="monthSelector" class="form-control form-control-sm u31" data-csp-change="loadExpenses">
     <button class="btn btn-primary btn-sm" data-csp-click="showAddForm">➕ 记一笔</button>
-    <select id="catFilter" class="form-select form-select-sm" style="max-width:140px;" data-csp-change="loadExpenses">
+    <select id="catFilter" class="form-select form-select-sm u32" data-csp-change="loadExpenses">
         <option value="">全部类别</option>
         <option value="餐饮">餐饮</option>
         <option value="交通">交通</option>
@@ -63,14 +63,14 @@
     <div class="col-md-4">
         <div class="card"><div class="card-body">
             <div class="text-muted mb-1 text-center">类别分布</div>
-            <div class="pie-chart" id="pieChart" style="background: conic-gradient(#e5e7eb 0% 100%);"></div>
+            <div class="pie-chart u33" id="pieChart"></div>
             <div class="pie-legend mt-2 text-center" id="pieLegend"></div>
         </div></div>
     </div>
 </div>
 
 <!-- Add Form (hidden by default) -->
-<div class="card mb-4" id="addFormCard" style="display:none;">
+<div class="card mb-4 u30" id="addFormCard">
     <div class="card-body">
         <h5 class="card-title mb-3">记一笔账</h5>
         <form id="expenseForm" data-csp-submit="submitExpense">
@@ -194,11 +194,11 @@ function loadExpenses() {
             html += '<div class="expense-item">';
             html += '<div>';
             html += '<span class="expense-cat cat-' + (it.category||'其他') + '">' + (it.category||'其他') + '</span> ';
-            html += '<span style="margin-left:8px;">' + (it.note || '') + '</span>';
+            html += '<span class="u34">' + (it.note || '') + '</span>';
             html += '</div>';
             html += '<div class="d-flex align-items-center gap-3">';
-            html += '<span style="font-size:0.85rem;color:var(--text-muted);">' + (it.date || '') + '</span>';
-            html += '<strong style="color:#3b82f6;">¥' + (it.amount||0).toFixed(2) + '</strong>';
+            html += '<span class="u35">' + (it.date || '') + '</span>';
+            html += '<strong class="u55">¥' + (it.amount||0).toFixed(2) + '</strong>';
             html += '<button class="btn btn-outline-danger btn-sm" data-csp-click="deleteExpense" data-csp-args="[' + (it.id||0) + ']">✕</button>';
             html += '</div>';
             html += '</div>';
@@ -229,7 +229,7 @@ function updatePie(stats) {
 
     if (total === 0) {
         pie.style.background = 'conic-gradient(#e5e7eb 0% 100%)';
-        legend.innerHTML = '<span style="color:var(--text-muted);">暂无数据</span>';
+        legend.innerHTML = '<span class="u37">暂无数据</span>';
         return;
     }
 
@@ -240,7 +240,7 @@ function updatePie(stats) {
         var pct = (stats[cats[i]] / total) * 100;
         var color = catColors[cats[i]] || '#6b7280';
         gradientParts.push(color + ' ' + acc + '% ' + (acc + pct) + '%');
-        legendHtml += '<span style="background:' + color + ';width:12px;height:12px;display:inline-block;border-radius:3px;margin-right:4px;"></span>' + cats[i] + ' ' + pct.toFixed(0) + '% ';
+        legendHtml += '<span class="u38" + color + ';width:12px;height:12px;display:inline-block;border-radius:3px;margin-right:4px;"></span>' + cats[i] + ' ' + pct.toFixed(0) + '% ';
         acc += pct;
     }
     pie.style.background = 'conic-gradient(' + gradientParts.join(', ') + ')';

@@ -68,7 +68,7 @@
 
 <div class="portal-hero">
     <h2>🏫 校友信息门户</h2>
-    <p style="opacity:.9;">母校动态 · 校友公告 · 活动通知 · 论坛热帖</p>
+    <p class="u149">母校动态 · 校友公告 · 活动通知 · 论坛热帖</p>
     <div class="stats" id="portalStats">
         <div class="stat-item"><div class="stat-num" id="statAlumni">--</div><div class="stat-label">已注册校友</div></div>
         <div class="stat-item"><div class="stat-num" id="statPosts">--</div><div class="stat-label">论坛帖子</div></div>
@@ -81,7 +81,7 @@
     <div>
         <!-- 公告区 -->
         <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background:transparent;border-bottom:1px solid var(--border-light);">
+            <div class="card-header d-flex justify-content-between align-items-center u150">
                 <h6 class="mb-0">📢 最新公告</h6>
                 <a href="/forum" class="btn btn-sm btn-outline-primary">论坛 →</a>
             </div>
@@ -92,7 +92,7 @@
 
         <!-- 最新帖子 -->
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background:transparent;border-bottom:1px solid var(--border-light);">
+            <div class="card-header d-flex justify-content-between align-items-center u150">
                 <h6 class="mb-0">🔥 最新讨论</h6>
                 <a href="/forum" class="btn btn-sm btn-outline-secondary">更多 →</a>
             </div>
@@ -106,7 +106,7 @@
     <div>
         <!-- 近期活动 -->
         <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center" style="background:transparent;border-bottom:1px solid var(--border-light);">
+            <div class="card-header d-flex justify-content-between align-items-center u150">
                 <h6 class="mb-0">📅 近期活动</h6>
                 <a href="/calendar" class="btn btn-sm btn-outline-secondary">日历 →</a>
             </div>
@@ -154,7 +154,7 @@ function renderAnnouncements(items) {
         html += '<div class="announce-item" data-csp-click="viewPost" data-csp-args=\'[' + a.id + ']\'>'
             + '<div class="announce-header">📢 ' + escapeHtml(a.title) + '</div>'
             + '<div class="announce-content">' + escapeHtml(a.content) + '</div>'
-            + '<div style="font-size:.73rem;color:var(--text-muted);margin-top:.3rem;">' + escapeHtml(a.username) + ' · ' + a.created_at.substring(0, 16) + '</div>'
+            + '<div class="u151">' + escapeHtml(a.username) + ' · ' + a.created_at.substring(0, 16) + '</div>'
             + '</div>';
     });
     el.innerHTML = html;

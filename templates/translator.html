@@ -96,7 +96,7 @@
         <button class="btn btn-outline-secondary" data-csp-click="trCopy">📋 复制结果</button>
         <button class="btn btn-outline-secondary" data-csp-click="trClear">🗑️ 清空</button>
     </div>
-    <div class="tr-error" id="trError" style="display:none;"></div>
+    <div class="tr-error u30" id="trError"></div>
 </div>
 {% endblock %}
 
@@ -159,7 +159,7 @@ function trTranslate() {
     }
 
     TRANSLATING = true;
-    outputBox.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;"><div class="spinner-border" style="color:#8b5cf6;" role="status"></div><span class="ms-2 text-muted">正在翻译...</span></div>';
+    outputBox.innerHTML = '<div class="u256"><div class="spinner-border u257" role="status"></div><span class="ms-2 text-muted">正在翻译...</span></div>';
 
     var source = document.getElementById('trSource').value;
     var target = document.getElementById('trTarget').value;

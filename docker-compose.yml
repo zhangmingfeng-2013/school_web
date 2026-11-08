@@ -11,11 +11,11 @@ services:
       - DB_HOST=host.docker.internal
       - DB_PORT=3306
       - DB_USER=root
-      - DB_PASSWORD=root@123456
+      - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=sample
       - RATE_GLOBAL_LIMIT=200
       - RATE_BLOCK_DURATION=10
-      - ADMIN_SECRET=asdfghjkl;'
+      - ADMIN_SECRET=${ADMIN_SECRET}
     volumes:
       - school_backups:/app/backups
       - school_uploads:/app/uploads

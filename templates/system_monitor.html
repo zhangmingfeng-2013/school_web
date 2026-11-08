@@ -134,7 +134,7 @@ async function fetchUserInfo() {
                 if (u.blocked) badge += '<span class="badge bg-danger ms-1">封</span>';
                 if (u.manual_blocked) badge += '<span class="badge bg-dark ms-1">手动</span>';
                 const c = u.idle_seconds>120?'text-warning':u.idle_seconds>60?'text-muted':'text-success';
-                html += `<div class="d-flex justify-content-between py-1 border-bottom"><div><strong>${u.username || '?'}</strong> <code style="font-size:11px">${u.ip}</code>${badge}</div><div><small class="${c}">${u.idle_str}</small><small class="ms-1">${u.requests}次</small></div></div>`;
+                html += `<div class="d-flex justify-content-between py-1 border-bottom"><div><strong>${u.username || '?'}</strong> <code class="u333">${u.ip}</code>${badge}</div><div><small class="${c}">${u.idle_str}</small><small class="ms-1">${u.requests}次</small></div></div>`;
             }
             html += '</div>';
         }

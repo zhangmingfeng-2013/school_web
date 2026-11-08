@@ -31,7 +31,7 @@
                 {% if result.error %}<div class="alert alert-danger">{{ result.error }}</div>
                 {% else %}
                 <table class="table table-bordered">
-                    <tr><th style="width:120px">输入</th><td>{{ result.hostname }}</td></tr>
+                    <tr><th class="u243">输入</th><td>{{ result.hostname }}</td></tr>
                     <tr><th>{{ _('network_resolved_ip') }}</th><td><strong>{{ result.ip }}</strong></td></tr>
                     <tr><th>{{ _('network_local_ip') }}</th><td>{{ result.local_ip }}</td></tr>
                     <tr><th>{{ _('network_public_ip') }}</th><td>{{ result.public_ip or '查询失败' }}</td></tr>
@@ -93,11 +93,11 @@
             <form data-csp-submit="toolSubmit" data-csp-submit-arg="ping">
                 <div class="input-group mb-3">
                     <input type="text" id="pingTarget" class="form-control form-control-lg" placeholder="输入域名或IP地址" required>
-                    <input type="number" id="pingCount" class="form-control" value="4" min="1" max="20" style="max-width:80px;" title="次数">
+                    <input class="form-control u244" type="number" id="pingCount"  value="4" min="1" max="20"  title="次数">
                     <button type="submit" class="btn btn-primary btn-lg">📡 Ping</button>
                 </div>
             </form>
-            <pre id="pingOutput" class="bg-dark text-light p-3 rounded" style="display:none;max-height:400px;overflow-y:auto;font-size:13px;"></pre>
+            <pre id="pingOutput" class="bg-dark text-light p-3 rounded u245"></pre>
         </div></div>
     </div>
 
@@ -110,7 +110,7 @@
                     <button type="submit" class="btn btn-info btn-lg">🗺️ Traceroute</button>
                 </div>
             </form>
-            <pre id="tracerouteOutput" class="bg-dark text-light p-3 rounded" style="display:none;max-height:400px;overflow-y:auto;font-size:13px;"></pre>
+            <pre id="tracerouteOutput" class="bg-dark text-light p-3 rounded u245"></pre>
         </div></div>
     </div>
 
@@ -123,7 +123,7 @@
                     <button type="submit" class="btn btn-dark btn-lg">🔎 Whois</button>
                 </div>
             </form>
-            <pre id="whoisOutput" class="bg-dark text-light p-3 rounded" style="display:none;max-height:400px;overflow-y:auto;font-size:13px;"></pre>
+            <pre id="whoisOutput" class="bg-dark text-light p-3 rounded u245"></pre>
         </div></div>
     </div>
 
@@ -151,7 +151,7 @@
                     </div>
                 </div>
             </form>
-            <div id="dnsOutput" style="display:none;"></div>
+            <div id="dnsOutput" class="u30"></div>
         </div></div>
     </div>
 
@@ -164,7 +164,7 @@
                     <button type="submit" class="btn btn-success btn-lg">📋 {{ _('common_search') }}</button>
                 </div>
             </form>
-            <div id="http_headersOutput" style="display:none;"></div>
+            <div id="http_headersOutput" class="u30"></div>
         </div></div>
     </div>
 
@@ -177,7 +177,7 @@
                     <button type="submit" class="btn btn-warning btn-lg">🔒 {{ _('common_search') }}</button>
                 </div>
             </form>
-            <div id="sslOutput" style="display:none;"></div>
+            <div id="sslOutput" class="u30"></div>
         </div></div>
     </div>
 
@@ -190,7 +190,7 @@
                     <button type="submit" class="btn btn-secondary btn-lg">🧮 计算</button>
                 </div>
             </form>
-            <div id="subnetOutput" style="display:none;"></div>
+            <div id="subnetOutput" class="u30"></div>
         </div></div>
     </div>
 </div>
@@ -283,7 +283,7 @@ function renderToolResult(tool, d) {
         h += '<p><strong>重定向次数:</strong> ' + d.redirect_count + '</p>';
         h += '<h6>响应头</h6><table class="table table-sm table-bordered">';
         for (let [k, v] of Object.entries(d.headers)) {
-            h += '<tr><td style="width:200px;"><code>' + k + '</code></td><td style="word-break:break-all;">' + v + '</td></tr>';
+            h += '<tr><td class="u246"><code>' + k + '</code></td><td class="u99">' + v + '</td></tr>';
         }
         h += '</table></div></div>';
         return h;
@@ -317,7 +317,7 @@ function renderToolResult(tool, d) {
             ['私有地址', d.is_private ? '✅ 是' : '❌ 否'],
             ['公网地址', d.is_global ? '✅ 是' : '❌ 否'],
         ];
-        rows.forEach(([k, v]) => { h += '<tr><td style="width:180px;"><strong>' + k + '</strong></td><td><code>' + v + '</code></td></tr>'; });
+        rows.forEach(([k, v]) => { h += '<tr><td class="u247"><strong>' + k + '</strong></td><td><code>' + v + '</code></td></tr>'; });
         h += '</table></div></div>';
         return h;
     }

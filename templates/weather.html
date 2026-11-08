@@ -44,7 +44,7 @@
     </div>
 </div>
 
-<div class="weather-attribution" style="display:none;">
+<div class="weather-attribution u30">
     天气数据来源：<a href="https://www.qweather.com/" target="_blank" rel="noopener">和风天气</a>
 </div>
 {% endblock %}
@@ -124,7 +124,7 @@ function searchWeather() {
             var html = '';
             // Current weather
             html += '<div class="weather-current mb-4">';
-            html += '<div style="font-size:1.2rem;opacity:0.9;">📍 ' + (data.city || city) + '</div>';
+            html += '<div class="u147">📍 ' + (data.city || city) + '</div>';
             html += '<div class="temp">' + emoji + ' ' + c.temp + '°C</div>';
             html += '<div class="desc">' + (c.condition || '') + '</div>';
             html += '<div class="detail">';
@@ -162,7 +162,7 @@ function searchWeather() {
                     html += '<span class="temp-high">' + (f.high || '--') + '°</span> ';
                     html += '<span class="temp-low">' + (f.low || '--') + '°</span>';
                     html += '</div>';
-                    html += '<div style="font-size:0.9rem;">' + (f.condition || '') + '</div>';
+                    html += '<div class="u148">' + (f.condition || '') + '</div>';
                     var fExtras = [];
                     if (f.sunrise) fExtras.push('🌅 ' + f.sunrise);
                     if (f.sunset) fExtras.push('🌇 ' + f.sunset);

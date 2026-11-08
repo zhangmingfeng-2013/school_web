@@ -21,13 +21,13 @@
 
     <div class="card mb-3"><div class="card-body">
         <h6>输入 User Agent 字符串</h6>
-        <textarea class="form-control mb-2" id="uaInput" rows="4" style="font-family:monospace;font-size:.9rem;resize:vertical" placeholder="粘贴 User Agent 字符串，或点击下方预设..."></textarea>
+        <textarea class="form-control mb-2 u281" id="uaInput" rows="4"  placeholder="粘贴 User Agent 字符串，或点击下方预设..."></textarea>
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <button class="btn btn-primary" data-csp-click="parseUA">解析</button>
             <button class="btn btn-outline-secondary" data-csp-click="detectCurrent">检测当前浏览器</button>
         </div>
         <div class="mt-2">
-            <span style="font-size:.75rem;color:var(--text-muted)">常用预设：</span>
+            <span class="u282">常用预设：</span>
             <span class="ua-preset" data-csp-click="uaPreset" data-csp-args='["chrome"]'>Chrome Win</span>
             <span class="ua-preset" data-csp-click="uaPreset" data-csp-args='["chrome_mac"]'>Chrome Mac</span>
             <span class="ua-preset" data-csp-click="uaPreset" data-csp-args='["safari"]'>Safari Mac</span>
@@ -150,7 +150,7 @@ function parseUA() {
     var raw = document.getElementById('uaRaw');
 
     if (!ua) {
-        grid.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px">请输入 User Agent 字符串</div>';
+        grid.innerHTML = '<div class="u283">请输入 User Agent 字符串</div>';
         el.className = 'ua-result show'; raw.textContent = ''; return;
     }
 

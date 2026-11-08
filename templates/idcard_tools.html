@@ -23,9 +23,9 @@
     <!-- 身份证解析 -->
     <div class="card mb-3"><div class="card-body">
         <h6>🪪 身份证号码解析</h6>
-        <p style="font-size:.8rem;color:var(--text-muted)">支持 18 位二代身份证</p>
+        <p class="u110">支持 18 位二代身份证</p>
         <div class="input-group mb-3">
-            <input type="text" class="form-control form-control-lg" id="idcardInput" placeholder="输入 18 位身份证号码..." style="font-family:monospace;font-size:1.1rem;letter-spacing:2px" maxlength="18">
+            <input class="form-control form-control-lg u338" type="text"  id="idcardInput" placeholder="输入 18 位身份证号码..."  maxlength="18">
             <button class="btn btn-primary" data-csp-click="parseIDCard">解析</button>
             <button class="btn btn-outline-secondary" data-csp-click="idcardDemo">示例</button>
         </div>
@@ -37,9 +37,9 @@
     <!-- 银行卡校验 -->
     <div class="card mb-3"><div class="card-body">
         <h6>💳 银行卡号校验（Luhn 算法）</h6>
-        <p style="font-size:.8rem;color:var(--text-muted)">支持 16-19 位银行卡号</p>
+        <p class="u110">支持 16-19 位银行卡号</p>
         <div class="input-group mb-3">
-            <input type="text" class="form-control form-control-lg" id="bankInput" placeholder="输入银行卡号..." style="font-family:monospace;font-size:1.1rem;letter-spacing:2px" maxlength="19">
+            <input class="form-control form-control-lg u338" type="text"  id="bankInput" placeholder="输入银行卡号..."  maxlength="19">
             <button class="btn btn-success" data-csp-click="checkBankCard">校验</button>
             <button class="btn btn-outline-secondary" data-csp-click="bankDemo">示例</button>
         </div>
@@ -87,7 +87,7 @@ function parseIDCard() {
     var el = document.getElementById('idcardResult');
     var grid = document.getElementById('idcardGrid');
     if (!/^\d{17}[\dXx]$/.test(id)) {
-        grid.innerHTML = '<div style="color:#ef4444;padding:8px">请输入正确的 18 位身份证号码</div>';
+        grid.innerHTML = '<div class="u339">请输入正确的 18 位身份证号码</div>';
         el.className = 'it-result-card show'; return;
     }
     id = id.toUpperCase();
@@ -160,7 +160,7 @@ function checkBankCard() {
     var grid = document.getElementById('bankGrid');
 
     if (!/^\d{13,19}$/.test(num)) {
-        ve.innerHTML = '<span style="color:#ef4444">请输入正确的银行卡号（13-19位数字）</span>';
+        ve.innerHTML = '<span class="u340">请输入正确的银行卡号（13-19位数字）</span>';
         grid.innerHTML = ''; el.className = 'it-result-card show'; return;
     }
 

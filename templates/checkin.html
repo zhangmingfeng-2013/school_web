@@ -82,16 +82,16 @@
     <div class="ck-header">
         <div>
             <div class="ck-streak-label">🔥 连续签到</div>
-            <div><span class="ck-streak" id="ckStreak">0</span> <span style="font-size:1.2rem;">天</span></div>
+            <div><span class="ck-streak" id="ckStreak">0</span> <span class="u86">天</span></div>
         </div>
-        <div style="margin-left:auto;">
-            <span style="font-size:.85rem;color:var(--bs-secondary-color);">📅 <span id="ckYearLabel">2026</span> 年共签到 <strong id="ckTotal">0</strong> 天</span>
+        <div class="u87">
+            <span class="u88">📅 <span id="ckYearLabel">2026</span> 年共签到 <strong id="ckTotal">0</strong> 天</span>
         </div>
     </div>
 
     <!-- Today checkin -->
     <div class="ck-today-card" id="ckTodayCard">
-        <div style="font-size:1.1rem;font-weight:600;white-space:nowrap;">📅 今日签到</div>
+        <div class="u89">📅 今日签到</div>
         <div class="ck-mood-select" id="ckMoodSelect">
             <button class="ck-mood-btn selected" data-csp-click="selectMood" data-csp-args='["😊"]'>😊</button>
             <button class="ck-mood-btn" data-csp-click="selectMood" data-csp-args='["😄"]'>😄</button>
@@ -102,13 +102,13 @@
         </div>
         <input type="text" class="ck-note-input" id="ckNote" placeholder="今天的心情...（选填）" maxlength="200">
         <button class="ck-checkin-btn" data-csp-click="doCheckin" id="ckCheckinBtn">✅ 签到</button>
-        <div id="ckCheckedMsg" style="display:none;color:#16a34a;font-weight:600;font-size:1.1rem;">✅ 今日已签到 <span id="ckCheckedMood"></span></div>
+        <div id="ckCheckedMsg" class="u90">✅ 今日已签到 <span id="ckCheckedMood"></span></div>
     </div>
 
     <!-- Heatmap -->
-    <div style="display:flex;">
+    <div class="u91">
         <div class="ck-day-labels" id="ckDayLabels"></div>
-        <div style="flex:1;overflow-x:auto;">
+        <div class="u92">
             <div class="ck-month-labels" id="ckMonthLabels"></div>
             <div class="ck-heatmap-grid" id="ckHeatmap"></div>
             <div class="ck-legend">
@@ -227,11 +227,11 @@ function renderHeatmap() {
             var months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
             // Calculate position
             var spanWidth = 14 * 7 + 3 * 6; // cell width * 7 + gap * 6
-            mlHtml += '<span style="position:absolute;left:' + (wi * (14 + 3)) + 'px;">' + months[mid.getMonth()] + '</span>';
+            mlHtml += '<span class="u93" + (wi * (14 + 3)) + 'px;">' + months[mid.getMonth()] + '</span>';
             lastMonth = mid.getMonth();
         }
     });
-    monthLabels.innerHTML = '<div style="position:relative;height:16px;">' + mlHtml + '</div>';
+    monthLabels.innerHTML = '<div class="u94">' + mlHtml + '</div>';
 
     // Render cells
     var html = '';

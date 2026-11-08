@@ -61,7 +61,7 @@
             <small>密钥已保存，重新输入才会更新。留空则使用已保存的密钥</small>
         </div>
         <div class="ai-modal-footer">
-            <a href="/ai_config" style="margin-right:auto;font-size:12px;color:#999;text-decoration:none;align-self:center;">📋 高级配置 →</a>
+            <a href="/ai_config" class="u74">📋 高级配置 →</a>
             <button data-csp-click="closeAISettings" class="ai-btn-secondary">取消</button>
             <button data-csp-click="saveAISettings" class="ai-btn-primary">保存</button>
         </div>
@@ -189,7 +189,7 @@ function switchToAI() {
     channel='ai'; dmUser=''; aiMode=true;
     document.getElementById('worldBtn').classList.remove('active');
     document.getElementById('aiBtn').classList.add('active');
-    document.getElementById('chatHeader').innerHTML = '🤖 AI 助手 <span id="aiModelBadge" style="font-size:11px;color:#999;font-weight:400"></span>';
+    document.getElementById('chatHeader').innerHTML = '🤖 AI 助手 <span id="aiModelBadge" class="u75"></span>';
     document.getElementById('aiClearBtn').style.display = 'inline-block';
     document.getElementById('msgInput').placeholder = '向 AI 提问...';
     document.getElementById('msgInput').maxLength = 4000;
@@ -206,6 +206,14 @@ async function loadAIModelBadge() {
     } catch(e) {}
 }
 
+// ===== HTML 转义（防 XSS）=====
+function escapeHtml(s) {
+    if (s == null) return ''
+    var div = document.createElement('div')
+    div.appendChild(document.createTextNode(String(s)))
+    return div.innerHTML
+}
+
 // ===== 加载消息 =====
 async function loadMsgs() {
     if (aiMode) { loadAIMsgs(); return; }
@@ -215,9 +223,9 @@ async function loadMsgs() {
     var html = msgs.length===0 ? '<div class="chat-empty">暂无消息</div>' :
         msgs.map(function(m){
             var cls = 'msg' + (m.sender===myUsername?' mine':'') + (m.content==='[消息已撤回]'?' recalled':'');
-            return '<div class="'+cls+'" data-msg-id="'+m.id+'" data-msg-sender="'+m.sender+'" data-msg-content="'+encodeURIComponent(m.content)+'">'
-                + '<div class="sender">'+m.sender+'</div>'
-                + '<div class="bubble">'+m.content+'</div>'
+            return '<div class="'+cls+'" data-msg-id="'+m.id+'" data-msg-sender="'+escapeHtml(m.sender)+'" data-msg-content="'+encodeURIComponent(m.content)+'">'
+                + '<div class="sender">'+escapeHtml(m.sender)+'</div>'
+                + '<div class="bubble">'+escapeHtml(m.content)+'</div>'
                 + '<div class="time">'+(m.created_at||'').slice(5,16)+'</div></div>';
         }).join('');
     var box = document.getElementById('messages');
@@ -232,9 +240,10 @@ async function loadAIMsgs() {
         msgs.map(function(m){
             var isMe = m.role === 'user';
             var cls = 'msg' + (isMe?' mine':' bot');
+            var content = escapeHtml(m.content).replace(/\n/g, '<br>');
             return '<div class="'+cls+'">'
                 + '<div class="sender">'+(isMe?myUsername:'🤖 AI 助手')+'</div>'
-                + '<div class="bubble">'+m.content.replace(/\n/g,'<br>')+'</div>'
+                + '<div class="bubble">'+content+'</div>'
                 + '<div class="time">'+(m.created_at||'').slice(5,16)+'</div></div>';
         }).join('');
     var box = document.getElementById('messages');
@@ -299,14 +308,14 @@ async function sendAIMsg(text) {
         if (typingEl) typingEl.remove();
 
         if (resp.error) {
-            box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble" style="color:#c00">❌ '+resp.error+'</div></div>';
+            box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble u76">❌ '+resp.error+'</div></div>';
         } else {
             box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble">'+resp.reply.replace(/\n/g,'<br>')+'</div><div class="time">刚刚</div></div>';
         }
     } catch(e) {
         var typingEl = document.getElementById('aiTyping');
         if (typingEl) typingEl.remove();
-        box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble" style="color:#c00">❌ 请求失败: '+e.message+'</div></div>';
+        box.innerHTML += '<div class="msg bot"><div class="sender">🤖 AI 助手</div><div class="bubble u76">❌ 请求失败: '+e.message+'</div></div>';
     }
 
     box.scrollTop = box.scrollHeight;

@@ -18,11 +18,12 @@ PYTHON="${PYTHON:-/Library/Frameworks/Python.framework/Versions/3.14/bin/python3
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_PORT="${APP_PORT:-4444}"
 MYSQL_DATADIR="${MYSQL_DATADIR:-/opt/homebrew/var/mysql}"
-DB_PASSWORD="${DB_PASSWORD:-root@123456}"
+DB_PASSWORD="${DB_PASSWORD:-}"
 DB_USER="${DB_USER:-root}"
 DB_NAME="${DB_NAME:-sample}"
 if [ -z "${ADMIN_SECRET}" ]; then
-    ADMIN_SECRET="asdfghjkl;'"
+    fail "未设置环境变量 ADMIN_SECRET，拒绝启动（避免使用弱口令硬编码）"
+    exit 1
 fi
 MAX_WAIT=30
 
@@ -97,13 +98,13 @@ box_line() {
 # ============================================================
 start_mysql() {
     # 已在运行？
-    if mysqladmin ping -u "$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null; then
+    if MYSQL_PWD="$DB_PASSWORD" mysqladmin ping -u "$DB_USER" --silent 2>/dev/null; then
         ok "MySQL 已在运行"
         return 0
     fi
 
     if ! check_cmd mysqld; then
-        fail "未找到 mysqld，请先安装 MySQL: brew install mysql@8.4"
+        fail "未找到 mysqld，请先安装 MySQL: brew install mysql@8.4 或 sudo apt install mysql-server"
         return 1
     fi
 
@@ -117,7 +118,7 @@ start_mysql() {
 
     # 等待就绪
     local waited=0
-    while ! mysqladmin ping -u "$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null; do
+    while ! MYSQL_PWD="$DB_PASSWORD" mysqladmin ping -u "$DB_USER" --silent 2>/dev/null; do
         sleep 1
         waited=$((waited + 1))
         if [ $waited -ge $MAX_WAIT ]; then
@@ -131,7 +132,7 @@ start_mysql() {
     done
 
     # 确保数据库存在
-    mysql -u "$DB_USER" -p"$DB_PASSWORD" \
+    MYSQL_PWD="$DB_PASSWORD" mysql -u "$DB_USER" \
         -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\`;" 2>/dev/null
 
     ok "MySQL 已启动 (PID: $pid)"
@@ -188,7 +189,7 @@ start_app() {
     fi
 
     info "启动 Flask 应用 (端口: $APP_PORT)..."
-    cd "$PROJECT_DIR"
+    cd "$PROJECT_DIR" || exit
     ADMIN_SECRET="$ADMIN_SECRET" \
     DB_PASSWORD="$DB_PASSWORD" \
     DB_USER="$DB_USER" \
@@ -321,7 +322,7 @@ show_status() {
     echo ""
 
     # MySQL
-    if mysqladmin ping -u "$DB_USER" -p"$DB_PASSWORD" --silent 2>/dev/null; then
+    if MYSQL_PWD="$DB_PASSWORD" mysqladmin ping -u "$DB_USER" --silent 2>/dev/null; then
         ok "MySQL          运行中"
     else
         fail "MySQL          未运行"
@@ -376,7 +377,8 @@ show_urls() {
     echo -e "  ${BOLD}局域网地址${NC}:"
     echo -e "    http://${lan_ip}:${APP_PORT}"
     echo ""
-    echo -e "  ${BOLD}管理员注册密钥${NC}: ${YELLOW}${ADMIN_SECRET}${NC}"
+    # 不再在终端/日志打印管理员注册密钥
+# echo -e "  ${BOLD}管理员注册密钥${NC}: ${YELLOW}${ADMIN_SECRET}${NC}"
     echo ""
     echo -e "  ${BOLD}日志文件${NC}:"
     echo -e "    MySQL:    $MYSQL_LOG"

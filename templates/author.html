@@ -238,7 +238,7 @@
         <p class="med right">像素皎皎兮光闪耀。</p>
         <p class="sm right">———《少年码农 · 铭》</p>
     </div>
-    <div style="text-align:center;">
+    <div class="u162">
         <button class="btn-start author-scroll-btn" data-target="sec2">开始探索 / Explore →</button>
     </div>
 </section>
@@ -246,30 +246,33 @@
 <!-- ===== Section 2: 欢迎 ===== -->
 <section class="lay" id="sec2">
     <div class="greeting">
-        <div style="width:130px;height:130px;margin:0 auto 1.2rem;border-radius:50%;overflow:hidden;box-shadow:0 0 40px rgba(99,102,241,.25);">
-            <img src="/static/img/avatar_ming.png" alt="铭" style="width:100%;height:100%;object-fit:cover;" id="authorAvatar">
+        <div class="u163">
+            <img src="/static/img/avatar_ming.png" alt="铭" class="u164" id="authorAvatar">
         </div>
         <h1>张铭枫</h1>
-        <p>少年编程爱好者 · 12 岁开发者<br>用代码构建未来，热爱创造与探索</p>
+        <p>少年编程爱好者 · 13 岁开发者<br>用代码构建未来，热爱创造与探索</p>
     </div>
     <div class="card-3d">
         <div class="card-3d-inner">
             <div class="card-tit">📋 基本信息 · Basic Info</div>
+            <div class="card-tit">(有待考证,仅供参考 >u-)o</div>
             <div class="info-grid">
                 <span class="label">性别<br><small>Gender</small></span><span class="value">男</span>
                 <span class="label">生日<br><small>Birthday</small></span><span class="value">2013年5月26日</span>
                 <span class="label">民族<br><small>Ethnicity</small></span><span class="value">蒙古族</span>
-                <span class="label">学校<br><small>School</small></span><span class="value">重庆大学城人民小学</span>
-                <span class="label">特长<br><small>Specialty</small></span><span class="value">💻 编程</span>
-                <span class="label">住址<br><small>Address</small></span><span class="value">重庆市高新区富力城书香里</span>
+                <span class="label">学校<br><small>School</small></span><span class="value">重庆师范大学附属科学城中学</span>
+                <span class="label">特长<br><small>Specialty</small></span><span class="value">💻 编程   🏸 羽毛球   🛌睡觉</span>
+                <span class="label">现居<br><small>Address</small></span><span class="value">重庆市高新区</span>
+                <span class="label">邮箱<br><small>Email</small></span><span class="value">503175021@qq.com 或 zmf20130526@outlook.com</span>
+                <span class="label">GitHub<br><small>GitHub</small></span><span class="value"><a href="https://github.com/zhangmingfeng-2013">zhangmingfeng-2013</a></span>
                 <hr>
-                <span class="label">经验<br><small>Experience</small></span><span class="value">2 年编程</span>
-                <span class="label">语言<br><small>Languages</small></span><span class="value">9 门</span>
-                <span class="label">荣誉<br><small>Honors</small></span><span class="value">12 项</span>
+                <span class="label">经验<br><small>Experience</small></span><span class="value">5 年编程</span>
+                <span class="label">语言<br><small>Languages</small></span><span class="value">11 门</span>
+                <span class="label">荣誉<br><small>Honors</small></span><span class="value">14 项</span>
             </div>
         </div>
     </div>
-    <div style="text-align:center;margin-top:1rem;">
+    <div class="u165">
         <button class="btn-start author-scroll-btn" data-target="sec3">查看技能 / Skills →</button>
     </div>
 </section>
@@ -282,7 +285,7 @@
             <div id="skillBars"></div>
         </div>
     </div>
-    <div style="text-align:center;margin-top:1rem;">
+    <div class="u165">
         <button class="btn-start author-scroll-btn" data-target="sec4">查看荣誉 / Honors →</button>
     </div>
 </section>
@@ -293,8 +296,9 @@
         <div class="card-3d-inner">
             <div class="card-tit">🏆 荣誉奖项 · Honors & Awards</div>
 
-            <div style="font-size:.85rem;opacity:.5;margin-bottom:1rem;">🎖 市级荣誉 · City-level</div>
+            <div class="u166">🎖 市级荣誉 · City-level</div>
             {% set h = [
+                ("全国青少年信息素养大赛Python编程挑战赛","2026年8月","bg-warning text-dark", "一等奖"),
                 ("全国青少年信息素养大赛西南赛区（重庆）编程挑战赛","2024年7月","bg-warning text-dark","二等奖"),
                 ("全国学生信息素养提升实践活动重庆市级选拔活动","2024年6月","bg-warning text-dark","二等奖"),
             ] %}
@@ -305,13 +309,13 @@
                     <div class="honor-name">{{ n }}</div>
                     <div class="honor-meta">
                         <span class="honor-date">{{ d }}</span>
-                        <span class="honor-badge" style="background:rgba(234,179,8,.15);color:#eab308;">{{ b }}</span>
+                        <span class="honor-badge u167">{{ b }}</span>
                     </div>
                 </div>
             </div>
             {% endfor %}
 
-            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🥇 区级荣誉 · District-level</div>
+            <div class="u168">🥇 区级荣誉 · District-level</div>
             {% set h = [
                 ("重庆高新区第二十六届全国学生信息素养提升实践活动","2025年5月","一等奖"),
                 ("重庆高新区第二十五届全国学生信息素养提升实践活动","2024年5月","一等奖"),
@@ -323,14 +327,14 @@
                     <div class="honor-name">{{ n }}</div>
                     <div class="honor-meta">
                         <span class="honor-date">{{ d }}</span>
-                        <span class="honor-badge" style="background:rgba(34,197,94,.15);color:#22c55e;">{{ b }}</span>
+                        <span class="honor-badge u169">{{ b }}</span>
                     </div>
                 </div>
             </div>
             {% endfor %}
 
-            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">📜 考级荣誉 · Certification</div>
-            {% set h = [("青少年软件编程等级考试","2025年9月","Level-3 G"),("青少年软件编程等级考试","2025年6月","Level-2 E"),("青少年软件编程等级考试","2024年10月","Level-1 E")] %}
+            <div class="u168">📜 考级荣誉 · Certification</div>
+            {% set h = [("青少年软件编程等级考试","2025年12月","Level-4 G"),("青少年软件编程等级考试","2025年9月","Level-3 G"),("青少年软件编程等级考试","2025年6月","Level-2 E"),("青少年软件编程等级考试","2024年10月","Level-1 E")] %}
             {% for n,d,b in h %}
             <div class="honor-item">
                 <div class="honor-icon">📜</div>
@@ -338,13 +342,13 @@
                     <div class="honor-name">{{ n }}</div>
                     <div class="honor-meta">
                         <span class="honor-date">{{ d }}</span>
-                        <span class="honor-badge" style="background:rgba(59,130,246,.15);color:#3b82f6;">{{ b }}</span>
+                        <span class="honor-badge u170">{{ b }}</span>
                     </div>
                 </div>
             </div>
             {% endfor %}
 
-            <div style="font-size:.85rem;opacity:.5;margin:1.5rem 0 1rem;">🌟 校内荣誉 · School</div>
+            <div class="u168">🌟 校内荣誉 · School</div>
             <div class="honor-grid">
                 {% set h = [("进步之星","2025年6月"),("数学之星","2025年1月"),("学习小标兵","2022年6月"),("学习小明星","2022年1月")] %}
                 {% for n,d in h %}
@@ -357,7 +361,7 @@
             </div>
         </div>
     </div>
-    <div style="text-align:center;margin-top:1rem;">
+    <div class="u165">
         <button class="btn-start author-scroll-btn" data-target="sec5">查看项目 / Projects →</button>
     </div>
 </section>
@@ -378,22 +382,22 @@
 {% set next_sec = 'sec' ~ (6 + loop.index0) %}
 <section class="lay" id="{{ sec_id }}">
     <div class="card-3d">
-        <div class="card-3d-inner" style="text-align:center;">
-            <div style="font-size:3rem;margin-bottom:1rem;">{{ emoji }}</div>
-            <h2 style="font-size:1.8rem;font-weight:700;margin-bottom:.5rem;">
+        <div class="card-3d-inner u162">
+            <div class="u171">{{ emoji }}</div>
+            <h2 class="u172">
                 <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" class="a">{{ name }}</a>
             </h2>
-            <p style="opacity:.55;max-width:500px;margin:1rem auto;line-height:1.7;font-size:.95rem;">{{ desc }}</p>
-            <div style="margin-top:1rem;">
+            <p class="u173">{{ desc }}</p>
+            <div class="u174">
                 <span class="project-lang"><span class="dot"></span>{{ lang }}</span>
             </div>
-            <div style="margin-top:1.5rem;">
+            <div class="u175">
                 <a href="https://gitee.com/{{ user }}/{{ repo }}" target="_blank" class="btn-start">在 Gitee 上查看 / View on Gitee →</a>
             </div>
         </div>
     </div>
     {% if not loop.last %}
-    <div style="text-align:center;margin-top:1.5rem;">
+    <div class="u176">
         <button class="btn-start author-scroll-btn" data-target="{{ next_sec }}">下一个项目 / Next ↓</button>
     </div>
     {% endif %}
@@ -402,9 +406,9 @@
 
 <!-- ===== 结尾 ===== -->
 <section class="lay" id="sec{{ 5 + projs|length }}">
-    <div style="text-align:center;padding:3rem 1.5rem;">
-        <p style="font-size:1.2rem;opacity:.5;margin-bottom:1rem;">感谢你花时间了解我 ❤️<br><small>Thanks for taking the time to know me</small></p>
-        <a href="https://gitee.com/organizations/zhang-mingfeng9773_admin/projects" target="_blank" class="a" style="font-size:.85rem;opacity:.35;">在 Gitee 上查看全部项目 →</a>
+    <div class="u177">
+        <p class="u178">感谢你花时间了解我 ❤️<br><small>Thanks for taking the time to know me</small></p>
+        <a href="https://gitee.com/organizations/zhang-mingfeng9773_admin/projects" target="_blank" class="a u179">在 Gitee 上查看全部项目 →</a>
     </div>
 </section>
 
@@ -525,15 +529,17 @@ document.addEventListener('click', function(e) {
 // ===== 6. 技能条 =====
 (function() {
     var skills = [
-        { name: 'Scratch', pct: 95, color: '#4D97FF' },
-        { name: 'Markdown', pct: 90, color: '#083fa1' },
-        { name: 'Python', pct: 80, color: '#3776AB' },
-        { name: 'OpenClaw', pct: 63, color: '#6366f1' },
-        { name: 'C/C++', pct: 25, color: '#00599C' },
-        { name: 'Linux', pct: 25, color: '#FCC624' },
-        { name: 'SQL', pct: 17, color: '#E38C00' },
-        { name: 'Vue3', pct: 11, color: '#42b883' },
-        { name: 'JavaScript', pct: 10, color: '#F7DF1E' }
+        { name: 'Scratch', pct: 100, color: '#4D97FF' },
+        { name: 'Markdown', pct: 95, color: '#083fa1' },
+        { name: 'Python', pct: 90, color: '#3776AB' },
+        { name: 'Vibe Coding', pct: 90, color: '#6366f1' },
+        { name: 'HTML/CSS', pct: 80, color: '#E34F26' },
+        { name: 'C/C++', pct: 40, color: '#00599C' },
+        { name: 'Linux', pct: 30, color: '#FCC624' },
+        { name: 'SQL', pct: 25, color: '#E38C00' },
+        { name: 'Vue3', pct: 13, color: '#42b883' },
+        { name: 'JavaScript', pct: 10, color: 'rgba(247,223,30,0.7)' },
+        { name: 'Java', pct: 5, color: '#007396' }
     ];
     var container = document.getElementById('skillBars');
     if (!container) return;

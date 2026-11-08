@@ -36,7 +36,7 @@
                     </div>
                 </form>
                 <div id="feedList" class="mt-2">
-                    <div class="rss-empty" style="padding:1rem;"><small class="text-muted">暂无订阅源，请添加</small></div>
+                    <div class="rss-empty u266"><small class="text-muted">暂无订阅源，请添加</small></div>
                 </div>
             </div>
         </div>
@@ -48,7 +48,7 @@
             <div class="card-body p-3">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h6 class="mb-0" id="currentFeedTitle">选择订阅源查看文章</h6>
-                    <button class="btn btn-sm btn-outline-primary" data-csp-click="refreshFeed" id="refreshBtn" style="display:none;">🔄 刷新</button>
+                    <button class="btn btn-sm btn-outline-primary u30" data-csp-click="refreshFeed" id="refreshBtn">🔄 刷新</button>
                 </div>
                 <div id="articleList">
                     <div class="rss-empty">
@@ -56,11 +56,11 @@
                         <p>从左侧选择一个订阅源查看内容</p>
                     </div>
                 </div>
-                <div id="articleLoading" style="display:none;text-align:center;padding:2rem;">
+                <div id="articleLoading" class="u267">
                     <div class="spinner-border text-primary" role="status"></div>
                     <p class="mt-2 text-muted">加载中...</p>
                 </div>
-                <div id="articleError" style="display:none;" class="alert alert-danger"></div>
+                <div id="articleError" class="u30 alert alert-danger"></div>
             </div>
         </div>
     </div>
@@ -102,13 +102,13 @@ function loadFeeds() {
                 html += '<div class="rss-feed-item' + (f.id === currentFeedId ? ' active' : '') + '" data-csp-click="selectFeed" data-csp-args=\'' + JSON.stringify([f.id]) + '\'>';
                 html += '<span class="feed-title" title="' + (f.title || f.url) + '">' + (f.title || f.url).replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
                 html += '<span class="feed-actions">';
-                html += '<button class="btn btn-sm btn-outline-danger" style="padding:0 4px;font-size:.7rem;" data-csp-click="deleteFeed" data-csp-args=\'' + JSON.stringify([f.id]) + '\'>✕</button>';
+                html += '<button class="btn btn-sm btn-outline-danger u268" data-csp-click="deleteFeed" data-csp-args=\'' + JSON.stringify([f.id]) + '\'>✕</button>';
                 html += '</span></div>';
             });
             list.innerHTML = html;
         } else {
             feedsData = [];
-            list.innerHTML = '<div class="rss-empty" style="padding:1rem;"><small class="text-muted">暂无订阅源，请添加</small></div>';
+            list.innerHTML = '<div class="rss-empty u266"><small class="text-muted">暂无订阅源，请添加</small></div>';
         }
     }).catch(function(err) { console.error('Failed to load feeds:', err); });
 }
@@ -176,7 +176,7 @@ function renderFeedList() {
         html += '<div class="rss-feed-item' + (f.id === currentFeedId ? ' active' : '') + '" data-csp-click="selectFeed" data-csp-args=\'' + JSON.stringify([f.id]) + '\'>';
         html += '<span class="feed-title" title="' + (f.title || f.url) + '">' + (f.title || f.url).replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
         html += '<span class="feed-actions">';
-        html += '<button class="btn btn-sm btn-outline-danger" style="padding:0 4px;font-size:.7rem;" data-csp-click="deleteFeed" data-csp-args=\'' + JSON.stringify([f.id]) + '\'>✕</button>';
+        html += '<button class="btn btn-sm btn-outline-danger u268" data-csp-click="deleteFeed" data-csp-args=\'' + JSON.stringify([f.id]) + '\'>✕</button>';
         html += '</span></div>';
     });
     list.innerHTML = html;

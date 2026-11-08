@@ -73,7 +73,7 @@
         </div>
         <input type="file" id="mergeInput" accept=".pdf" multiple class="d-none" data-csp-change="onMergeFilesSelected">
         <div class="pdf-file-list" id="mergeFileList"></div>
-        <div class="pdf-btn-row" id="mergeBtnRow" style="display:none;">
+        <div class="pdf-btn-row u30" id="mergeBtnRow">
             <button class="btn btn-primary" id="mergeBtn" data-csp-click="doMerge">📎 合并 PDF</button>
             <div class="spinner-border text-primary pdf-spinner" id="mergeSpinner" role="status"></div>
         </div>
@@ -89,12 +89,12 @@
         </div>
         <input type="file" id="splitInput" accept=".pdf" class="d-none" data-csp-change="onSplitFileSelected">
         <div class="pdf-file-list" id="splitFileInfo"></div>
-        <div class="pdf-range-row" id="splitRangeRow" style="display:none;">
+        <div class="pdf-range-row u30" id="splitRangeRow">
             <label>页码范围：</label>
             <input type="text" class="form-control form-control-sm" id="splitPageRange" placeholder="例: 1-3,5,7-9">
-            <span style="font-size:0.8rem;color:var(--text-muted);">格式：1-3,5,7-9（逗号分隔，支持范围和单页）</span>
+            <span class="u265">格式：1-3,5,7-9（逗号分隔，支持范围和单页）</span>
         </div>
-        <div class="pdf-btn-row" id="splitBtnRow" style="display:none;">
+        <div class="pdf-btn-row u30" id="splitBtnRow">
             <button class="btn btn-primary" id="splitBtn" data-csp-click="doSplit">✂️ 分割 PDF</button>
             <div class="spinner-border text-primary pdf-spinner" id="splitSpinner" role="status"></div>
         </div>
@@ -110,10 +110,10 @@
         </div>
         <input type="file" id="compressInput" accept=".pdf" class="d-none" data-csp-change="onCompressFileSelected">
         <div class="pdf-file-list" id="compressFileInfo"></div>
-        <div class="pdf-quality-info" id="compressQualityInfo" style="display:none;">
+        <div class="pdf-quality-info u30" id="compressQualityInfo">
             ℹ️ 压缩将优化 PDF 内部内容流，移除冗余数据，适合文本为主的 PDF 文件。
         </div>
-        <div class="pdf-btn-row" id="compressBtnRow" style="display:none;">
+        <div class="pdf-btn-row u30" id="compressBtnRow">
             <button class="btn btn-primary" id="compressBtn" data-csp-click="doCompress">🗜️ 压缩 PDF</button>
             <div class="spinner-border text-primary pdf-spinner" id="compressSpinner" role="status"></div>
         </div>
@@ -129,7 +129,7 @@
         </div>
         <input type="file" id="extractInput" accept=".pdf" class="d-none" data-csp-change="onExtractFileSelected">
         <div class="pdf-file-list" id="extractFileInfo"></div>
-        <div class="pdf-btn-row" id="extractBtnRow" style="display:none;">
+        <div class="pdf-btn-row u30" id="extractBtnRow">
             <button class="btn btn-primary" id="extractBtn" data-csp-click="doExtract">📋 提取文本</button>
             <div class="spinner-border text-primary pdf-spinner" id="extractSpinner" role="status"></div>
         </div>

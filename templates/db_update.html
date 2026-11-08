@@ -17,14 +17,14 @@
             </div>
             <div class="col-auto">
                 <button class="btn btn-primary" data-csp-click="loadTableData">🔄 加载数据</button>
-                <button class="btn btn-success" data-csp-click="showAddDialog" id="addBtn" style="display:none">➕ 添加行</button>
+                <button class="btn btn-success u30" data-csp-click="showAddDialog" id="addBtn">➕ 添加行</button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 数据表格 -->
-<div id="tableContainer" class="card" style="display:none">
+<div id="tableContainer" class="card u30">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-bordered table-hover table-sm mb-0" id="dataTable">
@@ -36,7 +36,7 @@
     </div>
 </div>
 
-<div id="loadingSpinner" class="text-center py-5" style="display:none">
+<div id="loadingSpinner" class="text-center py-5 u30">
     <div class="spinner-border text-primary" role="status"></div>
     <p class="mt-2">加载中...</p>
 </div>
@@ -105,7 +105,7 @@ function loadTableData() {
 
             // 渲染表头
             let thead = document.getElementById('tableHead');
-            let hdr = '<tr><th style="width:80px">操作</th>';
+            let hdr = '<tr><th class="u191">操作</th>';
             data.columns.forEach(c => { hdr += '<th>' + c + '</th>'; });
             hdr += '</tr>';
             thead.innerHTML = hdr;

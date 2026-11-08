@@ -777,7 +777,7 @@ function renderCards(events) {
         // 进度条
         html += '<div class="cd-progress-wrap">';
         html += '<div class="cd-progress-bar-outer">';
-        html += '<div class="cd-progress-bar-inner ' + progressClass + '" style="--cd-progress-pct:' + info.pct + '%;"></div>';
+        html += '<div class="cd-progress-bar-inner ' + progressClass u255" + info.pct + '%;"></div>';
         html += '</div>';
         html += '<div class="cd-progress-text">';
         html += '<span>' + (status === 'passed' ? '已过去' : '已过') + ' ' + info.elapsedDays + ' 天</span>';

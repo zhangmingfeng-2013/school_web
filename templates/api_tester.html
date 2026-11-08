@@ -27,7 +27,7 @@
                 <div class="card-body">
                     <div class="api-section">
                         <div class="input-group input-group-lg">
-                            <select id="apiMethod" class="form-select" style="max-width:130px;">
+                            <select id="apiMethod" class="form-select u95">
                                 <option value="GET">GET</option>
                                 <option value="POST">POST</option>
                                 <option value="PUT">PUT</option>
@@ -57,19 +57,19 @@
                     <!-- Request Body -->
                     <div class="api-section" id="bodySection">
                         <label class="form-label fw-bold">请求体</label>
-                        <textarea id="apiBody" class="form-control mono" rows="8" placeholder='{"key": "value"}' style="font-family:monospace;"></textarea>
+                        <textarea class="form-control mono u96" id="apiBody"  rows="8" placeholder='{"key": "value"}'></textarea>
                         <small class="text-muted">仅 POST / PUT / PATCH 请求需要</small>
                     </div>
                 </div>
             </div>
 
             <!-- Response -->
-            <div id="apiLoading" style="display:none; text-align:center; padding:2rem;">
+            <div id="apiLoading" class="u267">
                 <div class="spinner-border text-primary" role="status"></div>
                 <p class="mt-2 text-muted">请求中...</p>
             </div>
 
-            <div class="card" id="apiResponse" style="display:none;">
+            <div class="card u30" id="apiResponse">
                 <div class="card-body">
                     <div class="response-section">
                         <div class="response-status" id="responseStatus"></div>
@@ -77,7 +77,7 @@
                             <h6 class="mb-0">响应头</h6>
                             <button class="btn btn-outline-secondary btn-sm" data-csp-click="toggleResponseHeaders">展开/收起</button>
                         </div>
-                        <div id="responseHeadersWrap" style="display:none;">
+                        <div id="responseHeadersWrap" class="u30">
                             <table class="table table-sm table-bordered response-headers-table" id="responseHeadersTable"></table>
                         </div>
                     </div>
@@ -88,11 +88,11 @@
                         </div>
                         <pre class="response-body" id="responseBody"></pre>
                     </div>
-                    <div class="text-muted" style="font-size:.8rem;" id="responseTime"></div>
+                    <div class="text-muted u97" id="responseTime"></div>
                 </div>
             </div>
 
-            <div id="apiError" style="display:none;" class="alert alert-danger mt-3"></div>
+            <div id="apiError" class="u30 alert alert-danger mt-3"></div>
         </div>
 
         <!-- Request History -->
@@ -101,9 +101,9 @@
                 <div class="card-body p-3">
                     <h6 class="card-title mb-3">📜 请求历史</h6>
                     <div id="historyList">
-                        <div class="text-muted text-center py-3" style="font-size:.85rem;">暂无历史记录</div>
+                        <div class="text-muted text-center py-3 u98">暂无历史记录</div>
                     </div>
-                    <button class="btn btn-outline-secondary btn-sm mt-2 w-100" data-csp-click="clearHistory" id="clearHistoryBtn" style="display:none;">清空历史</button>
+                    <button class="btn btn-outline-secondary btn-sm mt-2 w-100 u30" data-csp-click="clearHistory" id="clearHistoryBtn">清空历史</button>
                 </div>
             </div>
         </div>
@@ -187,7 +187,7 @@ function sendRequest() {
             var headersHtml = '';
             if (d.headers) {
                 Object.keys(d.headers).forEach(function(k) {
-                    headersHtml += '<tr><td>' + k.replace(/</g,'&lt;') + '</td><td style="word-break:break-all;">' + (d.headers[k] || '').replace(/</g,'&lt;') + '</td></tr>';
+                    headersHtml += '<tr><td>' + k.replace(/</g,'&lt;') + '</td><td class="u99">' + (d.headers[k] || '').replace(/</g,'&lt;') + '</td></tr>';
                 });
             }
             headersTable.innerHTML = headersHtml || '<tr><td colspan="2">无</td></tr>';
@@ -266,7 +266,7 @@ function renderHistory() {
     var list = document.getElementById('historyList');
     var clearBtn = document.getElementById('clearHistoryBtn');
     if (requestHistory.length === 0) {
-        list.innerHTML = '<div class="text-muted text-center py-3" style="font-size:.85rem;">暂无历史记录</div>';
+        list.innerHTML = '<div class="text-muted text-center py-3 u98">暂无历史记录</div>';
         clearBtn.style.display = 'none';
         return;
     }
@@ -275,8 +275,8 @@ function renderHistory() {
     requestHistory.forEach(function(h, i) {
         var methodCls = {GET:'bg-success', POST:'bg-primary', PUT:'bg-warning text-dark', DELETE:'bg-danger', PATCH:'bg-info text-dark'}[h.method] || 'bg-secondary';
         html += '<div class="history-item" data-csp-click="replayHistory" data-csp-args=\'' + JSON.stringify([i]) + '\'>';
-        html += '<span><span class="badge method-badge ' + methodCls + ' me-1">' + h.method + '</span><span style="font-size:.8rem;">' + h.url.substring(0, 40).replace(/</g,'&lt;') + '</span></span>';
-        html += '<span class="badge ' + (h.statusCode < 400 ? 'bg-success' : 'bg-danger') + '" style="font-size:.7rem;">' + h.statusCode + '</span>';
+        html += '<span><span class="badge method-badge ' + methodCls + ' me-1">' + h.method + '</span><span class="u97">' + h.url.substring(0, 40).replace(/</g,'&lt;') + '</span></span>';
+        html += '<span class="badge ' + (h.statusCode < 400 ? 'bg-success' : 'bg-danger') u100">' + h.statusCode + '</span>';
         html += '</div>';
     });
     list.innerHTML = html;

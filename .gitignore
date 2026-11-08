@@ -2,10 +2,12 @@
 ip_whitelist.json
 rate_config.json
 .env
+.env.example
 .idea/
 .hermes/
 .qoder/
 .workflow/
 build/
 dist/
-.hermes/
+backups/
+qodana.yaml

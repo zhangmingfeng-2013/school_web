@@ -86,8 +86,8 @@
                 <option value="您最喜欢的书是什么？">您最喜欢的书是什么？</option>
                 <option value="自定义问题...">自定义问题...</option>
             </select>
-            <input type="text" id="securityQuestionCustom" class="form-control mb-2"
-                   placeholder="输入您自定义的安全问题" style="display:none;" maxlength="200"
+            <input class="form-control mb-2 u30" type="text" id="securityQuestionCustom" 
+                   placeholder="输入您自定义的安全问题"  maxlength="200"
                    value="{% if has_security and security_question not in ('您的出生城市是？','您的小学班主任叫什么名字？','您最喜欢的老师的名字是？','您最好的朋友叫什么名字？','您的宠物叫什么名字？','您母亲的姓名是？','您最喜欢的书是什么？') %}{{ security_question }}{% endif %}">
         </div>
 
@@ -157,16 +157,12 @@ async function saveSecurity() {
         question = '';
     }
 
-    if (!question) {
-        msgDiv.innerHTML = '<div class="alert alert-danger py-2">请选择或输入安全问题</div>';
-        return;
-    }
-    if (!answer || answer.length < 2) {
-        msgDiv.innerHTML = '<div class="alert alert-danger py-2">请输入答案（至少2个字符）</div>';
-        return;
-    }
-
-    msgDiv.innerHTML = '<div class="text-muted small">保存中...</div>';
+        // 安全文本插入（防 XSS，data.message/data.error 可能含用户输入）
+function setMsgSafe(html) {
+    var div = document.createElement('div');
+    div.textContent = html;
+    msgDiv.innerHTML = div.innerHTML;
+}
 
     try {
         var resp = await fetch('/api/profile/security', {
@@ -176,16 +172,16 @@ async function saveSecurity() {
         });
         var data = await resp.json();
         if (data.ok) {
-            msgDiv.innerHTML = '<div class="alert alert-success py-2">✅ ' + data.message + '，刷新页面查看状态</div>';
+            setMsgSafe('<div class="alert alert-success py-2">✅ ' + data.message + '，刷新页面查看状态</div>');
             // 清除答案输入
             document.getElementById('securityAnswer').value = '';
             // 更新 currentQuestion
             currentQuestion = question;
         } else {
-            msgDiv.innerHTML = '<div class="alert alert-danger py-2">❌ ' + (data.error || '保存失败') + '</div>';
+            setMsgSafe('<div class="alert alert-danger py-2">❌ ' + (data.error || '保存失败') + '</div>');
         }
     } catch(e) {
-        msgDiv.innerHTML = '<div class="alert alert-danger py-2">网络错误，请重试</div>';
+        setMsgSafe('<div class="alert alert-danger py-2">网络错误，请重试</div>');
     }
 }
 
@@ -201,13 +197,13 @@ async function clearSecurity() {
         });
         var data = await resp.json();
         if (data.ok) {
-            msgDiv.innerHTML = '<div class="alert alert-success py-2">✅ 安全问题已清除，刷新页面查看状态</div>';
+            setMsgSafe('<div class="alert alert-success py-2">✅ 安全问题已清除，刷新页面查看状态</div>');
             currentQuestion = '';
         } else {
-            msgDiv.innerHTML = '<div class="alert alert-danger py-2">❌ ' + (data.error || '操作失败') + '</div>';
+            setMsgSafe('<div class="alert alert-danger py-2">❌ ' + (data.error || '操作失败') + '</div>');
         }
     } catch(e) {
-        msgDiv.innerHTML = '<div class="alert alert-danger py-2">网络错误，请重试</div>';
+        setMsgSafe('<div class="alert alert-danger py-2">网络错误，请重试</div>');
     }
 }
 

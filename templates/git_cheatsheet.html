@@ -184,7 +184,7 @@ function renderGitCmds() {
         var q = currentSearch.toLowerCase();
         filtered = filtered.filter(function(c){ return c.cmd.toLowerCase().indexOf(q)>=0 || c.desc.indexOf(q)>=0 || c.example.indexOf(q)>=0; });
     }
-    var html = '<div style="font-size:.85rem;color:var(--text-muted);margin-bottom:8px">共 ' + filtered.length + ' 条命令</div>';
+    var html = '<div class="u39">共 ' + filtered.length + ' 条命令</div>';
     for (var i = 0; i < filtered.length; i++) {
         var c = filtered[i];
         html += '<div class="git-cmd" data-csp-click="toggleGitExample">';

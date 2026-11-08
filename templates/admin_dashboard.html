@@ -25,7 +25,7 @@
 <p class="text-muted mb-3">IP · Server · Plugins</p>
 
 {% if pending_admin_reqs > 0 %}
-<div class="alert alert-warning py-2 mb-3" style="cursor:pointer;" data-csp-click="showAdminRequests">
+<div class="alert alert-warning py-2 mb-3 u285" data-csp-click="showAdminRequests">
     ⚠️ 有 <strong>{{ pending_admin_reqs }}</strong> 个待审核的管理员申请 — 点击查看
 </div>
 {% endif %}
@@ -40,7 +40,7 @@
 <div class="card mb-4">
     <div class="card-header"><strong>🏆 活跃度排行榜</strong></div>
     <div class="card-body p-2">
-        <table class="table table-sm table-hover mb-0" style="font-size:.85rem;">
+        <table class="table table-sm table-hover mb-0 u98">
             <thead><tr><th>#</th><th>用户</th><th class="text-end">积分</th><th class="text-end">操作</th></tr></thead>
             <tbody>
             {% for u in leaderboard %}
@@ -48,7 +48,7 @@
                 <td>{% if loop.index==1 %}🥇{% elif loop.index==2 %}🥈{% elif loop.index==3 %}🥉{% else %}{{ loop.index }}{% endif %}</td>
                 <td>{{ u.username }}</td>
                 <td class="text-end"><strong>{{ u.score }}</strong></td>
-                <td class="text-end" style="color:#888;">{{ u.actions }}</td>
+                <td class="text-end u193">{{ u.actions }}</td>
             </tr>
             {% endfor %}
             </tbody>
@@ -127,12 +127,12 @@
                         <button class="btn btn-success" data-csp-click="addWhitelist">➕ 添加</button>
                     </div>
                     <details class="mb-2">
-                        <summary class="text-muted small" style="cursor:pointer">📋 批量添加</summary>
+                        <summary class="text-muted small u285">📋 批量添加</summary>
                         <textarea id="wlBatchInput" class="form-control form-control-sm ip-row mt-1" rows="3"
                             placeholder="每行一个 IP，或用逗号/空格分隔&#10;例如:&#10;192.168.1.100&#10;10.0.0.1, 10.0.0.2"></textarea>
                         <button class="btn btn-sm btn-success mt-1 w-100" data-csp-click="batchWhitelist">📋 批量添加白名单</button>
                     </details>
-                    <div class="mt-2" id="wlList" style="max-height:120px;overflow-y:auto">
+                    <div class="mt-2 u301" id="wlList">
                         <span class="text-muted small">加载中...</span>
                     </div>
                 </div>
@@ -147,7 +147,7 @@
                 <div class="card-body p-2">
                     <div class="input-group input-group-sm mb-2">
                         <input type="text" id="mbIpInput" class="form-control ip-row" placeholder="单个 IP 地址...">
-                        <select id="mbDuration" class="form-select" style="max-width:100px">
+                        <select id="mbDuration" class="form-select u302">
                             <option value="600">10分钟</option>
                             <option value="1800">30分钟</option>
                             <option value="3600" selected>1小时</option>
@@ -158,12 +158,12 @@
                         <button class="btn btn-warning" data-csp-click="manualBlock">🚫 封禁</button>
                     </div>
                     <details class="mb-2">
-                        <summary class="text-muted small" style="cursor:pointer">📋 批量封禁</summary>
+                        <summary class="text-muted small u285">📋 批量封禁</summary>
                         <textarea id="mbBatchInput" class="form-control form-control-sm ip-row mt-1" rows="3"
                             placeholder="每行一个 IP，或用逗号/空格分隔"></textarea>
                         <button class="btn btn-sm btn-warning mt-1 w-100" data-csp-click="batchManualBlock">📋 批量封禁</button>
                     </details>
-                    <div class="mt-2" id="mbList" style="max-height:120px;overflow-y:auto">
+                    <div class="mt-2 u301" id="mbList">
                         <span class="text-muted small">暂无手动封禁</span>
                     </div>
                 </div>
@@ -185,13 +185,13 @@
             <table class="table table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th style="width:160px">IP 地址</th>
+                        <th class="u303">IP 地址</th>
                         <th>请求次数</th>
                         <th>请求速率/s</th>
                         <th>首次请求</th>
                         <th>最后请求</th>
                         <th>状态</th>
-                        <th style="width:160px">操作</th>
+                        <th class="u303">操作</th>
                     </tr>
                 </thead>
                 <tbody id="ipTableBody">
@@ -201,7 +201,7 @@
         </div>
     </div>
 
-    <div class="card mt-3" id="rateConfigCard" style="display:none">
+    <div class="card mt-3 u30" id="rateConfigCard">
         <div class="card-header bg-info bg-opacity-10">
             <span class="fw-bold">⚙️ 速率限制配置</span>
             <button class="btn btn-sm btn-outline-info float-end" id="rateConfigCloseBtn">收起</button>
@@ -322,47 +322,47 @@
 
 <!-- Tab: 网络请求地图 — Kaspersky 风格 -->
 <div class="tab-pane fade" id="tab-cybermap">
-    <div class="card" style="background:#060b14;border:1px solid #1a2540;">
-        <div class="card-body p-0" style="height:72vh;position:relative;overflow:hidden;">
-            <div id="cybermap" style="width:100%;height:100%;"></div>
+    <div class="card u304">
+        <div class="card-body p-0 u305">
+            <div id="cybermap" class="u306"></div>
             <!-- Canvas 飞线层 -->
-            <canvas id="cyberCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:500;"></canvas>
+            <canvas id="cyberCanvas" class="u307"></canvas>
             <!-- 顶部标题栏 -->
-            <div style="position:absolute;top:0;left:0;right:0;z-index:1000;background:linear-gradient(180deg,rgba(6,11,20,.95) 60%,transparent);padding:10px 16px 20px;">
-                <span style="color:#fff;font-size:16px;font-weight:700;">🌍 全球网络威胁态势</span>
-                <span style="color:#4a6fa5;font-size:12px;margin-left:8px;" id="mapUpdateTime"></span>
-                <button class="btn btn-sm btn-outline-info float-end" data-csp-click="refreshCyberMap" style="border-color:#1a3a5c;color:#4a8fcc;">🔄 刷新</button>
+            <div class="u308">
+                <span class="u309">🌍 全球网络威胁态势</span>
+                <span class="u310" id="mapUpdateTime"></span>
+                <button class="btn btn-sm btn-outline-info float-end u311" data-csp-click="refreshCyberMap">🔄 刷新</button>
             </div>
             <!-- 底部攻击类型统计条 -->
-            <div style="position:absolute;bottom:0;left:0;right:0;z-index:1000;background:linear-gradient(0deg,rgba(6,11,20,.97) 60%,transparent);padding:20px 16px 10px;">
-                <div class="row g-3" style="margin:0;">
-                    <div class="col" style="min-width:120px;">
-                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">WEB 攻击</div>
-                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
-                            <div id="barWeb" style="height:100%;background:linear-gradient(90deg,#ff4444,#ff6b6b);border-radius:2px;transition:width .6s;width:0;"></div>
+            <div class="u312">
+                <div class="row g-3 u313">
+                    <div class="col u314">
+                        <div class="u315">WEB 攻击</div>
+                        <div class="u316">
+                            <div id="barWeb" class="u317"></div>
                         </div>
-                        <div style="color:#ff6b6b;font-size:18px;font-weight:700;" id="countWeb">0</div>
+                        <div class="u318" id="countWeb">0</div>
                     </div>
-                    <div class="col" style="min-width:120px;">
-                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">扫描探测</div>
-                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
-                            <div id="barScan" style="height:100%;background:linear-gradient(90deg,#ffaa00,#ffcc00);border-radius:2px;transition:width .6s;width:0;"></div>
+                    <div class="col u314">
+                        <div class="u315">扫描探测</div>
+                        <div class="u316">
+                            <div id="barScan" class="u319"></div>
                         </div>
-                        <div style="color:#ffcc00;font-size:18px;font-weight:700;" id="countScan">0</div>
+                        <div class="u320" id="countScan">0</div>
                     </div>
-                    <div class="col" style="min-width:120px;">
-                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">正常流量</div>
-                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
-                            <div id="barNormal" style="height:100%;background:linear-gradient(90deg,#00c6ff,#00ff88);border-radius:2px;transition:width .6s;width:0;"></div>
+                    <div class="col u314">
+                        <div class="u315">正常流量</div>
+                        <div class="u316">
+                            <div id="barNormal" class="u321"></div>
                         </div>
-                        <div style="color:#00ff88;font-size:18px;font-weight:700;" id="countNormal">0</div>
+                        <div class="u322" id="countNormal">0</div>
                     </div>
-                    <div class="col" style="min-width:120px;">
-                        <div style="color:#8899bb;font-size:11px;margin-bottom:2px;">内网/未知</div>
-                        <div style="height:4px;background:#1a2540;border-radius:2px;overflow:hidden;">
-                            <div id="barUnknown" style="height:100%;background:linear-gradient(90deg,#556677,#8899bb);border-radius:2px;transition:width .6s;width:0;"></div>
+                    <div class="col u314">
+                        <div class="u315">内网/未知</div>
+                        <div class="u316">
+                            <div id="barUnknown" class="u323"></div>
                         </div>
-                        <div style="color:#8899bb;font-size:18px;font-weight:700;" id="countUnknown">0</div>
+                        <div class="u324" id="countUnknown">0</div>
                     </div>
                 </div>
             </div>
@@ -507,6 +507,14 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
 const CIRCUMFERENCE = 2 * Math.PI * 52; // ~326.7
+
+// 全局 HTML 转义（防 XSS，服务端返回的 IP/插件名等可能来自客户端可控输入）
+function esc(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s == null ? '' : String(s)));
+    return d.innerHTML;
+}
+
 let ipRefreshTimer = null, serverRefreshTimer = null, countdown = 0;
 let serverTabActive = false, ipTabActive = true;
 
@@ -520,6 +528,12 @@ async function refreshIPStats() {
         }
         const data = await resp.json();
         const tbody = document.getElementById('ipTableBody');
+
+        function esc(s) {
+            var d = document.createElement('div');
+            d.appendChild(document.createTextNode(s == null ? '' : String(s)));
+            return d.innerHTML;
+        }
 
         // 更新顶部统计 + 策略
         document.getElementById('statTracked').textContent = data.total_tracked;
@@ -568,20 +582,20 @@ async function refreshIPStats() {
 
             let actions = '';
             if (r.blocked || r.manual_blocked) {
-                actions += `<button class="btn btn-sm btn-outline-success me-1" data-csp-click="unblockIP" data-csp-args=\'["${r.ip}"]\'>🔓 解封</button>`;
+                actions += `<button class="btn btn-sm btn-outline-success me-1" data-csp-click="unblockIP" data-csp-args=\'["${esc(r.ip)}"]\'>🔓 解封</button>`;
             }
             if (!r.whitelisted) {
-                actions += `<button class="btn btn-sm btn-outline-success me-1" data-csp-click="addWhitelistIP" data-csp-args=\'["${r.ip}"]\'>⭐ 加白</button>`;
+                actions += `<button class="btn btn-sm btn-outline-success me-1" data-csp-click="addWhitelistIP" data-csp-args=\'["${esc(r.ip)}"]\'>⭐ 加白</button>`;
             } else {
-                actions += `<button class="btn btn-sm btn-outline-secondary me-1" data-csp-click="removeWhitelistIP" data-csp-args=\'["${r.ip}"]\'>➖ 移白</button>`;
+                actions += `<button class="btn btn-sm btn-outline-secondary me-1" data-csp-click="removeWhitelistIP" data-csp-args=\'["${esc(r.ip)}"]\'>➖ 移白</button>`;
             }
             if (!r.whitelisted && !r.blocked && !r.manual_blocked) {
-                actions += `<button class="btn btn-sm btn-outline-warning me-1" data-csp-click="manualBlockIP" data-csp-args=\'["${r.ip}"]\'>🚫 封禁</button>`;
+                actions += `<button class="btn btn-sm btn-outline-warning me-1" data-csp-click="manualBlockIP" data-csp-args=\'["${esc(r.ip)}"]\'>🚫 封禁</button>`;
             }
-            actions += `<button class="btn btn-sm btn-outline-danger" data-csp-click="clearIP" data-csp-args=\'["${r.ip}"]\'>🗑️</button>`;
+            actions += `<button class="btn btn-sm btn-outline-danger" data-csp-click="clearIP" data-csp-args=\'["${esc(r.ip)}"]\'>🗑️</button>`;
 
             return `<tr class="ip-row ${rowClass}">
-                <td><code>${r.ip}</code>${r.whitelisted ? ' <span class="badge bg-success" style="font-size:9px">白名单</span>' : ''}</td>
+                <td><code>${esc(r.ip)}</code>${r.whitelisted ? ' <span class="badge bg-success u325">白名单</span>' : ''}</td>
                 <td><strong>${r.requests}</strong></td>
                 <td>${r.rate_per_sec.toFixed(1)}/s</td>
                 <td>${r.first_request}</td>
@@ -659,8 +673,8 @@ async function refreshWhitelist() {
         } else {
             wlList.innerHTML = data.whitelist.map(ip =>
                 `<div class="d-flex justify-content-between align-items-center border-bottom py-1">
-                    <code class="ip-row">${ip}</code>
-                    <button class="btn btn-sm btn-outline-danger" data-csp-click="removeWhitelistIP" data-csp-args=\'["${ip}"]\'>✕ 移除</button>
+                    <code class="ip-row">${esc(ip)}</code>
+                    <button class="btn btn-sm btn-outline-danger" data-csp-click="removeWhitelistIP" data-csp-args=\'["${esc(ip)}"]\'>✕ 移除</button>
                 </div>`
             ).join('');
         }
@@ -770,8 +784,8 @@ async function refreshServerStats() {
                 <td>${d.used_gb} GB</td>
                 <td>${d.free_gb} GB</td>
                 <td>
-                    <div class="progress" style="height:20px">
-                        <div class="progress-bar ${barColor}" style="width:${d.percent}%">${d.percent}%</div>
+                    <div class="progress u326">
+                        <div class="progress-bar ${barColor} u327">${d.percent}%</div>
                     </div>
                 </td>
             </tr>`;
@@ -1113,24 +1127,14 @@ async function refreshCyberMap() {
             // 脉冲圆点
             const pulseIcon = L.divIcon({
                 className: 'cyber-pulse',
-                html: `<div style="
-                    width:${size+6}px;height:${size+6}px;border-radius:50%;
-                    background:radial-gradient(circle, ${color}33 0%, transparent 70%);
-                    animation:kasperskyPulse 1.8s ease-out infinite;
-                "></div>
-                <div style="
-                    position:absolute;top:50%;left:50%;
-                    width:${size}px;height:${size}px;
-                    margin-left:-${size/2}px;margin-top:-${size/2}px;
-                    border-radius:50%;background:${color};
-                    box-shadow:0 0 ${size+4}px ${glow}, 0 0 ${size*2}px ${color}44;
-                "></div>`,
+                html: `<div class="u328"></div>
+                <div class="u329"></div>`,
                 iconSize: [size+8, size+8], iconAnchor: [(size+8)/2, (size+8)/2]
             });
 
             const label = isUnknown
-                ? `<span style="color:#8899bb">${d.ip}</span><br>${d.country||'内网'} · 无法定位`
-                : `${d.ip}<br>${d.city||''}, ${d.country||''}<br>请求: ${d.requests||0}${d.blocked?' 🔒':''}${d.manual_blocked?' 🚫':''}`;
+                ? `<span class="u330">${esc(d.ip)}</span><br>${esc(d.country||'内网')} · 无法定位`
+                : `${esc(d.ip)}<br>${esc(d.city||'')}, ${esc(d.country||'')}<br>请求: ${d.requests||0}${d.blocked?' 🔒':''}${d.manual_blocked?' 🚫':''}`;
 
             const marker = L.marker([lat, lon], {icon: pulseIcon}).addTo(cyberMap);
             marker.bindTooltip(label, {direction:'top', offset:[0,-size]});
@@ -1151,17 +1155,8 @@ async function refreshCyberMap() {
         // 服务器位置大光点
         const serverIcon = L.divIcon({
             className: '',
-            html: `<div style="
-                width:16px;height:16px;border-radius:50%;background:#00d2ff;
-                box-shadow:0 0 20px #00d2ff, 0 0 40px #00d2ff44, 0 0 60px #00d2ff22;
-                animation:kasperskyPulse 1.5s ease-out infinite;
-            "></div>
-            <div style="
-                position:absolute;top:50%;left:50%;width:40px;height:40px;
-                margin-left:-20px;margin-top:-20px;border-radius:50%;
-                border:1px solid rgba(0,210,255,.3);
-                animation:kasperskyRing 2s ease-out infinite;
-            "></div>`,
+            html: `<div class="u331"></div>
+            <div class="u332"></div>`,
             iconSize: [40, 40], iconAnchor: [20, 20]
         });
         const serverMarker = L.marker(SERVER_POS, {icon: serverIcon}).addTo(cyberMap);
@@ -1258,16 +1253,16 @@ async function loadPlugins() {
         container.innerHTML = data.plugins.map(p => `
             <div class="d-flex align-items-center p-3 border-bottom">
                 <div class="flex-grow-1">
-                    <strong>${p.title}</strong>
-                    <span class="badge bg-secondary ms-2">v${p.version}</span>
+                    <strong>${esc(p.title)}</strong>
+                    <span class="badge bg-secondary ms-2">v${esc(p.version)}</span>
                     ${p.loaded ? '<span class="badge bg-success ms-1">已加载</span>' : '<span class="badge bg-warning ms-1">未加载</span>'}
-                    <div class="text-muted small">${p.description || ''}</div>
-                    <div class="text-muted" style="font-size:11px;">作者: ${p.author || '-'} | 目录: <code>${p.name}</code></div>
+                    <div class="text-muted small">${esc(p.description || '')}</div>
+                    <div class="text-muted u333">作者: ${esc(p.author || '-')} | 目录: <code>${esc(p.name)}</code></div>
                 </div>
                 <div>
                     ${p.loaded
-                        ? `<button class="btn btn-sm btn-outline-danger" data-csp-click="togglePlugin" data-csp-args=\'["${p.name}","unload"]\'>卸载</button>`
-                        : `<button class="btn btn-sm btn-outline-success" data-csp-click="togglePlugin" data-csp-args=\'["${p.name}","load"]\'>加载</button>`}
+                        ? `<button class="btn btn-sm btn-outline-danger" data-csp-click="togglePlugin" data-csp-args=\'["${esc(p.name)}","unload"]\'>卸载</button>`
+                        : `<button class="btn btn-sm btn-outline-success" data-csp-click="togglePlugin" data-csp-args=\'["${esc(p.name)}","load"]\'>加载</button>`}
                 </div>
             </div>
         `).join('');
@@ -1389,7 +1384,7 @@ async function loadMarketplace() {
                     <span class="badge bg-info ms-2">${p.file_type.toUpperCase()}</span>
                     <span class="badge bg-secondary ms-1">v${p.version}</span>
                     <div class="text-muted small">${p.description || __mp.no_desc}</div>
-                    <div class="text-muted" style="font-size:11px;">
+                    <div class="text-muted u333">
                         ${__mp.author} ${p.author || '-'} | ${__mp.uploader} ${p.uploader || '-'} | ${p.created_at || ''}
                         ${!p.exists_on_disk ? ' <span class="text-danger">⚠️ ' + __mp.file_lost + '</span>' : ''}
                     </div>

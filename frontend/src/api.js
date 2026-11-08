@@ -1,7 +1,10 @@
 // API 封装
 const BASE = '/api/album'
 function api(path, options) {
-  return fetch(BASE + path, { credentials: 'include', ...options }).then(r => r.json())
+  return fetch(BASE + path, { credentials: 'include', ...options }).then(r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    return r.json()
+  })
 }
 
 export const getMe = () => api('/me')

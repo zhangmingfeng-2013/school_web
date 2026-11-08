@@ -8,16 +8,16 @@
     </span>
 
     {% if warn_no_security %}
-    <div class="alert alert-warning mt-3 mx-auto" style="max-width:600px;text-align:left;">
+    <div class="alert alert-warning mt-3 mx-auto u180">
         <strong>⚠️ 安全提醒：</strong>您还未设置<strong>安全问题</strong>。<br>
         设置后可通过安全问题自助找回密码。未设置则忘记密码时只能联系管理员。<br>
         <a href="/profile" class="btn btn-sm btn-warning mt-2">👉 立即前往设置安全问题</a>
     </div>
     {% endif %}
-    <div class="mt-2" style="font-size:.85rem;color:#666;">
+    <div class="mt-2 u181">
         {{ _('dashboard_online_count') }}：<strong id="online-count">--</strong> 人
-        <span id="online-users-toggle" style="cursor:pointer;margin-left:8px;color:#3b82f6;font-size:.8rem;" data-csp-click="toggleOnlineUsers">{{ _('device_manager_expand') }}</span>
-        <div id="online-users-list" style="display:none;margin-top:6px;font-size:.8rem;max-height:200px;overflow-y:auto;">
+        <span id="online-users-toggle" class="u182" data-csp-click="toggleOnlineUsers">{{ _('device_manager_expand') }}</span>
+        <div id="online-users-list" class="u183">
             <span class="text-muted">{{ _('common_loading') }}</span>
         </div>
     </div>
@@ -40,12 +40,12 @@
 </div>
 
 <!-- 投诉建议箱 -->
-<div class="card mt-4" style="border:2px solid #e74c3c;box-shadow:0 4px 24px rgba(231,76,60,.12);">
+<div class="card mt-4 u184">
     <div class="card-body">
         <div class="d-flex align-items-center justify-content-between">
             <div>
-                <h4 class="mb-1 text-danger" style="font-weight:700;">📬 投诉建议箱</h4>
-                <p class="text-muted mb-0" style="font-size:.85rem;">你的声音很重要 — 提交意见、建议或投诉，管理员将认真对待每一条反馈</p>
+                <h4 class="mb-1 text-danger u185">📬 投诉建议箱</h4>
+                <p class="text-muted mb-0 u98">你的声音很重要 — 提交意见、建议或投诉，管理员将认真对待每一条反馈</p>
             </div>
             <div class="d-flex gap-2">
                 {% if permission == 'administrator' %}
@@ -58,36 +58,36 @@
 </div>
 
 {% if leaderboard %}
-<div class="card mt-4" style="border:none;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+<div class="card mt-4 u186">
     <div class="card-body">
-        <h5 class="mb-3" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <h5 class="mb-3 u187">
             <span>🏆 {{ _('dashboard_leaderboard') }}</span>
             {% if my_rank %}
-            <span id="rankBadge" class="badge bg-info" style="font-size:.75rem;">{{ _('dashboard_your_rank') }}: #{{ my_rank.rank }} ({{ my_rank.score }}{{ _('dashboard_rank_score') }})</span>
+            <span id="rankBadge" class="badge bg-info u154">{{ _('dashboard_your_rank') }}: #{{ my_rank.rank }} ({{ my_rank.score }}{{ _('dashboard_rank_score') }})</span>
             {% else %}
-            <span id="rankBadge" class="badge bg-info" style="font-size:.75rem;display:none;"></span>
+            <span id="rankBadge" class="badge bg-info u188"></span>
             {% endif %}
-            <small id="leaderboardUpdated" class="text-muted" style="font-size:.7rem;"></small>
+            <small id="leaderboardUpdated" class="text-muted u100"></small>
         </h5>
         <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0" style="font-size:.9rem;">
-                <thead style="background:#f8f9fa;">
+            <table class="table table-sm table-hover mb-0 u189">
+                <thead class="u72">
                     <tr>
-                        <th style="width:60px;">#</th>
+                        <th class="u190">#</th>
                         <th>{{ _('login_username') }}</th>
-                        <th class="text-end" style="width:80px;">{{ _('dashboard_rank_score') }}</th>
-                        <th class="text-end" style="width:80px;">{{ _('dashboard_rank_actions') }}</th>
+                        <th class="text-end u191">{{ _('dashboard_rank_score') }}</th>
+                        <th class="text-end u191">{{ _('dashboard_rank_actions') }}</th>
                     </tr>
                 </thead>
                 <tbody id="leaderboardBody">
                 {% for u in leaderboard %}
-                <tr {% if u.username == username %}style="background:rgba(13,110,253,.08);font-weight:600;"{% endif %}>
+                <tr {% if u.username == username %}class="u192"{% endif %}>
                     <td>
-                        {% if loop.index == 1 %}🥇 {% elif loop.index == 2 %}🥈 {% elif loop.index == 3 %}🥉 {% else %}<span style="color:#888;">{{ loop.index }}</span>{% endif %}
+                        {% if loop.index == 1 %}🥇 {% elif loop.index == 2 %}🥈 {% elif loop.index == 3 %}🥉 {% else %}<span class="u193">{{ loop.index }}</span>{% endif %}
                     </td>
-                    <td>{{ u.username }}{% if u.username == username %}<span class="badge bg-primary ms-1" style="font-size:.7rem;">You</span>{% endif %}</td>
+                    <td>{{ u.username }}{% if u.username == username %}<span class="badge bg-primary ms-1 u100">You</span>{% endif %}</td>
                     <td class="text-end"><strong>{{ u.score }}</strong></td>
-                    <td class="text-end" style="color:#888;">{{ u.actions }}</td>
+                    <td class="text-end u193">{{ u.actions }}</td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -99,15 +99,15 @@
             {% if pending_request %}
             <div class="alert alert-info mb-0 py-2">⏳ {{ _('dashboard_admin_request') }}{{ _('common_loading') }}</div>
             {% else %}
-            <button class="btn btn-warning btn-sm me-2" data-csp-click="requestAdmin" style="font-weight:600;">🔑 {{ _('dashboard_admin_request') }}</button>
+            <button class="btn btn-warning btn-sm me-2 u194" data-csp-click="requestAdmin">🔑 {{ _('dashboard_admin_request') }}</button>
             {% endif %}
         </div>
         {% endif %}
 
         {% if permission != 'administrator' and permission != 'vip' %}
         <div class="mt-2 text-center">
-            <button class="btn btn-outline-warning btn-sm" data-csp-click="requestVIP" style="font-weight:600;">⭐ {{ _('dashboard_vip_request') }}</button>
-            <div style="font-size:.75rem;color:#888;margin-top:2px;">{{ _('dashboard_vip_unlock') }}</div>
+            <button class="btn btn-outline-warning btn-sm u194" data-csp-click="requestVIP">⭐ {{ _('dashboard_vip_request') }}</button>
+            <div class="u195">{{ _('dashboard_vip_unlock') }}</div>
         </div>
         {% endif %}
 
@@ -124,7 +124,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="javascript:void(0)" data-csp-click="openWebDialog" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔗</span></div>
+                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span class="u196">🔗</span></div>
                 <h5>{{ _('dashboard_feature_jump') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_jump_desc') }}</p>
             </div></div>
@@ -134,8 +134,8 @@
     {% if permission == 'administrator' %}
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('admin_dashboard') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(220,53,69,.3)"><div class="card-body text-center">
-                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span style="font-size:2rem;">🛡️</span></div>
+            <div class="card h-100 u197"><div class="card-body text-center">
+                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span class="u196">🛡️</span></div>
                 <h5>{{ _('dashboard_feature_admin') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_admin_desc') }}</p>
             </div></div>
@@ -147,7 +147,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="/admin/sessions" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔍</span></div>
+                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span class="u196">🔍</span></div>
                 <h5>会话管理</h5>
                 <p class="text-muted small">查看和管理在线用户会话</p>
             </div></div>
@@ -159,7 +159,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('system_monitor') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-success bg-opacity-10 mx-auto"><span style="font-size:2rem;">📊</span></div>
+                <div class="feature-icon bg-success bg-opacity-10 mx-auto"><span class="u196">📊</span></div>
                 <h5>{{ _('dashboard_feature_system') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_system_desc') }}</p>
             </div></div>
@@ -171,7 +171,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('network_tools') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span style="font-size:2rem;">🌐</span></div>
+                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span class="u196">🌐</span></div>
                 <h5>{{ _('dashboard_feature_network') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_network_desc') }}</p>
             </div></div>
@@ -183,7 +183,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('db_query') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">🗄️</span></div>
+                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span class="u196">🗄️</span></div>
                 <h5>{{ _('dashboard_feature_db_query') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_db_query_desc') }}</p>
             </div></div>
@@ -195,7 +195,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('db_update') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span style="font-size:2rem;">⚙️</span></div>
+                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span class="u196">⚙️</span></div>
                 <h5>{{ _('dashboard_feature_db_update') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_db_update_desc') }}</p>
             </div></div>
@@ -205,8 +205,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('study_page') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(139,92,246,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(139,92,246,.1)!important;"><span style="font-size:2rem;">📚</span></div>
+            <div class="card h-100 u198"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u199"><span class="u196">📚</span></div>
                 <h5>{{ _('dashboard_feature_study') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_study_desc') }}</p>
             </div></div>
@@ -216,7 +216,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('calculator') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span style="font-size:2rem;">🧮</span></div>
+                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span class="u196">🧮</span></div>
                 <h5>{{ _('dashboard_feature_calculator') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_calculator_desc') }}</p>
             </div></div>
@@ -226,7 +226,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('calendar_view') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span style="font-size:2rem;">📅</span></div>
+                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span class="u196">📅</span></div>
                 <h5>{{ _('dashboard_feature_calendar') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_calendar_desc') }}</p>
             </div></div>
@@ -235,8 +235,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('portal_page') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(102,126,234,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(102,126,234,.12),rgba(118,75,162,.12))!important;"><span style="font-size:2rem;">🏫</span></div>
+            <div class="card h-100 u200"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u201"><span class="u196">🏫</span></div>
                 <h5>信息门户</h5>
                 <p class="text-muted small">母校动态、校友公告、活动汇总</p>
             </div></div>
@@ -245,8 +245,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('alumni_page') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(14,165,233,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(14,165,233,.12),rgba(6,182,212,.12))!important;"><span style="font-size:2rem;">📋</span></div>
+            <div class="card h-100 u202"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u203"><span class="u196">📋</span></div>
                 <h5>校友名录</h5>
                 <p class="text-muted small">毕业年份、班级分组、搜索联系</p>
             </div></div>
@@ -256,8 +256,8 @@
     <!-- 校友论坛入口（保留） -->
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('forum_page') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(16,185,129,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(5,150,105,.12))!important;"><span style="font-size:2rem;">💬</span></div>
+            <div class="card h-100 u204"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u205"><span class="u196">💬</span></div>
                 <h5>校友社区</h5>
                 <p class="text-muted small">校友论坛，版块分类，发帖交流</p>
             </div></div>
@@ -266,8 +266,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="/alumni_stories" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(99,102,241,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.12))!important;"><span style="font-size:2rem;">📖</span></div>
+            <div class="card h-100 u206"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u207"><span class="u196">📖</span></div>
                 <h5>校友故事</h5>
                 <p class="text-muted small">校园回忆、成长故事，校友投稿分享</p>
             </div></div>
@@ -276,8 +276,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="/confession" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(139,92,246,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(99,102,241,.12))!important;"><span style="font-size:2rem;">🌳</span></div>
+            <div class="card h-100 u198"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u208"><span class="u196">🌳</span></div>
                 <h5>匿名树洞</h5>
                 <p class="text-muted small">畅所欲言，匿名倾诉，温暖树洞</p>
             </div></div>
@@ -286,8 +286,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('album') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(64,158,255,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(64,158,255,.12),rgba(103,194,58,.12))!important;"><span style="font-size:2rem;">🎓</span></div>
+            <div class="card h-100 u209"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u210"><span class="u196">🎓</span></div>
                 <h5>{{ _('dashboard_feature_album') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_album_desc') }}</p>
             </div></div>
@@ -297,7 +297,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('change_password') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔑</span></div>
+                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span class="u196">🔑</span></div>
                 <h5>{{ _('dashboard_feature_password') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_password_desc') }}</p>
             </div></div>
@@ -307,7 +307,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('notes') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(111,66,193,.1)!important;"><span style="font-size:2rem;">📝</span></div>
+                <div class="feature-icon mx-auto u211"><span class="u196">📝</span></div>
                 <h5>{{ _('dashboard_feature_notes') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_notes_desc') }}</p>
             </div></div>
@@ -318,7 +318,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('logs') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-dark bg-opacity-10 mx-auto"><span style="font-size:2rem;">📋</span></div>
+                <div class="feature-icon bg-dark bg-opacity-10 mx-auto"><span class="u196">📋</span></div>
                 <h5>{{ _('dashboard_feature_logs') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_logs_desc') }}</p>
             </div></div>
@@ -329,8 +329,8 @@
     {% if permission == 'administrator' %}
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('backup_page') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(0,123,255,.3)"><div class="card-body text-center">
-                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span style="font-size:2rem;">💾</span></div>
+            <div class="card h-100 u212"><div class="card-body text-center">
+                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span class="u196">💾</span></div>
                 <h5>{{ _('dashboard_feature_backup') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_backup_desc') }}</p>
             </div></div>
@@ -340,8 +340,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('marketplace_browse') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(16,185,129,.2)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(16,185,129,.08)!important;"><span style="font-size:2rem;">🏪</span></div>
+            <div class="card h-100 u213"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u214"><span class="u196">🏪</span></div>
                 <h5>{{ _('dashboard_feature_marketplace') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_marketplace_desc') }}</p>
             </div></div>
@@ -350,8 +350,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('utils_page') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(59,130,246,.2)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(59,130,246,.08)!important;"><span style="font-size:2rem;">🧰</span></div>
+            <div class="card h-100 u215"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u216"><span class="u196">🧰</span></div>
                 <h5>{{ _('dashboard_feature_utils') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_utils_desc') }}</p>
             </div></div>
@@ -361,7 +361,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('profile') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">👤</span></div>
+                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span class="u196">👤</span></div>
                 <h5>{{ _('dashboard_feature_profile') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_profile_desc') }}</p>
             </div></div>
@@ -371,7 +371,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('chat_standalone') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span style="font-size:2rem;">💬</span></div>
+                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span class="u196">💬</span></div>
                 <h5>{{ _('dashboard_feature_chat') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_chat_desc') }}</p>
             </div></div>
@@ -381,7 +381,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="/ai_writing" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.12))!important;"><span style="font-size:2rem;">✍️</span></div>
+                <div class="feature-icon mx-auto u207"><span class="u196">✍️</span></div>
                 <h5>AI 写作助手</h5>
                 <p class="text-muted small">发言稿·通知·文案·总结，6种模式快速生成</p>
             </div></div>
@@ -391,7 +391,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="/ai_config" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(107,114,128,.12),rgba(75,85,99,.12))!important;"><span style="font-size:2rem;">⚙️</span></div>
+                <div class="feature-icon mx-auto u217"><span class="u196">⚙️</span></div>
                 <h5>AI 配置</h5>
                 <p class="text-muted small">管理 AI API 连接，支持 OpenAI 兼容接口</p>
             </div></div>
@@ -401,7 +401,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="/translator" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(5,150,105,.12))!important;"><span style="font-size:2rem;">🌐</span></div>
+                <div class="feature-icon mx-auto u205"><span class="u196">🌐</span></div>
                 <h5>智能翻译</h5>
                 <p class="text-muted small">AI 驱动的中/英/日/韩高质量翻译</p>
             </div></div>
@@ -411,7 +411,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('author') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-success bg-opacity-10 mx-auto"><span style="font-size:2rem;">👨‍💻</span></div>
+                <div class="feature-icon bg-success bg-opacity-10 mx-auto"><span class="u196">👨‍💻</span></div>
                 <h5>{{ _('dashboard_feature_author') }}</h5>
                 <p class="text-muted small">{{ _('dashboard_feature_author_desc') }}</p>
             </div></div>
@@ -420,8 +420,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('src_submit') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(220,53,69,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(220,53,69,.08)!important;"><span style="font-size:2rem;">🛡️</span></div>
+            <div class="card h-100 u197"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u218"><span class="u196">🛡️</span></div>
                 <h5>安全响应中心</h5>
                 <p class="text-muted small">提交安全漏洞报告，帮助完善系统安全</p>
             </div></div>
@@ -431,8 +431,8 @@
     {% if permission == 'administrator' %}
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('src_admin') }}" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(13,110,253,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(13,110,253,.08)!important;"><span style="font-size:2rem;">⚙️</span></div>
+            <div class="card h-100 u219"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u220"><span class="u196">⚙️</span></div>
                 <h5>SRC 管理后台</h5>
                 <p class="text-muted small">审核漏洞报告，管理安全响应</p>
             </div></div>
@@ -441,12 +441,12 @@
     {% endif %}
 
     <!-- ====== 🔵 生活实用类 ====== -->
-    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🔵 生活实用</h5></div>
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0 u152">🔵 生活实用</h5></div>
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('weather_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span style="font-size:2rem;">🌤️</span></div>
+                <div class="feature-icon bg-primary bg-opacity-10 mx-auto"><span class="u196">🌤️</span></div>
                 <h5>天气预报</h5>
                 <p class="text-muted small">全球城市天气查询，未来预报</p>
             </div></div>
@@ -456,7 +456,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="/checkin" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(239,68,68,.12))!important;"><span style="font-size:2rem;">📅</span></div>
+                <div class="feature-icon mx-auto u221"><span class="u196">📅</span></div>
                 <h5>每日签到</h5>
                 <p class="text-muted small">GitHub风格热力图，连续签到统计</p>
             </div></div>
@@ -466,7 +466,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('expenses_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-success bg-opacity-10 mx-auto"><span style="font-size:2rem;">💰</span></div>
+                <div class="feature-icon bg-success bg-opacity-10 mx-auto"><span class="u196">💰</span></div>
                 <h5>记账本</h5>
                 <p class="text-muted small">收支记录，分类统计，月度汇总</p>
             </div></div>
@@ -476,7 +476,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('habits_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(16,185,129,.1)!important;"><span style="font-size:2rem;">✅</span></div>
+                <div class="feature-icon mx-auto u222"><span class="u196">✅</span></div>
                 <h5>习惯追踪</h5>
                 <p class="text-muted small">每日打卡，习惯养成，进度可视化</p>
             </div></div>
@@ -486,7 +486,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('pomodoro_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span style="font-size:2rem;">🍅</span></div>
+                <div class="feature-icon bg-danger bg-opacity-10 mx-auto"><span class="u196">🍅</span></div>
                 <h5>番茄钟</h5>
                 <p class="text-muted small">专注计时，工作休息循环，统计 + 排行榜</p>
             </div></div>
@@ -496,7 +496,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('unit_converter_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(99,102,241,.1)!important;"><span style="font-size:2rem;">📐</span></div>
+                <div class="feature-icon mx-auto u223"><span class="u196">📐</span></div>
                 <h5>单位换算</h5>
                 <p class="text-muted small">长度/重量/温度/面积/体积/速度/数据/时间</p>
             </div></div>
@@ -506,7 +506,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('countdown_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(236,72,153,.1)!important;"><span style="font-size:2rem;">⏰</span></div>
+                <div class="feature-icon mx-auto u224"><span class="u196">⏰</span></div>
                 <h5>倒计时 · 纪念日</h5>
                 <p class="text-muted small">重要日期倒计时，进度追踪，模板预设</p>
             </div></div>
@@ -514,12 +514,12 @@
     </div>
 
     <!-- ====== 🟢 办公效率类 ====== -->
-    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟢 办公效率</h5></div>
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0 u152">🟢 办公效率</h5></div>
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('bookmarks_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔖</span></div>
+                <div class="feature-icon bg-warning bg-opacity-10 mx-auto"><span class="u196">🔖</span></div>
                 <h5>书签管理</h5>
                 <p class="text-muted small">分类收藏网址，快速访问常用站点</p>
             </div></div>
@@ -529,7 +529,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('converter_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span style="font-size:2rem;">🔄</span></div>
+                <div class="feature-icon bg-info bg-opacity-10 mx-auto"><span class="u196">🔄</span></div>
                 <h5>文件格式转换</h5>
                 <p class="text-muted small">图片格式互转，CSV/JSON 数据转换</p>
             </div></div>
@@ -537,12 +537,12 @@
     </div>
 
     <!-- ====== 🟣 娱乐/资讯类 ====== -->
-    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟣 娱乐 · 资讯</h5></div>
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0 u152">🟣 娱乐 · 资讯</h5></div>
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('rss_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(249,115,22,.1)!important;"><span style="font-size:2rem;">📡</span></div>
+                <div class="feature-icon mx-auto u225"><span class="u196">📡</span></div>
                 <h5>RSS 阅读器</h5>
                 <p class="text-muted small">订阅博客和新闻源，聚合阅读</p>
             </div></div>
@@ -552,7 +552,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('daily_quote_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(102,126,234,.15),rgba(118,75,162,.15))!important;"><span style="font-size:2rem;">💬</span></div>
+                <div class="feature-icon mx-auto u226"><span class="u196">💬</span></div>
                 <h5>每日一言</h5>
                 <p class="text-muted small">精美语录卡片，一键复制分享</p>
             </div></div>
@@ -562,7 +562,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('games_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(139,92,246,.1)!important;"><span style="font-size:2rem;">🎮</span></div>
+                <div class="feature-icon mx-auto u199"><span class="u196">🎮</span></div>
                 <h5>小游戏</h5>
                 <p class="text-muted small">猜数字 · 2048 · 贪吃蛇，休闲放松</p>
             </div></div>
@@ -570,12 +570,12 @@
     </div>
 
     <!-- ====== 🟠 工具增强类 ====== -->
-    <div class="col-12 mt-2"><h5 class="text-muted mb-0" style="font-size:.85rem;letter-spacing:1px;">🟠 工具增强</h5></div>
+    <div class="col-12 mt-2"><h5 class="text-muted mb-0 u152">🟠 工具增强</h5></div>
 
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('markdown_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(59,130,246,.08)!important;"><span style="font-size:2rem;">📝</span></div>
+                <div class="feature-icon mx-auto u216"><span class="u196">📝</span></div>
                 <h5>Markdown 编辑器</h5>
                 <p class="text-muted small">实时预览，工具栏辅助，导出 HTML</p>
             </div></div>
@@ -585,7 +585,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('text_diff_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(14,203,139,.1)!important;"><span style="font-size:2rem;">🔍</span></div>
+                <div class="feature-icon mx-auto u227"><span class="u196">🔍</span></div>
                 <h5>文本差异对比</h5>
                 <p class="text-muted small">逐行 Diff，新增/删除/未变化分色高亮</p>
             </div></div>
@@ -595,7 +595,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('jwt_decoder_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(249,115,22,.1)!important;"><span style="font-size:2rem;">🔐</span></div>
+                <div class="feature-icon mx-auto u225"><span class="u196">🔐</span></div>
                 <h5>JWT 解码器</h5>
                 <p class="text-muted small">解析 Token，查看 Header/Payload，检查过期</p>
             </div></div>
@@ -605,7 +605,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('sql_formatter_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(99,102,241,.1)!important;"><span style="font-size:2rem;">📊</span></div>
+                <div class="feature-icon mx-auto u223"><span class="u196">📊</span></div>
                 <h5>SQL 格式化器</h5>
                 <p class="text-muted small">美化/压缩 SQL，关键字高亮，语法着色</p>
             </div></div>
@@ -615,7 +615,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('mock_data_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(245,158,11,.1)!important;"><span style="font-size:2rem;">🎲</span></div>
+                <div class="feature-icon mx-auto u228"><span class="u196">🎲</span></div>
                 <h5>模拟数据生成</h5>
                 <p class="text-muted small">13种类型测试数据，一键生成，导出CSV</p>
             </div></div>
@@ -625,7 +625,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('random_tools_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(236,72,153,.1)!important;"><span style="font-size:2rem;">🎯</span></div>
+                <div class="feature-icon mx-auto u224"><span class="u196">🎯</span></div>
                 <h5>随机工具集</h5>
                 <p class="text-muted small">骰子/转盘/抽牌/硬币/随机数/老虎机</p>
             </div></div>
@@ -635,7 +635,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('git_cheatsheet_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(239,68,68,.1)!important;"><span style="font-size:2rem;">📖</span></div>
+                <div class="feature-icon mx-auto u229"><span class="u196">📖</span></div>
                 <h5>Git 命令手册</h5>
                 <p class="text-muted small">100+ Git 命令，分类参考，搜索复制</p>
             </div></div>
@@ -645,7 +645,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('password_analyzer_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(16,185,129,.1)!important;"><span style="font-size:2rem;">🔐</span></div>
+                <div class="feature-icon mx-auto u222"><span class="u196">🔐</span></div>
                 <h5>密码强度分析</h5>
                 <p class="text-muted small">实时评估强度，熵值计算，破解时间预估</p>
             </div></div>
@@ -655,7 +655,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('file_converter_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(99,102,241,.1)!important;"><span style="font-size:2rem;">🔄</span></div>
+                <div class="feature-icon mx-auto u223"><span class="u196">🔄</span></div>
                 <h5>格式转换器</h5>
                 <p class="text-muted small">JSON↔YAML↔XML↔CSV↔TOML 互转</p>
             </div></div>
@@ -665,7 +665,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('qrcode_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon bg-dark bg-opacity-10 mx-auto"><span style="font-size:2rem;">📱</span></div>
+                <div class="feature-icon bg-dark bg-opacity-10 mx-auto"><span class="u196">📱</span></div>
                 <h5>二维码生成</h5>
                 <p class="text-muted small">文本/链接生成二维码，多尺寸下载</p>
             </div></div>
@@ -675,7 +675,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('image_compress_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(59,130,246,.08)!important;"><span style="font-size:2rem;">🖼️</span></div>
+                <div class="feature-icon mx-auto u216"><span class="u196">🖼️</span></div>
                 <h5>图片压缩</h5>
                 <p class="text-muted small">智能压缩，可调质量，前后对比</p>
             </div></div>
@@ -685,7 +685,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('api_tester_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(14,203,139,.1)!important;"><span style="font-size:2rem;">🧪</span></div>
+                <div class="feature-icon mx-auto u227"><span class="u196">🧪</span></div>
                 <h5>API 测试器</h5>
                 <p class="text-muted small">自定义请求，查看响应，调试接口</p>
             </div></div>
@@ -695,7 +695,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('morse_code_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(99,102,241,.1)!important;"><span style="font-size:2rem;">📡</span></div>
+                <div class="feature-icon mx-auto u223"><span class="u196">📡</span></div>
                 <h5>摩尔斯电码</h5>
                 <p class="text-muted small">文本↔摩尔斯电码编解码，播放电码音效</p>
             </div></div>
@@ -705,7 +705,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('idcard_tools_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(245,158,11,.1)!important;"><span style="font-size:2rem;">🪪</span></div>
+                <div class="feature-icon mx-auto u228"><span class="u196">🪪</span></div>
                 <h5>身份证 & 银行卡</h5>
                 <p class="text-muted small">身份证号码解析，Luhn 银行卡校验</p>
             </div></div>
@@ -715,7 +715,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('cron_parser_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(236,72,153,.1)!important;"><span style="font-size:2rem;">⏰</span></div>
+                <div class="feature-icon mx-auto u224"><span class="u196">⏰</span></div>
                 <h5>Cron 解析器</h5>
                 <p class="text-muted small">解析Cron表达式，人类可读，未来执行时间</p>
             </div></div>
@@ -725,7 +725,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('ua_parser_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(16,185,129,.1)!important;"><span style="font-size:2rem;">🔍</span></div>
+                <div class="feature-icon mx-auto u222"><span class="u196">🔍</span></div>
                 <h5>UA 解析器</h5>
                 <p class="text-muted small">解析User Agent，识别OS/浏览器/设备类型</p>
             </div></div>
@@ -735,7 +735,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('code_formatter_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(59,130,246,.08)!important;"><span style="font-size:2rem;">🎨</span></div>
+                <div class="feature-icon mx-auto u216"><span class="u196">🎨</span></div>
                 <h5>代码格式化</h5>
                 <p class="text-muted small">CSS/SCSS/HTML/XML/JS/TS/JSON/Python/SQL 美化与压缩</p>
             </div></div>
@@ -745,7 +745,7 @@
     <div class="col-md-6 col-lg-4">
         <a href="{{ url_for('pdf_tools_page') }}" class="text-decoration-none text-dark">
             <div class="card h-100"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(239,68,68,.08)!important;"><span style="font-size:2rem;">📄</span></div>
+                <div class="feature-icon mx-auto u230"><span class="u196">📄</span></div>
                 <h5>PDF 工具箱</h5>
                 <p class="text-muted small">合并/分割/压缩/提取文本，四合一 PDF 处理</p>
             </div></div>
@@ -754,8 +754,8 @@
 
     <div class="col-md-6 col-lg-4">
         <a href="/donate" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:1px solid rgba(245,158,11,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:rgba(245,158,11,.1)!important;"><span style="font-size:2rem;">❤️</span></div>
+            <div class="card h-100 u231"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u228"><span class="u196">❤️</span></div>
                 <h5>{{ _('nav_donate') }}</h5>
                 <p class="text-muted small">{{ _('common_info') }}</p>
             </div></div>
@@ -765,8 +765,8 @@
     <!-- 多用户在线：设备管理 -->
     <div class="col-md-6 col-lg-4">
         <a href="javascript:void(0)" data-csp-click="showDeviceManager" class="text-decoration-none text-dark">
-            <div class="card h-100" style="border:2px solid rgba(103,194,58,.3)"><div class="card-body text-center">
-                <div class="feature-icon mx-auto" style="background:linear-gradient(135deg,rgba(103,194,58,.12),rgba(64,158,255,.12))!important;"><span style="font-size:2rem;">📱</span></div>
+            <div class="card h-100 u232"><div class="card-body text-center">
+                <div class="feature-icon mx-auto u233"><span class="u196">📱</span></div>
                 <h5>{{ _('device_manager_title') }}</h5>
                 <p class="text-muted small">{{ _('device_manager_desc') }}</p>
             </div></div>
@@ -802,12 +802,12 @@ function refreshOnlineUsers() {
                     var html = '';
                     data.online_users.forEach(function(u) {
                         var idleBadge = u.idle_seconds < 120 ? '🟢' : (u.idle_seconds < 600 ? '🟡' : '🟠');
-                        html += '<div style="padding:2px 0;">' + idleBadge + ' <strong>' + u.username + '</strong>' +
-                            (u.username === '{{ session.username }}' ? ' <span style="color:#999;font-size:.75rem;">' + dmMe + '</span>' : '') +
-                            ' <span style="color:#999;font-size:.7rem;">' + u.idle_str + '</span></div>';
+                        html += '<div class="u234">' + idleBadge + ' <strong>' + u.username + '</strong>' +
+                            (u.username === '{{ session.username }}' ? ' <span class="u235">' + dmMe + '</span>' : '') +
+                            ' <span class="u236">' + u.idle_str + '</span></div>';
                     });
                     if (isMultiSession) {
-                        html += '<div style="font-size:.7rem;color:#999;margin-top:2px;">' + dmSessionsHint.replace('{total}', data.total_sessions) + '</div>';
+                        html += '<div class="u237">' + dmSessionsHint.replace('{total}', data.total_sessions) + '</div>';
                     }
                     listEl.innerHTML = html;
                 }
@@ -1008,15 +1008,15 @@ function refreshLeaderboard() {
         var rows = '';
         var medals = ['🥇','🥈','🥉'];
         lbData.forEach(function(u, i) {
-            var medal = i < 3 ? medals[i] : ('<span style="color:#888;">' + (i+1) + '</span>');
+            var medal = i < 3 ? medals[i] : ('<span class="u193">' + (i+1) + '</span>');
             var isMe = u.username === curUsername;
-            var trStyle = isMe ? 'style="background:rgba(13,110,253,.08);font-weight:600;"' : '';
-            var youBadge = isMe ? '<span class="badge bg-primary ms-1" style="font-size:.7rem;">You</span>' : '';
+            var trStyle = isMe ? 'class="u192"' : '';
+            var youBadge = isMe ? '<span class="badge bg-primary ms-1 u100">You</span>' : '';
             rows += '<tr ' + trStyle + '>' +
                 '<td>' + medal + '</td>' +
                 '<td>' + escapeHtml(u.username) + youBadge + '</td>' +
                 '<td class="text-end"><strong>' + u.score + '</strong></td>' +
-                '<td class="text-end" style="color:#888;">' + u.actions + '</td>' +
+                '<td class="text-end u193">' + u.actions + '</td>' +
                 '</tr>';
         });
         body.innerHTML = rows;
@@ -1037,7 +1037,7 @@ function refreshLeaderboard() {
                 if (pendingReq) {
                     adminArea.innerHTML = '<div class="alert alert-info mb-0 py-2">⏳ ' + adminReqText + loadingText + '</div>';
                 } else {
-                    adminArea.innerHTML = '<button class="btn btn-warning btn-sm me-2" data-csp-click="requestAdmin" style="font-weight:600;">🔑 ' + adminReqText + '</button>';
+                    adminArea.innerHTML = '<button class="btn btn-warning btn-sm me-2 u194" data-csp-click="requestAdmin">🔑 ' + adminReqText + '</button>';
                 }
                 adminArea.style.display = '';
             } else {
@@ -1085,7 +1085,7 @@ function renderAnnouncement() {
         // 管理员始终可见，方便发布第一条公告
         if (curPermission === 'administrator') {
             bar.style.display = 'block';
-            textEl.innerHTML = '<span style="opacity:0.6;">暂无公告，点击右侧 ＋ 发布</span>';
+            textEl.innerHTML = '<span class="u238">暂无公告，点击右侧 ＋ 发布</span>';
             if (dotsEl) dotsEl.innerHTML = '';
             if (prevBtn) prevBtn.style.visibility = 'hidden';
             if (nextBtn) nextBtn.style.visibility = 'hidden';
@@ -1098,7 +1098,7 @@ function renderAnnouncement() {
     var item = announceList[announceIdx];
     var by = item.created_by || '';
     var time = (item.created_at || '').slice(0, 16);
-    textEl.innerHTML = escapeHtml(item.content) + ' <small style="opacity:0.6;white-space:nowrap;">— ' + escapeHtml(by) + ' · ' + escapeHtml(time) + '</small>';
+    textEl.innerHTML = escapeHtml(item.content) + ' <small class="u239">— ' + escapeHtml(by) + ' · ' + escapeHtml(time) + '</small>';
     // 导航点
     if (dotsEl) {
         var dots = '';
@@ -1294,7 +1294,7 @@ document.getElementById('announceManageList').addEventListener('click', function
                 <!-- 投诉提交守则 -->
                 <div class="alert alert-info">
                     <strong>📋 投诉提交守则</strong>
-                    <ul class="mb-0 mt-1" style="font-size:.9rem;">
+                    <ul class="mb-0 mt-1 u189">
                         <li>请如实描述问题，提供必要的时间、地点等细节信息</li>
                         <li>禁止恶意投诉、虚假举报或人身攻击</li>
                         <li>投诉内容将严格保密，仅管理员可见</li>
@@ -1315,8 +1315,8 @@ document.getElementById('announceManageList').addEventListener('click', function
                 <div id="complaintSubmitStatus"></div>
             </div>
             <!-- 我的投诉视图 -->
-            <div id="complaintMyView" style="display:none;">
-                <div id="complaintMyList" style="max-height:55vh;overflow-y:auto;">
+            <div id="complaintMyView" class="u30">
+                <div id="complaintMyList" class="u240">
                     <div class="text-center text-muted py-4">加载中...</div>
                 </div>
             </div>
@@ -1326,7 +1326,7 @@ document.getElementById('announceManageList').addEventListener('click', function
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
             <button type="button" class="btn btn-danger" data-csp-click="submitComplaint">提交</button>
         </div>
-        <div class="modal-footer" id="complaintMyFooter" style="display:none;">
+        <div class="modal-footer u30" id="complaintMyFooter">
             <button type="button" class="btn btn-outline-danger me-auto" data-csp-click="showComplaintForm">✏️ 新建投诉</button>
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
         </div>
@@ -1347,12 +1347,12 @@ document.getElementById('announceManageList').addEventListener('click', function
                     <span class="badge bg-secondary" id="complaintTotal">0</span> 条投诉
                     <span class="badge bg-warning ms-2" id="complaintUnread">0</span> 条未读
                 </div>
-                <div id="complaintInboxList" style="max-height:60vh;overflow-y:auto;">
+                <div id="complaintInboxList" class="u241">
                     <div class="text-center text-muted py-4">加载中...</div>
                 </div>
             </div>
             <!-- 内联回复表单 -->
-            <div id="complaintReplyView" style="display:none;">
+            <div id="complaintReplyView" class="u30">
                 <button class="btn btn-sm btn-outline-secondary mb-3" data-csp-click="backToComplaintList">← 返回列表</button>
                 <div class="mb-2 p-3 bg-light rounded">
                     <strong id="replyComplaintTitle"></strong>
@@ -1490,9 +1490,9 @@ function loadMyComplaints() {
                 '<div class="card-body py-2">' +
                 '<strong>' + escapeHtml(c.title) + '</strong> ' + statusBadge +
                 '<div class="text-muted small">🕐 ' + (c.created_at||'').slice(0,16) + '</div>' +
-                '<div class="mt-1" style="font-size:.9rem;">' + escapeHtml(c.content) + '</div>';
+                '<div class="mt-1 u189">' + escapeHtml(c.content) + '</div>';
             if (c.reply) {
-                html += '<div class="mt-1 p-2 bg-light rounded" style="font-size:.85rem;">' +
+                html += '<div class="mt-1 p-2 bg-light rounded u98">' +
                     '<span class="text-info">💬 管理员回复：</span>' + escapeHtml(c.reply) + '</div>';
             }
             html += '</div></div>';
@@ -1529,15 +1529,15 @@ function loadComplaintInbox() {
             if (c.status === 'pending') statusBadge = '<span class="badge bg-warning">待处理</span>';
             else if (c.status === 'replied') statusBadge = '<span class="badge bg-success">已回复</span>';
             var readBadge = c.is_read ? '' : '<span class="badge bg-danger ms-1">未读</span>';
-            html += '<div class="card mb-2 complaint-item" style="' + (c.is_read ? '' : 'border-left:3px solid #e74c3c;') + '">' +
+            html += '<div class="card mb-2 complaint-item u242" + (c.is_read ? '' : 'border-left:3px solid #e74c3c;') + '">' +
                 '<div class="card-body py-2">' +
                 '<div class="d-flex justify-content-between align-items-start">' +
                 '<div class="flex-grow-1">' +
                 '<strong>' + escapeHtml(c.title) + '</strong> ' + statusBadge + ' ' + readBadge +
                 '<div class="text-muted small">👤 ' + escapeHtml(c.username) + ' · 🕐 ' + (c.created_at||'').slice(0,16) + '</div>' +
-                '<div class="mt-1" style="font-size:.9rem;">' + escapeHtml(c.content.slice(0, 200)) + (c.content.length > 200 ? '...' : '') + '</div>';
+                '<div class="mt-1 u189">' + escapeHtml(c.content.slice(0, 200)) + (c.content.length > 200 ? '...' : '') + '</div>';
             if (c.reply) {
-                html += '<div class="mt-1 p-2 bg-light rounded" style="font-size:.85rem;">' +
+                html += '<div class="mt-1 p-2 bg-light rounded u98">' +
                     '<span class="text-info">💬 管理员回复：</span>' + escapeHtml(c.reply) + '</div>';
             }
             html += '</div>' +

@@ -76,10 +76,7 @@ from flask import (
 )
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
-from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
 from urllib.parse import urlparse, quote, unquote
-import session_manager
-import captcha_manager
 
 # ---------- 加载 .env（必须在任何 os.environ.get 读取配置之前执行） ----------
 # 未安装 python-dotenv 时不崩溃，仅提示；此时仍可用 shell 导出的环境变量。
@@ -92,6 +89,10 @@ except ImportError:
         "如需通过 .env 管理配置，请先执行: pip install python-dotenv",
         flush=True,
     )
+
+from i18n import _, detect_lang, get_supported_langs, SUPPORTED_LANGS
+import session_manager
+import captcha_manager
 
 
 def safe_check_password_hash(pwhash: str, password: str) -> bool:
@@ -359,12 +360,12 @@ app.secret_key = _load_or_create_secret_key(SECRET_KEY_FILE)
 
 # ---------- ProxyFix：部署在 Nginx 后正确获取客户端真实 IP ----------
 # 信任第一个反向代理（Nginx）的 X-Forwarded-* 头
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=1, x_host=1, x_port=1)
 
 # CORS：仅在开发/调试模式下开启，允许前端 dev server 跨域调用后端 API。
 # 生产环境前端静态资源由 Flask 同源托管，无需 CORS。
 # 可通过 ALLOWED_CORS_ORIGINS 环境变量覆盖允许的源列表（逗号分隔）。
-_debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+_debug = os.environ.get("FLASK_DEBUG", "0").lower() in ("1", "true", "yes", "on")
 if _debug:
     _origins = os.environ.get("ALLOWED_CORS_ORIGINS", "http://localhost:3000").split(",")
     _origins = [o.strip() for o in _origins if o.strip()]
@@ -384,7 +385,7 @@ _BLOCKED_UAS = [
     "dirbuster", "openvas", "hydra", "amass", "gobuster", "wpscan",
     "zgrab", "masscan", "whatweb", "httprint", "jaeles", "zaproxy",
     "davtest", "wfuzz", "sqlint", "sqlworm", "sqlquery", "sqlmapper",
-    "wapiti", "skipfish", "nmap""w3af", "dirb", "nuclei"
+    "wapiti", "skipfish", "nmap", "w3af", "dirb", "nuclei"
 ]
 
 
@@ -530,7 +531,7 @@ def _init_db_once():
         _init_life_tables()
         _init_forum_tables()
         _init_session_tables()
-        _init_db_done = True
+        _db_init_done = True
 
 
 def _init_reset_table():
@@ -884,6 +885,7 @@ def _verify_captcha(user_input, captcha_key=""):
 
     验证码摘要存储在 MySQL 中，key 由对应图片绑定到表单或 JSON 请求。
     有效期 5 分钟，一次性消费防止重放。
+    MySQL 不可用时降级到 session 存储验证。
     """
     if not user_input or not user_input.strip():
         return False, "验证码不能为空"
@@ -897,20 +899,39 @@ def _verify_captcha(user_input, captcha_key=""):
     if not key:
         return False, "验证码已失效，请刷新"
 
+    # 优先使用 MySQL 存储的摘要验证
     if captcha_manager.verify(key, user_input):
         return True, "验证通过"
+
+    # MySQL 不可用或验证未通过时，尝试 session 降级验证
+    stored_code = session.get("_captcha_code")
+    expires = session.get("_captcha_expires", 0)
+    import time as _time
+    if stored_code and key == "session_captcha" and _time.time() < expires:
+        session.pop("_captcha_code", None)
+        session.pop("_captcha_expires", None)
+        if hmac.compare_digest(str(stored_code).lower(), str(user_input).strip().lower()):
+            return True, "验证通过"
 
     return False, "验证码错误或已过期"
 
 
 def _generate_captcha():
     """
-    生成新验证码并写入 MySQL。
+    生成新验证码并写入 MySQL；数据库不可用时降级到 session 存储。
 
     Returns:
-        tuple[str, str] | None: ``(captcha_key, code)``；数据库不可用时返回 None
+        tuple[str, str] | None: ``(captcha_key, code)``；数据库和 session 均不可用时返回 None
     """
-    return captcha_manager.generate()
+    challenge = captcha_manager.generate()
+    if challenge is not None:
+        return challenge
+    # MySQL 不可用时降级：将验证码存入当前 session（5 分钟有效）
+    import time as _time
+    code = "".join(_random.choice(_captcha_chars) for _ in range(6)).lower()
+    session["_captcha_code"] = code
+    session["_captcha_expires"] = _time.time() + 300
+    return ("session_captcha", code)
 
 
 # ---------- 图形验证码 ----------
@@ -1305,11 +1326,22 @@ def check_global_captcha():
 
 
 # ---------- 配置 ----------
+# 数据库配置：未设置 DB_PASSWORD 时使用不可连接的占位值，
+# 应用仍可启动（依赖数据库的功能会通过 get_db() 返回 None 降级）
+_db_password = os.environ.get("DB_PASSWORD")
+if not _db_password:
+    _db_password = ""
+    print(
+        "[安全警告] 未设置环境变量 DB_PASSWORD，数据库将不可用。"
+        "请在 .env 或部署环境中设置 DB_PASSWORD",
+        flush=True,
+    )
+
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
     "port": int(os.environ.get("DB_PORT", "3306")),
     "user": os.environ.get("DB_USER", "root"),
-    "password": os.environ.get("DB_PASSWORD", "root@123456"),
+    "password": _db_password,
     "database": os.environ.get("DB_NAME", "sample"),
     "init_command": "SET time_zone='+00:00'",
     "autocommit": False,
@@ -1318,7 +1350,7 @@ ALBUM_DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
     "port": int(os.environ.get("DB_PORT", "3306")),
     "user": os.environ.get("DB_USER", "root"),
-    "password": os.environ.get("DB_PASSWORD", "root@123456"),
+    "password": _db_password,
     "database": os.environ.get("DB_NAME", "sample"),
     "init_command": "SET time_zone='+00:00'",
 }
@@ -1382,8 +1414,9 @@ def add_security_headers(response):
         response.headers["Cache-Control"] = "no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-    # HSTS: 仅在生产环境下使用
-    if not os.environ.get("FLASK_DEBUG"):
+    # HSTS: 仅在生产环境下使用（严格布尔解析，避免 "0" 等非空字符串被误判为真）
+    _flask_debug = os.environ.get("FLASK_DEBUG", "0").lower() in ("1", "true", "yes", "on")
+    if not _flask_debug:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
@@ -1740,7 +1773,28 @@ def _mask_cell(col_name, value):
     Returns:
         脱敏后的字符串
     """
-    return str(value) if value is not None else ""
+    if value is None:
+        return ""
+    if not col_name:
+        return str(value)
+    lower = col_name.lower()
+    if any(k in lower for k in ("password", "passwd", "pwd", "secret", "token", "api_key", "session_key")):
+        s = str(value)
+        return s[:3] + "***" if len(s) > 3 else "***"
+    return str(value)
+
+
+def _safe_int(value, default=0, min_val=None, max_val=None):
+    """安全地将值转换为整数，失败返回 default；可选范围钳制。"""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return default
+    if min_val is not None and v < min_val:
+        v = min_val
+    if max_val is not None and v > max_val:
+        v = max_val
+    return v
 
 
 def _safe_identifier(name):
@@ -1871,6 +1925,19 @@ def csrf_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+
+# ---------- 全局 CSRF 保护（所有非安全方法路由统一校验）----------
+@app.before_request
+def _global_csrf_protect():
+    if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+        return
+    token = request.form.get("_csrf_token") or request.headers.get("X-CSRF-Token")
+    expected = session.get("csrf_token")
+    if not expected or not token or not hmac.compare_digest(str(token), str(expected)):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "安全验证失败，请重试"}), 403
+        flash("安全验证失败，请重试", "danger")
+        return redirect(url_for("login"))
 
 def admin_required(f):
     """
@@ -2013,7 +2080,7 @@ def login():
             _login_logger.addHandler(_h)
         _login_logger.info(
             f"LOGIN_ATTEMPT | user={username} | pwd_len={len(password)} | "
-            f"captcha_input='{captcha_input}' | "
+            f"captcha_ok={bool(captcha_input)} | "
             f"ip={client_ip} | ua={request.headers.get('User-Agent','?')[:80]}"
         )
 
@@ -2051,9 +2118,6 @@ def login():
 
             if result:
                 pwd_valid = safe_check_password_hash(result[0], password)
-                if not pwd_valid:
-                    # 回退：数据库中的密码可能是明文（旧版），尝试明文匹配
-                    pwd_valid = (result[0] == password)
                 _login_logger.info(f"LOGIN_DB_CHECK | user={username} | pwd_valid={pwd_valid} | perm={result[1]}")
                 if pwd_valid:
                     # 生成新的 session_key
@@ -2122,7 +2186,7 @@ def login():
                 flash("用户名或密码错误", "danger")
         except pymysql.MySQLError as e:
             _login_logger.info(f"LOGIN_FAIL | reason=db_error | error={e}")
-            flash(f"数据库错误: {str(e)}", "danger")
+            flash("数据库错误，请稍后重试", "danger")
 
     return render_template("login.html", csrf_token=session.get("csrf_token", ""))
 
@@ -2217,7 +2281,7 @@ def register():
         except pymysql.IntegrityError:
             flash("用户名已存在", "danger")
         except pymysql.MySQLError as e:
-            flash(f"注册失败: {str(e)}", "danger")
+            flash("注册失败，请稍后重试", "danger")
 
     return render_template("register.html", csrf_token=session.get("csrf_token", ""))
 
@@ -2714,7 +2778,7 @@ def api_admin_request():
         conn.close()
         return jsonify({"message": "管理员申请已提交，请等待现有管理员审核"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 # ---------- 路由：查看/处理管理员申请 ----------
 @app.route("/api/admin-requests")
@@ -2776,7 +2840,7 @@ def api_admin_review():
         conn.close()
         return jsonify({"message": "已" + ("通过" if action == "approve" else "拒绝") + "申请"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 # ---------- VIP 申请/审核 ----------
 @app.route("/api/vip-request", methods=["POST"])
@@ -2814,7 +2878,7 @@ def api_vip_request():
         conn.close()
         return jsonify({"message": "VIP 申请已提交，请等待管理员审核"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/vip-review", methods=["POST"])
 @login_required
@@ -2846,7 +2910,7 @@ def api_vip_review():
         write_log("VIP审核", f"管理员: {session['username']}, 目标用户: {username}, 操作: {'通过' if action == 'approve' else '拒绝'}")
         return jsonify({"message": f"已{'设为VIP' if action == 'approve' else '降为访客'}"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 # ---------- 路由：本地头像生成 (PNG) ----------
 AVATAR_CACHE_DIR = os.path.join(os.path.dirname(__file__), "static", "avatars")
@@ -2856,7 +2920,7 @@ os.makedirs(AVATAR_CACHE_DIR, exist_ok=True)
 def api_avatar(seed):
     """生成初始头像PNG"""
 
-    size = request.args.get("size", 140, type=int)
+    size = _safe_int(request.args.get("size", 140), default=140, min_val=16, max_val=512)
     bgcolor = request.args.get("bg", "667eea")
     color = request.args.get("color", "fff")
     text = seed[0].upper() if seed else "?"
@@ -3158,7 +3222,7 @@ def api_set_security():
                 write_log("安全问题清除", f"用户名: {session['username']}")
                 return jsonify({"ok": True, "message": "安全问题已清除"})
             except pymysql.MySQLError as e:
-                return jsonify({"ok": False, "error": f"操作失败: {str(e)}"})
+                return jsonify({"ok": False, "error": 操作失败}), 500
         return jsonify({"ok": False, "error": "安全问题和答案不能为空"})
 
     if len(security_answer) < 2:
@@ -3184,7 +3248,7 @@ def api_set_security():
         else:
             return jsonify({"ok": False, "error": "用户不存在"})
     except pymysql.MySQLError as e:
-        return jsonify({"ok": False, "error": f"保存失败: {str(e)}"})
+        return jsonify({"ok": False, "error": "保存失败"}), 500
 
 
 # ---------- 路由：关于作者 ----------
@@ -3340,7 +3404,7 @@ def api_system_info():
             }
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/system_users")
@@ -3552,7 +3616,7 @@ def api_multi_login_setting():
             session_manager.kick_user_sessions(username, except_session_key=current_key)
         return jsonify({"ok": True, "allow_multi_login": bool(allow)})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 # ---------- 路由：网络工具 ----------
@@ -3805,7 +3869,7 @@ def api_network_dns():
                     return jsonify({"ok": False, "error": "DNS tools (dig/nslookup) not available"}), 500
         return jsonify({"ok": True, "results": results, "type": record_type})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/network/http_headers", methods=["POST"])
@@ -3838,7 +3902,7 @@ def api_network_http_headers():
             "redirect_count": len(resp.history),
         })
     except requests.RequestException as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/network/ssl", methods=["POST"])
@@ -3887,7 +3951,7 @@ def api_network_ssl():
             "version": cert.get("version"),
         })
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/network/subnet", methods=["POST"])
@@ -3917,7 +3981,7 @@ def api_network_subnet():
             "is_global": net.is_global,
         })
     except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": "请求失败"}), 400
 
 
 # ---------- 路由：数据库 ----------
@@ -3925,6 +3989,7 @@ def api_network_subnet():
 @login_required
 @non_guest_required
 @db_captcha_required
+@admin_required
 
 # ========== 数据库管理 ==========
 
@@ -3965,7 +4030,7 @@ def db_query():
                     cursor.close()
                     conn.close()
                 except pymysql.MySQLError as e:
-                    flash(f"查询失败: {str(e)}", "danger")
+                    flash("查询失败，请稍后重试", "danger")
 
     return render_template("db_query.html",
                            tables=tables,
@@ -4015,7 +4080,7 @@ def api_table_data(table):
             ] for row in rows]
         })
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/table/<table>/insert", methods=["POST"])
@@ -4057,7 +4122,7 @@ def api_table_insert(table):
         write_log("插入数据", f"表: {table}, 用户: {session['username']}")
         return jsonify({"success": True, "affected": cursor.rowcount})
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/table/<table>/update", methods=["POST"])
@@ -4113,13 +4178,14 @@ def api_table_update(table):
         write_log("更新数据", f"表: {table}, 主键: {pk_col}={pk_val}, 用户: {session['username']}")
         return jsonify({"success": True, "affected": cursor.rowcount})
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
-@app.route("/api/table/<table>/delete/<path:pk_val>")
+@app.route("/api/table/<table>/delete/<path:pk_val>", methods=["POST", "DELETE"])
 @login_required
 @admin_required
 @db_captcha_required
+@csrf_required
 def api_table_delete(table, pk_val):
     table = _safe_identifier(table)
     if not table:
@@ -4152,7 +4218,7 @@ def api_table_delete(table, pk_val):
         write_log("删除数据", f"表: {table}, 主键: {pk_col}={pk_val}, 用户: {session['username']}")
         return jsonify({"success": True, "affected": cursor.rowcount})
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 # ---------- 路由：更改数据库（可视化） ----------
@@ -4233,7 +4299,7 @@ def api_album_images():
         if tag_id:
             join_clause = " JOIN album_image_tags ait ON album_images.id=ait.image_id"
             where += " AND ait.tag_id=%s"
-            params.append(int(tag_id))
+            params.append(_safe_int(tag_id, min_val=1))
         # 非管理员只看已审核的，管理员看所有
         if session.get("permission") != "administrator":
             where += " AND (COALESCE(album_images.status, 'approved') = 'approved')"
@@ -4249,7 +4315,7 @@ def api_album_images():
             "status": r[7] if len(r) > 7 else "approved"
         } for r in rows])
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/album/images/<int:img_id>", methods=["PUT", "DELETE"])
 @login_required
@@ -4275,7 +4341,7 @@ def api_album_image_manage(img_id):
             write_log("修改图片名", f"用户: {session['username']}, 图片ID: {img_id}, 新名: {new_name}")
             return jsonify({"success": True})
         except pymysql.MySQLError as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": 操作失败}), 500
 
     if request.method == "DELETE":
         try:
@@ -4302,7 +4368,7 @@ def api_album_image_manage(img_id):
             write_log("删除图片", f"用户: {session['username']}, 图片ID: {img_id}, 文件: {filename}")
             return jsonify({"success": True})
         except pymysql.MySQLError as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": 操作失败}), 500
 
     return jsonify({"error": "未知操作"}), 400
 
@@ -4331,7 +4397,7 @@ def api_album_pending():
             "uploadTime": r[6].strftime("%Y-%m-%d %H:%M") if r[6] else ""
         } for r in rows])
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/album/pending/count")
 @login_required
@@ -4373,7 +4439,7 @@ def api_album_image_approve(img_id):
             return jsonify({"success": True, "message": "照片已审核通过"})
         return jsonify({"error": "照片不存在或无需审核"}), 404
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/album/images/<int:img_id>/reject", methods=["POST"])
 @login_required
@@ -4404,7 +4470,7 @@ def api_album_image_reject(img_id):
         write_log("拒绝照片", f"管理员: {session['username']}, 图片ID: {img_id}")
         return jsonify({"success": True, "message": "照片已拒绝删除"})
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/album/upload", methods=["POST"])
@@ -4483,7 +4549,7 @@ def api_album_upload():
         is_approved = session.get("permission") == "administrator"
         return jsonify({"success": True, "id": img_id, "approved": is_approved})
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 # ---------- 点赞 ----------
@@ -4507,7 +4573,7 @@ def api_album_like(img_id):
             conn.close()
             return jsonify({"count": count, "liked": liked})
         except pymysql.MySQLError as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": 操作失败}), 500
 
     if request.method == "POST":
         try:
@@ -4518,7 +4584,7 @@ def api_album_like(img_id):
             conn.close()
             return jsonify({"success": True})
         except pymysql.MySQLError as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": 操作失败}), 500
 
     if request.method == "DELETE":
         try:
@@ -4529,7 +4595,7 @@ def api_album_like(img_id):
             conn.close()
             return jsonify({"success": True})
         except pymysql.MySQLError as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": 操作失败}), 500
 
 
 # ---------- 下载图片 ----------
@@ -4555,7 +4621,7 @@ def api_album_download(img_id):
             safe_name += ext
         return send_from_directory(ALBUM_DIR, filename, as_attachment=True, download_name=safe_name)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 # ---------- 分享链接 ----------
@@ -4578,7 +4644,7 @@ def api_album_share(img_id):
             link = f"{request.host_url}share/{token}"
             return jsonify({"link": link, "token": token})
         except pymysql.MySQLError as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": 操作失败}), 500
 
     if request.method == "GET":
         try:
@@ -4592,7 +4658,7 @@ def api_album_share(img_id):
                 return jsonify({"link": link})
             return jsonify({"link": None})
         except pymysql.MySQLError as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/share/<token>")
@@ -4639,7 +4705,7 @@ def share_view(token):
         </div></body></html>
         """
     except Exception as e:
-        return f"<h2>加载失败: {str(e)}</h2>", 500
+        return f"<h2>加载失败</h2>", 500
 
 @app.route("/api/album/images/<int:img_id>/comments")
 @login_required
@@ -4661,7 +4727,7 @@ def api_album_image_comments(img_id):
             "time": r[4].strftime("%Y-%m-%d %H:%M") if r[4] else ""
         } for r in rows])
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/album/images/<int:img_id>/comments", methods=["POST"])
 @login_required
@@ -4695,7 +4761,7 @@ def api_album_add_image_comment(img_id):
         record_activity(session["username"], "评论", 2)
         return jsonify({"success": True, "id": cid})
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/album/comments")
 @login_required
@@ -4714,7 +4780,7 @@ def api_album_general_comments():
             "time": r[4].strftime("%Y-%m-%d %H:%M") if r[4] else ""
         } for r in rows])
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/album/comments", methods=["POST"])
 @login_required
@@ -4739,7 +4805,7 @@ def api_album_add_general_comment():
         write_log("总体留言", f"用户: {session['username']}")
         return jsonify({"success": True, "id": cid})
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 @app.route("/api/album/comments/<int:cid>", methods=["DELETE"])
 @login_required
@@ -4797,7 +4863,7 @@ def api_album_stats():
             "topUploaders": top_uploaders, "topCommenters": top_commenters, "topLiked": top_liked
         })
     except pymysql.MySQLError as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/album/me")
@@ -5228,11 +5294,12 @@ def api_album_danmaku_add(img_id):
 # ===== 💬 聊天系统 API =====
 
 @app.route("/api/chat/messages")
+@login_required
 def api_chat_messages():
     """获取聊天记录"""
     channel = request.args.get("channel", "world")
     before = request.args.get("before", "")  # 翻页
-    limit = min(int(request.args.get("limit", 50)), 100)
+    limit = min(int(request.args.get("limit", "50") or "50"), 100)
     conn = get_album_db()
     if not conn:
         return jsonify([])
@@ -5249,7 +5316,7 @@ def api_chat_messages():
         params = [user, other, other, user]
     if before:
         sql += " AND id < %s"
-        params.append(int(before))
+        params.append(_safe_int(before, default=0))
     sql += " ORDER BY id DESC LIMIT %s"
     params.append(limit)
     cursor.execute(sql, params)
@@ -5521,7 +5588,7 @@ def api_chat_ai_config():
 def api_chat_ai_messages():
     """获取 AI 对话历史"""
     user = session["username"]
-    limit = min(int(request.args.get("limit", 50)), 200)
+    limit = _safe_int(request.args.get("limit", 50), default=50, min_val=1, max_val=200)
     conn = get_album_db()
     if not conn:
         return jsonify([])
@@ -5639,7 +5706,7 @@ def api_chat_ai_ask():
     except requests.exceptions.ConnectionError:
         return jsonify({"error": f"无法连接到 {provider_url}，请检查 API 地址"}), 502
     except Exception as e:
-        return jsonify({"error": f"请求失败: {str(e)}"}), 500
+        return jsonify({"error": f"请求失败: 操作失败"}), 500
 
 
 @app.route("/api/chat/ai/clear", methods=["POST"])
@@ -5708,7 +5775,7 @@ def api_chat_ai_test():
             return jsonify({"success": False, "error": f"API 返回 {resp.status_code}: {err_text}", "latency_ms": latency})
     except Exception as e:
         latency = int((time.time() - start) * 1000)
-        return jsonify({"success": False, "error": f"连接失败: {str(e)}", "latency_ms": latency})
+        return jsonify({"success": False, "error": f"连接失败: 操作失败", "latency_ms": latency})
 
 
 # ---- AI 写作助手 ----
@@ -5797,7 +5864,7 @@ def api_ai_writing():
     except requests.exceptions.ConnectionError:
         return jsonify({"error": f"无法连接到 {provider_url}，请检查 API 地址"}), 502
     except Exception as e:
-        return jsonify({"error": f"请求失败: {str(e)}"}), 500
+        return jsonify({"error": f"请求失败: 操作失败"}), 500
 
 
 # ---- 智能翻译 ----
@@ -5876,7 +5943,7 @@ def api_translator():
     except requests.exceptions.ConnectionError:
         return jsonify({"error": f"无法连接到 {provider_url}，请检查 API 地址"}), 502
     except Exception as e:
-        return jsonify({"error": f"请求失败: {str(e)}"}), 500
+        return jsonify({"error": f"请求失败: 操作失败"}), 500
 
 
 # ---------- 路由：备忘录 ----------
@@ -6039,7 +6106,7 @@ def change_password():
                     else:
                         flash("修改密码失败", "danger")
                 except pymysql.MySQLError as e:
-                    flash(f"修改失败: {str(e)}", "danger")
+                    flash(f"修改失败: 操作失败", "danger")
 
     return render_template("change_password.html",
                            is_admin=is_admin, users=users,
@@ -6284,7 +6351,7 @@ def api_admin_manual_block():
     """手动封禁IP（可指定时长，默认1小时）"""
     data = request.get_json()
     ip = (data or {}).get("ip", "").strip()
-    duration = int((data or {}).get("duration", 3600))  # 默认1小时
+    duration = _safe_int((data or {}).get("duration", 3600), default=3600, min_val=60, max_val=86400)
     if not ip:
         return jsonify({"error": "未提供IP"}), 400
     # 不能封禁白名单IP
@@ -6304,7 +6371,7 @@ def api_admin_batch():
     data = request.get_json()
     action = (data or {}).get("action")  # "whitelist" 或 "block"
     ips_raw = (data or {}).get("ips", "")
-    duration = int((data or {}).get("duration", 3600))
+    duration = _safe_int((data or {}).get("duration", 3600), default=3600, min_val=60, max_val=86400)
 
     # 解析IP列表（支持逗号、空格、换行分隔）
     ips = []
@@ -6400,9 +6467,10 @@ def logs():
                            permission=session["permission"])
 
 
-@app.route("/logs/clear")
+@app.route("/logs/clear", methods=["POST", "DELETE"])
 @login_required
 @admin_required
+@csrf_required
 def logs_clear():
     try:
         ip = request.remote_addr or "0.0.0.0"
@@ -6627,7 +6695,7 @@ def api_calendar_events():
             })
         return jsonify({"ok": True, "events": events})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -6675,7 +6743,7 @@ def api_calendar_add_event():
         record_activity(session["username"], "添加日历事件")
         return jsonify({"ok": True, "id": eid})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -6714,7 +6782,7 @@ def api_calendar_update_event(eid):
             conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -6738,7 +6806,7 @@ def api_calendar_delete_event(eid):
         conn.commit()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -6900,7 +6968,7 @@ def api_backup_create():
     except Exception as e:
         if os.path.exists(filepath):
             os.remove(filepath)
-        return jsonify({"ok": False, "error": f"备份失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"备份失败: 操作失败"}), 500
 
 
 @app.route("/api/backup/download/<path:filename>")
@@ -6934,7 +7002,7 @@ def api_backup_delete(filename):
         write_log("删除备份", f"文件名: {safe_name}, 操作者: {session['username']}")
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/backup/delete-all", methods=["DELETE"])
@@ -6951,7 +7019,7 @@ def api_backup_delete_all():
         write_log("清空所有备份", f"删除 {count} 个文件, 操作者: {session['username']}")
         return jsonify({"ok": True, "deleted": count})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/backup/prune", methods=["DELETE"])
@@ -6973,7 +7041,7 @@ def api_backup_prune():
         write_log("清理旧备份", f"保留 {keep} 个, 删除 {len(to_delete)} 个, 操作者: {session['username']}")
         return jsonify({"ok": True, "deleted": len(to_delete), "kept": min(len(files), keep)})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/backup/restore", methods=["POST"])
@@ -7035,7 +7103,7 @@ def api_backup_restore():
             "files_list": restored_files[:100]  # 只返回前 100 个
         })
     except Exception as e:
-        return jsonify({"ok": False, "error": f"恢复失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"恢复失败: 操作失败"}), 500
 
 
 @app.route("/api/backup/diff/<path:filename>")
@@ -7111,7 +7179,7 @@ def api_backup_diff(filename):
             "current_file_count": len(current_files),
         })
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 def _fmt_size(bytes):
@@ -7213,7 +7281,7 @@ def api_utils_base64():
             result = base64.b64decode(text.encode("ascii")).decode("utf-8")
         return jsonify({"ok": True, "result": result})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        return jsonify({"ok": False, "error": 操作失败})
 
 
 # --- URL 编解码 ---
@@ -7229,7 +7297,7 @@ def api_utils_url():
         result = quote(text, safe="") if action == "encode" else unquote(text)
         return jsonify({"ok": True, "result": result})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        return jsonify({"ok": False, "error": 操作失败})
 
 
 # --- JSON 格式化/校验 ---
@@ -7533,6 +7601,7 @@ def api_study_flashcards_next():
 # ---------- 插件系统 ----------
 @app.route("/plugin/<plugin_name>")
 @app.route("/plugin/<plugin_name>/<path:subpath>")
+@login_required
 def plugin_route(plugin_name, subpath=None):
     """插件路由分发"""
     loaded = plugins.get_loaded_plugins()
@@ -8062,7 +8131,7 @@ def api_admin_plugin_marketplace_update(plugin_id):
         })
 
     except Exception as e:
-        return jsonify({"ok": False, "error": f"更新失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"更新失败: 操作失败"}), 500
 
 
 # ---------- 插件市场沙箱渲染（安全隔离） ----------
@@ -8554,7 +8623,7 @@ def api_src_submit():
         conn.close()
         return jsonify({"ok": True, "id": report_id, "message": "漏洞报告已提交，感谢您的贡献！"})
     except Exception as e:
-        return jsonify({"error": f"提交失败: {str(e)}"}), 500
+        return jsonify({"error": f"提交失败: 操作失败"}), 500
 
 
 @app.route("/api/src/reports")
@@ -8613,7 +8682,7 @@ def api_src_reports():
         conn.close()
         return jsonify({"reports": reports, "is_admin": is_admin})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/src/report/<int:report_id>")
@@ -8651,7 +8720,7 @@ def api_src_report_detail(report_id):
         conn.close()
         return jsonify({"report": r, "is_admin": is_admin})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/src/report/<int:report_id>/update", methods=["POST"])
@@ -8690,7 +8759,7 @@ def api_src_report_update(report_id):
         conn.close()
         return jsonify({"ok": True, "message": "报告状态已更新"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/src/stats")
@@ -8717,7 +8786,7 @@ def api_src_stats():
             "by_severity": by_severity,
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 # ---------- API：管理员审核密码重置申请 ----------
@@ -8746,7 +8815,7 @@ def api_admin_reset_requests():
                 r["created_at"] = str(r["created_at"])
         return jsonify({"ok": True, "requests": rows})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": 操作失败}), 500
 
 
 @app.route("/api/admin/reset_requests/<int:req_id>/approve", methods=["POST"])
@@ -8781,7 +8850,7 @@ def api_admin_reset_approve(req_id):
         write_log("管理员重置审核通过", f"用户名: {username}, 操作人: {session['username']}")
         return jsonify({"ok": True, "message": "已通过", "token": token, "username": username})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/admin/reset_requests/<int:req_id>/reject", methods=["POST"])
@@ -8806,7 +8875,7 @@ def api_admin_reset_reject(req_id):
             return jsonify({"ok": True, "message": "已拒绝"})
         return jsonify({"ok": False, "error": "申请不存在或已处理"})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 
@@ -9506,7 +9575,7 @@ def api_weather():
         return jsonify(result)
 
     except Exception as e:
-        return jsonify({"error": f"天气数据获取失败: {str(e)}"}), 500
+        return jsonify({"error": f"天气数据获取失败: 操作失败"}), 500
 
 # ---------- 记账 ----------
 @app.route("/expenses")
@@ -10007,7 +10076,7 @@ def api_converter():
             "mime": mime
         })
     except Exception as e:
-        return jsonify({"ok": False, "error": f"转换失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"转换失败: 操作失败"}), 500
 
 # ---------- PDF 工具箱 ----------
 @app.route("/pdf_tools")
@@ -10041,7 +10110,7 @@ def api_pdf_merge():
                 writer.add_page(page)
             total_pages += len(reader.pages)
         except Exception as e:
-            return jsonify({"ok": False, "error": f"读取 {f.filename} 失败: {str(e)}"}), 400
+            return jsonify({"ok": False, "error": f"读取 {f.filename} 失败: 操作失败"}), 400
 
     import uuid, os
     os.makedirs("/tmp/pdf_tools", exist_ok=True)
@@ -10082,7 +10151,7 @@ def api_pdf_split():
         if total_pages == 0:
             return jsonify({"ok": False, "error": "PDF 文件为空"}), 400
     except Exception as e:
-        return jsonify({"ok": False, "error": f"读取 PDF 失败: {str(e)}"}), 400
+        return jsonify({"ok": False, "error": f"读取 PDF 失败: 操作失败"}), 400
 
     # Parse ranges
     selected_pages = set()
@@ -10152,7 +10221,7 @@ def api_pdf_compress():
             page.compress_content_streams()
             writer.add_page(page)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"压缩失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"压缩失败: 操作失败"}), 500
 
     import uuid, os
     os.makedirs("/tmp/pdf_tools", exist_ok=True)
@@ -10199,7 +10268,7 @@ def api_pdf_extract_text():
         full_text = "\n\n".join(pages_text)
         chars = len(full_text)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"提取文本失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"提取文本失败: 操作失败"}), 500
 
     return jsonify({
         "ok": True,
@@ -10232,7 +10301,7 @@ def api_pdf_download(filename):
         threading.Thread(target=cleanup, daemon=True).start()
         return response
     except Exception as e:
-        return jsonify({"ok": False, "error": f"下载失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"下载失败: 操作失败"}), 500
 
 
 # ---------- RSS 阅读器 ----------
@@ -10291,7 +10360,7 @@ def api_rss_fetch():
             feed_title = root.findtext(".//channel/title") or url
             return jsonify({"ok": True, "feed_title": feed_title, "entries": entries[:30]})
         except Exception as e:
-            return jsonify({"ok": False, "error": f"解析失败: {str(e)}"}), 500
+            return jsonify({"ok": False, "error": f"解析失败: 操作失败"}), 500
 
 @app.route("/api/rss/feeds", methods=["GET", "POST"])
 @login_required
@@ -10434,7 +10503,7 @@ def api_image_compress():
             "ratio": round((1 - len(compressed)/max(original_size,1)) * 100, 1)
         })
     except Exception as e:
-        return jsonify({"ok": False, "error": f"压缩失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"压缩失败: 操作失败"}), 500
 
 # ---------- API 测试器 ----------
 @app.route("/api_tester")
@@ -10600,7 +10669,7 @@ def api_api_tester_proxy():
     except requests.exceptions.ConnectionError:
         return jsonify({"ok": False, "error": "无法连接到目标服务器"}), 502
     except Exception as e:
-        return jsonify({"ok": False, "error": f"请求失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"请求失败: 操作失败"}), 500
 
 
 # ---------- Markdown 编辑器 ----------
@@ -12163,7 +12232,7 @@ def api_announcements_create():
         cursor.close(); conn.close()
         return jsonify({"ok": True, "id": new_id})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/announcements/<int:aid>", methods=["DELETE"])
@@ -12182,7 +12251,7 @@ def api_announcements_delete(aid):
         conn.commit(); cursor.close(); conn.close()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 # ==============================================================
@@ -12217,7 +12286,7 @@ def api_complaint_submit():
         conn.close()
         return jsonify({"ok": True, "message": "投诉已提交，管理员将尽快处理"})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/complaint/list", methods=["GET"])
@@ -12243,7 +12312,7 @@ def api_complaint_list():
             r["created_at"] = str(r["created_at"]) if r["created_at"] else ""
         return jsonify({"ok": True, "complaints": rows, "total": len(rows)})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/complaint/my", methods=["GET"])
@@ -12268,7 +12337,7 @@ def api_complaint_my():
             r["created_at"] = str(r["created_at"]) if r["created_at"] else ""
         return jsonify({"ok": True, "complaints": rows, "total": len(rows)})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/complaint/read/<int:cid>", methods=["POST"])
@@ -12288,7 +12357,7 @@ def api_complaint_mark_read(cid):
         conn.close()
         return jsonify({"ok": True})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/complaint/delete/<int:cid>", methods=["DELETE"])
@@ -12308,7 +12377,7 @@ def api_complaint_delete(cid):
         conn.close()
         return jsonify({"ok": True, "message": "已删除"})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 @app.route("/api/complaint/reply/<int:cid>", methods=["POST"])
@@ -12335,7 +12404,7 @@ def api_complaint_reply(cid):
         conn.close()
         return jsonify({"ok": True, "message": "回复成功"})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "请求失败"}), 500
 
 
 # ==============================================================
@@ -13046,7 +13115,7 @@ def api_login():
         # 登录失败（用户名不存在）
         return jsonify({"ok": False, "error": "用户名或密码错误"}), 401
     except pymysql.MySQLError as e:
-        return jsonify({"ok": False, "error": f"数据库错误: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"数据库错误: 操作失败"}), 500
 
 
 @app.route("/api/auth/register", methods=["POST"])
@@ -13114,7 +13183,7 @@ def api_register():
     except pymysql.IntegrityError:
         return jsonify({"ok": False, "error": "用户名已存在"}), 409
     except pymysql.MySQLError as e:
-        return jsonify({"ok": False, "error": f"注册失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"注册失败: 操作失败"}), 500
 
 
 @app.route("/api/auth/status")
@@ -13186,7 +13255,7 @@ def api_forgot_password():
         write_log("密码重置申请", f"用户名: {username}, 邮箱: {email}")
         return jsonify({"ok": True, "message": "申请已提交，请等待管理员审核"})
     except pymysql.MySQLError as e:
-        return jsonify({"ok": False, "error": f"提交失败: {str(e)}"}), 500
+        return jsonify({"ok": False, "error": f"提交失败: 操作失败"}), 500
 
 
 # ---------- 启动 ----------
@@ -13260,7 +13329,7 @@ if __name__ == "__main__":
         t.start()
     _session_cleanup_loop()
     
-    debug_mode = os.environ.get("FLASK_DEBUG", "0") == "1"
+    debug_mode = os.environ.get("FLASK_DEBUG", "0").lower() in ("1", "true", "yes", "on")
     _init_plugins()
     
     # ---- 服务器选择 ----

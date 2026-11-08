@@ -27,11 +27,21 @@ import pymysql
 
 # ---------- 配置 ----------
 
+# 数据库配置：未设置 DB_PASSWORD 时使用空占位值，
+# 连接会失败并返回 None，由调用方优雅降级，不阻断应用启动
+_sm_db_password = os.environ.get("DB_PASSWORD")
+if not _sm_db_password:
+    _sm_db_password = ""
+    import logging as _sm_logging
+    _sm_logging.getLogger(__name__).warning(
+        "未设置环境变量 DB_PASSWORD，数据库将不可用。请在 .env 或部署环境中设置 DB_PASSWORD"
+    )
+
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
     "port": int(os.environ.get("DB_PORT", "3306")),
     "user": os.environ.get("DB_USER", "root"),
-    "password": os.environ.get("DB_PASSWORD", "root@123456"),
+    "password": _sm_db_password,
     "database": os.environ.get("DB_NAME", "sample"),
     "connect_timeout": 5,   # 连接超时 5 秒，避免阻塞
     "autocommit": True,     # 自动提交，无需手动 commit

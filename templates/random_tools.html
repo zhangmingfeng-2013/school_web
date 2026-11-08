@@ -36,7 +36,7 @@
         <!-- Dice -->
         <div class="tab-pane fade show active" id="tab-dice">
             <div class="card"><div class="card-body text-center">
-                <div class="dice-display" id="diceDisplay"><span style="color:#6b7280">点击下方骰子开始</span></div>
+                <div class="dice-display" id="diceDisplay"><span class="u40">点击下方骰子开始</span></div>
                 <div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
                     <button class="btn btn-outline-primary" data-csp-click="rollDice" data-csp-args='[4,1]'>d4</button>
                     <button class="btn btn-outline-primary" data-csp-click="rollDice" data-csp-args='[6,2]'>2d6</button>
@@ -46,7 +46,7 @@
                     <button class="btn btn-outline-danger" data-csp-click="rollDice" data-csp-args='[20,1]'>d20</button>
                     <button class="btn btn-outline-warning" data-csp-click="rollDice" data-csp-args='[100,1]'>d100</button>
                 </div>
-                <div id="diceTotal" style="font-size:1.2rem;font-weight:700;color:#3b82f6"></div>
+                <div id="diceTotal" class="u41"></div>
             </div></div>
         </div>
 
@@ -54,14 +54,14 @@
         <div class="tab-pane fade" id="tab-wheel">
             <div class="card"><div class="card-body text-center">
                 <div class="mb-3">
-                    <textarea id="wheelInput" class="form-control" placeholder="每行一个选项..." style="max-width:400px;margin:0 auto">吃饭\n外卖\n自己做\n不吃</textarea>
+                    <textarea class="form-control u42" id="wheelInput"  placeholder="每行一个选项...">吃饭\n外卖\n自己做\n不吃</textarea>
                 </div>
                 <div class="wheel-wrap">
                     <div class="wheel-arrow">▼</div>
                     <canvas class="wheel-canvas" id="wheelCanvas" width="280" height="280"></canvas>
                 </div>
                 <button class="btn btn-primary mt-3" data-csp-click="spinWheel">🎯 转！</button>
-                <div id="wheelResult" style="font-size:1.3rem;font-weight:700;color:#8b5cf6;margin-top:8px"></div>
+                <div id="wheelResult" class="u43"></div>
             </div></div>
         </div>
 
@@ -94,13 +94,13 @@
         <div class="tab-pane fade" id="tab-number">
             <div class="card"><div class="card-body text-center">
                 <div class="d-flex justify-content-center gap-2 align-items-center mb-3">
-                    <input type="number" id="numMin" value="1" style="width:80px" placeholder="最小">
+                    <input type="number" id="numMin" value="1" class="u191" placeholder="最小">
                     <span>~</span>
-                    <input type="number" id="numMax" value="100" style="width:80px" placeholder="最大">
-                    <input type="number" id="numCount" value="1" min="1" max="20" style="width:60px" placeholder="数量">
+                    <input type="number" id="numMax" value="100" class="u191" placeholder="最大">
+                    <input type="number" id="numCount" value="1" min="1" max="20" class="u190" placeholder="数量">
                     <button class="btn btn-primary" data-csp-click="genRandomNum">生成</button>
                 </div>
-                <div id="numResult" style="font-size:2rem;font-weight:700;color:#3b82f6;min-height:60px"></div>
+                <div id="numResult" class="u46"></div>
             </div></div>
         </div>
 
@@ -111,7 +111,7 @@
                     <div class="slot-cell">🍒</div><div class="slot-cell">🍒</div><div class="slot-cell">🍒</div>
                 </div>
                 <button class="btn btn-lg btn-danger" data-csp-click="spinSlot">🎰 拉杆!</button>
-                <div id="slotResult" style="font-size:1.2rem;font-weight:700;margin-top:8px"></div>
+                <div id="slotResult" class="u47"></div>
             </div></div>
         </div>
     </div>
@@ -179,7 +179,7 @@ var RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 function resetCards() {
     cardDeck = [];
     for (var s = 0; s < 4; s++) for (var r = 0; r < 13; r++) cardDeck.push({suit:SUITS[s],rank:RANKS[r]});
-    document.getElementById('cardDisplay').innerHTML = '<span style="color:#6b7280">牌堆: '+cardDeck.length+'张</span>';
+    document.getElementById('cardDisplay').innerHTML = '<span class="u40">牌堆: '+cardDeck.length+'张</span>';
 }
 function drawCards(n) {
     if (cardDeck.length < n) { alert('牌不够了，请洗牌'); resetCards(); return; }
@@ -188,9 +188,9 @@ function drawCards(n) {
         var idx = Math.floor(Math.random() * cardDeck.length);
         var c = cardDeck.splice(idx, 1)[0];
         var color = (c.suit === '♥' || c.suit === '♦') ? '#ef4444' : '#1f2937';
-        html += '<div style="width:70px;height:100px;border:2px solid #d1d5db;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff"><span style="font-size:1.5rem;color:'+color+'">'+c.rank+'</span><span style="font-size:1.8rem;color:'+color+'">'+c.suit+'</span></div>';
+        html += '<div class="u48"><span class="u49"+color+'">'+c.rank+'</span><span class="u50"+color+'">'+c.suit+'</span></div>';
     }
-    document.getElementById('cardDisplay').innerHTML = html + '<div style="font-size:.8rem;color:#6b7280;line-height:100px">剩余:'+cardDeck.length+'张</div>';
+    document.getElementById('cardDisplay').innerHTML = html + '<div class="u51">剩余:'+cardDeck.length+'张</div>';
 }
 resetCards();
 

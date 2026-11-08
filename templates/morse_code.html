@@ -27,7 +27,7 @@
             <textarea id="mcText" placeholder="输入英文/数字/标点..."></textarea>
         </div>
         <div class="mc-row">
-            <button class="btn btn-primary btn-sm" data-csp-click="mcEncode" style="padding:6px 20px">编码 → ●●● ▬▬▬</button>
+            <button class="btn btn-primary btn-sm u109" data-csp-click="mcEncode">编码 → ●●● ▬▬▬</button>
             <button class="btn btn-outline-secondary btn-sm" data-csp-click="mcPlay" data-csp-args='["result"]'>🔊 播放</button>
             <button class="btn btn-outline-secondary btn-sm" data-csp-click="mcClear" data-csp-args='["all"]'>清空</button>
         </div>
@@ -37,12 +37,12 @@
     <!-- 解码 -->
     <div class="card mb-3"><div class="card-body">
         <h6>📡 摩尔斯电码 → 文本</h6>
-        <p style="font-size:.8rem;color:var(--text-muted)">用 <code>.</code> (点) <code>-</code> (划) <code>/</code> (词分隔) <code>空格</code> (字分隔)</p>
+        <p class="u110">用 <code>.</code> (点) <code>-</code> (划) <code>/</code> (词分隔) <code>空格</code> (字分隔)</p>
         <div class="mc-row">
             <textarea id="mcCode" placeholder="输入摩尔斯电码... 如 ... --- ... / .... . .-.. .-.. ---"></textarea>
         </div>
         <div class="mc-row">
-            <button class="btn btn-success btn-sm" data-csp-click="mcDecode" style="padding:6px 20px">解码 → 文本</button>
+            <button class="btn btn-success btn-sm u109" data-csp-click="mcDecode">解码 → 文本</button>
         </div>
         <div class="mc-result" id="mcDecoded"></div>
     </div></div>
