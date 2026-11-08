@@ -12088,7 +12088,7 @@ def api_pet_game_score():
     data = request.get_json() or {}
     score = data.get("score", 0)
     score = max(0, min(99999, int(score)))
-    coins_earned = max(1, score // 10)  # 每10分换1硬币
+    coins_earned = max(1, score // 10)  # 每10分换1枚硬币
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM pets WHERE username=%s", (username,))
