@@ -20,7 +20,7 @@ def register(plugin_info):
     # 注册底部模板注入
     register_template_block(PLUGIN_NAME, {
         "name": "hello_footer",
-        "template": '<div style="text-align:center;padding:8px;font-size:11px;color:#aaa;">⚡ Hello World Plugin 已运行</div>',
+        "template": '<div class="text-center text-muted small py-2">⚡ Hello World Plugin 已运行</div>',
         "position": "footer",
         "order": 100,
     })

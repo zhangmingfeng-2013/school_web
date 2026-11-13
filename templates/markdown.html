@@ -247,7 +247,7 @@
 
 {% block scripts %}
 <!-- marked.js CDN -->
-<script nonce="{{ csp_nonce }}" src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='vendor/marked.min.js') }}"></script>
 
 <script nonce="{{ csp_nonce }}">
 (function() {

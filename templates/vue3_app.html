@@ -259,7 +259,7 @@ body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei
 <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
 <script src="https://unpkg.com/@element-plus/icons-vue"></script>
 <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, h } = Vue;

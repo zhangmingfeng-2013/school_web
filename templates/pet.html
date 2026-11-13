@@ -2,7 +2,7 @@
 {% block title %}电子宠物 — 多合一工具箱{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/element-plus.min.css') }}">
 <style nonce="{{ csp_nonce }}">
 :root{--pet-primary:#8b5cf6;--pet-secondary:#f59e0b;--pet-success:#10b981;--pet-danger:#ef4444;--pet-info:#3b82f6;}
 .pet-app-wrap{max-width:780px;margin:0 auto;}
